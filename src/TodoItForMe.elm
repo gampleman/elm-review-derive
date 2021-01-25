@@ -10,9 +10,12 @@ import Elm.Syntax.Infix as Infix
 import Elm.Syntax.Module as Module exposing (Module)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
+import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range
+import Elm.Syntax.Type
 import Elm.Syntax.TypeAlias exposing (TypeAlias)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
+import Elm.Type
 import Elm.Writer
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
@@ -42,7 +45,6 @@ rule =
 moduleVisitor : Rule.ModuleRuleSchema {} ModuleContext -> Rule.ModuleRuleSchema { hasAtLeastOneVisitor : () } ModuleContext
 moduleVisitor schema =
     schema
-        |> Rule.withModuleDefinitionVisitor moduleDefinitionVisitor
         |> Rule.withDeclarationEnterVisitor declarationVisitor
 
 
@@ -70,9 +72,7 @@ type ExposedConstructors
 
 
 type alias ProjectContext =
-    { exposedModules : Set ModuleNameAsString
-    , exposedConstructors : Dict ModuleNameAsString ExposedConstructors
-    , usedConstructors : Dict ModuleNameAsString (Set ConstructorName)
+    { customTypes : List ( ModuleName, Elm.Syntax.Type.Type )
     , typeAliases : List ( ModuleName, TypeAlias )
     , todos : List ( ModuleName, Rule.ModuleKey, Todo )
     }
@@ -83,13 +83,7 @@ type alias Todo =
 
 
 type alias ModuleContext =
-    { lookupTable : ModuleNameLookupTable
-    , exposedCustomTypesWithConstructors : Set CustomTypeName
-    , isExposed : Bool
-    , exposesEverything : Bool
-    , exposedConstructors : Dict ModuleNameAsString ExposedConstructors
-    , declaredTypesWithConstructors : Dict CustomTypeName (Dict ConstructorName (Node ConstructorName))
-    , usedFunctionsOrValues : Dict ModuleNameAsString (Set ConstructorName)
+    { customTypes : List Elm.Syntax.Type.Type
     , typeAliases : List TypeAlias
     , todos : List Todo
     }
@@ -97,9 +91,7 @@ type alias ModuleContext =
 
 initialProjectContext : ProjectContext
 initialProjectContext =
-    { exposedModules = Set.empty
-    , exposedConstructors = Dict.empty
-    , usedConstructors = Dict.empty
+    { customTypes = []
     , typeAliases = []
     , todos = []
     }
@@ -111,13 +103,7 @@ fromProjectToModule lookupTable metadata projectContext =
         moduleName =
             Rule.moduleNameFromMetadata metadata
     in
-    { lookupTable = lookupTable
-    , exposedCustomTypesWithConstructors = Set.empty
-    , isExposed = Set.member (moduleName |> String.join ".") projectContext.exposedModules
-    , exposedConstructors = projectContext.exposedConstructors
-    , exposesEverything = False
-    , declaredTypesWithConstructors = Dict.empty
-    , usedFunctionsOrValues = Dict.empty
+    { customTypes = projectContext.customTypes |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
     , typeAliases = projectContext.typeAliases |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
     , todos =
         List.filterMap
@@ -135,37 +121,11 @@ fromProjectToModule lookupTable metadata projectContext =
 fromModuleToProject : Rule.ModuleKey -> Rule.Metadata -> ModuleContext -> ProjectContext
 fromModuleToProject moduleKey metadata moduleContext =
     let
-        localUsed : Set ConstructorName
-        localUsed =
-            moduleContext.usedFunctionsOrValues
-                |> Dict.get ""
-                |> Maybe.withDefault Set.empty
-
         moduleName : ModuleName
         moduleName =
             Rule.moduleNameFromMetadata metadata
-
-        moduleNameAsString : ModuleNameAsString
-        moduleNameAsString =
-            String.join "." moduleName
     in
-    { exposedModules = Set.empty
-    , exposedConstructors =
-        if moduleContext.isExposed then
-            Dict.empty
-
-        else
-            Dict.singleton
-                moduleNameAsString
-                (ExposedConstructors
-                    { moduleKey = moduleKey
-                    , customTypes = moduleContext.declaredTypesWithConstructors
-                    }
-                )
-    , usedConstructors =
-        moduleContext.usedFunctionsOrValues
-            |> Dict.remove ""
-            |> Dict.insert moduleNameAsString localUsed
+    { customTypes = List.map (Tuple.pair moduleName) moduleContext.customTypes
     , typeAliases = List.map (Tuple.pair moduleName) moduleContext.typeAliases
     , todos = List.map (\todo -> ( moduleName, moduleKey, todo )) moduleContext.todos
     }
@@ -173,16 +133,7 @@ fromModuleToProject moduleKey metadata moduleContext =
 
 foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
-    { exposedModules = previousContext.exposedModules
-    , exposedConstructors = Dict.union newContext.exposedConstructors previousContext.exposedConstructors
-    , usedConstructors =
-        Dict.merge
-            Dict.insert
-            (\key newUsed previousUsed dict -> Dict.insert key (Set.union newUsed previousUsed) dict)
-            Dict.insert
-            newContext.usedConstructors
-            previousContext.usedConstructors
-            Dict.empty
+    { customTypes = newContext.customTypes ++ previousContext.customTypes
     , typeAliases = newContext.typeAliases ++ previousContext.typeAliases
     , todos = newContext.todos ++ previousContext.todos
     }
@@ -196,23 +147,7 @@ elmJsonVisitor : Maybe { elmJsonKey : Rule.ElmJsonKey, project : Elm.Project.Pro
 elmJsonVisitor maybeElmJson projectContext =
     case maybeElmJson |> Maybe.map .project of
         Just (Elm.Project.Package package) ->
-            let
-                exposedModules : List Elm.Module.Name
-                exposedModules =
-                    case package.exposed of
-                        Elm.Project.ExposedList list ->
-                            list
-
-                        Elm.Project.ExposedDict list ->
-                            List.concatMap Tuple.second list
-
-                exposedNames : Set String
-                exposedNames =
-                    exposedModules
-                        |> List.map Elm.Module.toString
-                        |> Set.fromList
-            in
-            ( [], { projectContext | exposedModules = exposedNames } )
+            ( [], projectContext )
 
         Just (Elm.Project.Application _) ->
             ( [], projectContext )
@@ -222,73 +157,14 @@ elmJsonVisitor maybeElmJson projectContext =
 
 
 
--- MODULE DEFINITION VISITOR
-
-
-moduleDefinitionVisitor : Node Module -> ModuleContext -> ( List nothing, ModuleContext )
-moduleDefinitionVisitor moduleNode context =
-    case Module.exposingList (Node.value moduleNode) of
-        Exposing.All _ ->
-            ( [], { context | exposesEverything = True } )
-
-        Exposing.Explicit list ->
-            let
-                names : List String
-                names =
-                    List.filterMap
-                        (\node_ ->
-                            case Node.value node_ of
-                                Exposing.TypeExpose { name } ->
-                                    Just name
-
-                                _ ->
-                                    Nothing
-                        )
-                        list
-            in
-            ( []
-            , { context
-                | exposedCustomTypesWithConstructors =
-                    Set.union (Set.fromList names) context.exposedCustomTypesWithConstructors
-              }
-            )
-
-
-
 -- DECLARATION VISITOR
 
 
 declarationVisitor : Node Declaration -> ModuleContext -> ( List nothing, ModuleContext )
 declarationVisitor node_ context =
     case Node.value node_ of
-        Declaration.CustomTypeDeclaration { name, constructors } ->
-            let
-                constructorsForCustomType : Dict String (Node String)
-                constructorsForCustomType =
-                    List.foldl
-                        (\constructor dict ->
-                            let
-                                nameNode : Node String
-                                nameNode =
-                                    (Node.value constructor).name
-                            in
-                            Dict.insert
-                                (Node.value nameNode)
-                                nameNode
-                                dict
-                        )
-                        Dict.empty
-                        constructors
-            in
-            ( []
-            , { context
-                | declaredTypesWithConstructors =
-                    Dict.insert
-                        (Node.value name)
-                        constructorsForCustomType
-                        context.declaredTypesWithConstructors
-              }
-            )
+        Declaration.CustomTypeDeclaration customType ->
+            ( [], { context | customTypes = customType :: context.customTypes } )
 
         Declaration.FunctionDeclaration function ->
             ( []
@@ -322,6 +198,135 @@ declarationVisitor node_ context =
             ( [], context )
 
 
+generateRecordCodec : Todo -> Node String -> List (Node ( Node String, Node TypeAnnotation )) -> String
+generateRecordCodec todo typeAliasName recordFields =
+    List.foldl
+        (\(Node _ ( Node _ fieldName, Node _ typeAnnotation )) code ->
+            code
+                |> pipeLeft
+                    (application
+                        [ functionOrValue [ "Serialize" ] "field"
+                        , Expression.RecordAccessFunction fieldName |> node
+                        , case typeAnnotation of
+                            TypeAnnotation.Typed (Node _ ( _, typed )) [] ->
+                                getCodecName typed
+
+                            _ ->
+                                application
+                                    [ functionOrValue [ "Debug" ] "todo"
+                                    , Expression.Literal "" |> node
+                                    ]
+                        ]
+                    )
+        )
+        (application
+            [ functionOrValue [ "Codec" ] "record"
+            , functionOrValue [] (Node.value typeAliasName)
+            ]
+        )
+        recordFields
+        |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishRecord" ])
+        |> Elm.Writer.writeExpression
+        |> Elm.Writer.write
+        |> String.replace "|>" "\n        |>"
+        |> (++)
+            ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
+                ++ (Node.value todo.functionName ++ " =\n    ")
+            )
+
+
+getCodecName : String -> Node Expression
+getCodecName text =
+    case text of
+        "Int" ->
+            functionOrValue [ "Serialize" ] "int"
+
+        "Float" ->
+            functionOrValue [ "Serialize" ] "float"
+
+        "String" ->
+            functionOrValue [ "Serialize" ] "string"
+
+        _ ->
+            functionOrValue [] (uncapitalize text ++ "Codec")
+
+
+generateCustomTypeCodec : Todo -> Elm.Syntax.Type.Type -> String
+generateCustomTypeCodec todo customType =
+    let
+        args : List ( Node Pattern, ( Node Pattern, Node Expression ) )
+        args =
+            customType.constructors
+                |> List.indexedMap
+                    (\index (Node _ constructor) ->
+                        let
+                            var =
+                                index + Char.toCode 'a' |> Char.fromCode |> String.fromChar
+
+                            arguments =
+                                List.range 0 (List.length constructor.arguments - 1)
+                                    |> List.map (String.fromInt >> (++) "data")
+                        in
+                        ( VarPattern var |> node
+                        , ( NamedPattern
+                                { moduleName = [], name = Node.value constructor.name }
+                                (List.map (VarPattern >> node) arguments)
+                                |> node
+                          , application (functionOrValue [] var :: List.map (functionOrValue []) arguments)
+                          )
+                        )
+                    )
+
+        start =
+            application
+                [ functionOrValue [ "Codec" ] "customType"
+                , Expression.LambdaExpression
+                    { args = List.map Tuple.first args ++ [ VarPattern "value" |> node ]
+                    , expression =
+                        Expression.CaseExpression
+                            { expression = functionOrValue [] "value", cases = List.map Tuple.second args }
+                            |> node
+                    }
+                    |> node
+                    |> Expression.ParenthesizedExpression
+                    |> node
+                ]
+    in
+    List.foldl
+        (\(Node _ constructor) code ->
+            code
+                |> pipeLeft
+                    (application
+                        (functionOrValue [ "Serialize" ] ("variant" ++ String.fromInt (List.length constructor.arguments))
+                            :: functionOrValue [] (Node.value constructor.name)
+                            :: List.map
+                                (\(Node _ typeAnnotation) ->
+                                    case typeAnnotation of
+                                        TypeAnnotation.Typed (Node _ ( _, typed )) [] ->
+                                            getCodecName typed
+
+                                        _ ->
+                                            application
+                                                [ functionOrValue [ "Debug" ] "todo"
+                                                , Expression.Literal "" |> node
+                                                ]
+                                )
+                                constructor.arguments
+                        )
+                    )
+        )
+        start
+        customType.constructors
+        |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishCustomType" ])
+        |> Elm.Writer.writeExpression
+        |> Elm.Writer.write
+        |> String.replace "|>" "\n        |>"
+        |> (++)
+            ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
+                ++ (Node.value todo.functionName ++ " =\n    ")
+            )
+
+
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
     projectContext.todos
@@ -332,56 +337,20 @@ finalProjectEvaluation projectContext =
                     localTypeAliases =
                         List.filter (Tuple.first >> (==) moduleName) projectContext.typeAliases
                             |> List.map Tuple.second
+
+                    localCustomTypes : List Elm.Syntax.Type.Type
+                    localCustomTypes =
+                        List.filter (Tuple.first >> (==) moduleName) projectContext.customTypes
+                            |> List.map Tuple.second
                 in
-                case find (\typeAlias -> Node.value typeAlias.name == Tuple.second todo.typeVar) localTypeAliases of
+                case find (.name >> Node.value >> (==) (Tuple.second todo.typeVar)) localTypeAliases of
                     Just typeAlias ->
                         case typeAlias.typeAnnotation of
                             Node _ (TypeAnnotation.Record fields) ->
                                 let
                                     fix : String
                                     fix =
-                                        List.foldl
-                                            (\(Node _ ( Node _ fieldName, Node _ typeAnnotation )) code ->
-                                                code
-                                                    |> pipeLeft
-                                                        (application
-                                                            [ functionOrValue [ "Serialize" ] "field"
-                                                            , Expression.RecordAccessFunction fieldName |> node
-                                                            , case typeAnnotation of
-                                                                TypeAnnotation.Typed (Node _ ( _, "Int" )) [] ->
-                                                                    functionOrValue [ "Serialize" ] "int"
-
-                                                                TypeAnnotation.Typed (Node _ ( _, "Float" )) [] ->
-                                                                    functionOrValue [ "Serialize" ] "float"
-
-                                                                TypeAnnotation.Typed (Node _ ( _, "String" )) [] ->
-                                                                    functionOrValue [ "Serialize" ] "string"
-
-                                                                TypeAnnotation.Typed (Node _ ( _, typed )) [] ->
-                                                                    functionOrValue [] (uncapitalize typed ++ "Codec")
-
-                                                                _ ->
-                                                                    application
-                                                                        [ functionOrValue [ "Debug" ] "todo"
-                                                                        , Expression.Literal "" |> node
-                                                                        ]
-                                                            ]
-                                                        )
-                                            )
-                                            (application
-                                                [ functionOrValue [ "Codec" ] "record"
-                                                , functionOrValue [] (Node.value typeAlias.name)
-                                                ]
-                                            )
-                                            fields
-                                            |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishRecord" ])
-                                            |> Elm.Writer.writeExpression
-                                            |> Elm.Writer.write
-                                            |> String.replace "|>" "\n        |>"
-                                            |> (++)
-                                                ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
-                                                    ++ (Node.value todo.functionName ++ " =\n    ")
-                                                )
+                                        generateRecordCodec todo typeAlias.name fields
 
                                     range =
                                         Node.range todo.declaration
@@ -399,7 +368,27 @@ finalProjectEvaluation projectContext =
                                 Nothing
 
                     Nothing ->
-                        Nothing
+                        case find (.name >> Node.value >> (==) (Tuple.second todo.typeVar)) localCustomTypes of
+                            Just customType ->
+                                let
+                                    fix : String
+                                    fix =
+                                        generateCustomTypeCodec todo customType
+
+                                    range =
+                                        Node.range todo.declaration
+                                in
+                                Rule.errorForModuleWithFix
+                                    moduleKey
+                                    { message = "Here's my attempt to complete this stub"
+                                    , details = [ "" ]
+                                    }
+                                    range
+                                    [ Review.Fix.replaceRangeBy range fix ]
+                                    |> Just
+
+                            Nothing ->
+                                Nothing
             )
 
 
