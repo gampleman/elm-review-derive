@@ -72,8 +72,7 @@ type ExposedConstructors
 
 
 type alias ProjectContext =
-    { customTypes : List ( ModuleName, Elm.Syntax.Type.Type )
-    , typeAliases : List ( ModuleName, TypeAlias )
+    { types : List ( ModuleName, TypeOrTypeAlias )
     , todos : List ( ModuleName, Rule.ModuleKey, Todo )
     }
 
@@ -83,16 +82,15 @@ type alias Todo =
 
 
 type alias ModuleContext =
-    { customTypes : List Elm.Syntax.Type.Type
-    , typeAliases : List TypeAlias
+    { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
+    , types : List TypeOrTypeAlias
     , todos : List Todo
     }
 
 
 initialProjectContext : ProjectContext
 initialProjectContext =
-    { customTypes = []
-    , typeAliases = []
+    { types = []
     , todos = []
     }
 
@@ -103,8 +101,8 @@ fromProjectToModule lookupTable metadata projectContext =
         moduleName =
             Rule.moduleNameFromMetadata metadata
     in
-    { customTypes = projectContext.customTypes |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
-    , typeAliases = projectContext.typeAliases |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
+    { lookupTable = lookupTable
+    , types = projectContext.types |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
     , todos =
         List.filterMap
             (\( moduleName_, _, todo ) ->
@@ -125,16 +123,14 @@ fromModuleToProject moduleKey metadata moduleContext =
         moduleName =
             Rule.moduleNameFromMetadata metadata
     in
-    { customTypes = List.map (Tuple.pair moduleName) moduleContext.customTypes
-    , typeAliases = List.map (Tuple.pair moduleName) moduleContext.typeAliases
+    { types = List.map (Tuple.pair moduleName) moduleContext.types
     , todos = List.map (\todo -> ( moduleName, moduleKey, todo )) moduleContext.todos
     }
 
 
 foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
-    { customTypes = newContext.customTypes ++ previousContext.customTypes
-    , typeAliases = newContext.typeAliases ++ previousContext.typeAliases
+    { types = newContext.types ++ previousContext.types
     , todos = newContext.todos ++ previousContext.todos
     }
 
@@ -164,41 +160,48 @@ declarationVisitor : Node Declaration -> ModuleContext -> ( List nothing, Module
 declarationVisitor node_ context =
     case Node.value node_ of
         Declaration.CustomTypeDeclaration customType ->
-            ( [], { context | customTypes = customType :: context.customTypes } )
+            ( [], { context | types = TypeValue customType :: context.types } )
 
         Declaration.FunctionDeclaration function ->
-            ( []
-            , { context
-                | todos =
-                    (case ( function.signature, function.declaration ) of
-                        ( Just (Node _ signature), Node _ declaration ) ->
-                            case signature.typeAnnotation of
-                                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed (Node _ codecType) []) ]) ->
-                                    case declaration.expression of
-                                        Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
-                                            [ { functionName = signature.name, typeVar = codecType, declaration = node_ } ]
-
-                                        _ ->
-                                            []
-
-                                _ ->
-                                    []
-
-                        _ ->
-                            []
-                    )
-                        ++ context.todos
-              }
-            )
+            ( [], { context | todos = getTodo context node_ function ++ context.todos } )
 
         Declaration.AliasDeclaration typeAlias ->
-            ( [], { context | typeAliases = typeAlias :: context.typeAliases } )
+            ( [], { context | types = TypeAliasValue typeAlias :: context.types } )
 
         _ ->
             ( [], context )
 
 
-generateRecordCodec : Todo -> Node String -> List (Node ( Node String, Node TypeAnnotation )) -> String
+getTodo : ModuleContext -> Node Declaration -> Function -> List Todo
+getTodo context node_ function =
+    case ( function.signature, function.declaration ) of
+        ( Just (Node _ signature), Node _ declaration ) ->
+            case signature.typeAnnotation of
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType []) ]) ->
+                    case declaration.expression of
+                        Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
+                            case ModuleNameLookupTable.moduleNameFor context.lookupTable codecType of
+                                Just actualCodecType ->
+                                    [ { functionName = signature.name
+                                      , typeVar = ( actualCodecType, Node.value codecType |> Tuple.second )
+                                      , declaration = node_
+                                      }
+                                    ]
+
+                                Nothing ->
+                                    []
+
+                        _ ->
+                            []
+
+                _ ->
+                    []
+
+        _ ->
+            []
+
+
+generateRecordCodec : Todo -> String -> List (Node ( Node String, Node TypeAnnotation )) -> String
 generateRecordCodec todo typeAliasName recordFields =
     List.foldl
         (\(Node _ ( Node _ fieldName, Node _ typeAnnotation )) code ->
@@ -221,7 +224,7 @@ generateRecordCodec todo typeAliasName recordFields =
         )
         (application
             [ functionOrValue [ "Codec" ] "record"
-            , functionOrValue [] (Node.value typeAliasName)
+            , functionOrValue [] typeAliasName
             ]
         )
         recordFields
@@ -330,30 +333,62 @@ generateCustomTypeCodec todo customType =
             )
 
 
+type TypeOrTypeAlias
+    = TypeValue Elm.Syntax.Type.Type
+    | TypeAliasValue TypeAlias
+
+
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
     projectContext.todos
         |> List.filterMap
             (\( moduleName, moduleKey, todo ) ->
                 let
-                    localTypeAliases : List TypeAlias
-                    localTypeAliases =
-                        List.filter (Tuple.first >> (==) moduleName) projectContext.typeAliases
-                            |> List.map Tuple.second
+                    ( typeVarModule, typeVarName ) =
+                        todo.typeVar
+                            |> Tuple.mapFirst
+                                (\a ->
+                                    if a == [] then
+                                        moduleName
 
-                    localCustomTypes : List Elm.Syntax.Type.Type
-                    localCustomTypes =
-                        List.filter (Tuple.first >> (==) moduleName) projectContext.customTypes
-                            |> List.map Tuple.second
+                                    else
+                                        a
+                                )
+
+                    maybeType : Maybe TypeOrTypeAlias
+                    maybeType =
+                        List.filterMap
+                            (\( typeModule, type_ ) ->
+                                if typeModule == typeVarModule then
+                                    case type_ of
+                                        TypeValue { name } ->
+                                            if Node.value name == typeVarName then
+                                                Just type_
+
+                                            else
+                                                Nothing
+
+                                        TypeAliasValue { name } ->
+                                            if Node.value name == typeVarName then
+                                                Just type_
+
+                                            else
+                                                Nothing
+
+                                else
+                                    Nothing
+                            )
+                            projectContext.types
+                            |> List.head
                 in
-                case find (.name >> Node.value >> (==) (Tuple.second todo.typeVar)) localTypeAliases of
-                    Just typeAlias ->
+                case maybeType of
+                    Just (TypeAliasValue typeAlias) ->
                         case typeAlias.typeAnnotation of
                             Node _ (TypeAnnotation.Record fields) ->
                                 let
                                     fix : String
                                     fix =
-                                        generateRecordCodec todo typeAlias.name fields
+                                        generateRecordCodec todo (Node.value typeAlias.name) fields
 
                                     range =
                                         Node.range todo.declaration
@@ -370,28 +405,26 @@ finalProjectEvaluation projectContext =
                             _ ->
                                 Nothing
 
+                    Just (TypeValue customType) ->
+                        let
+                            fix : String
+                            fix =
+                                generateCustomTypeCodec todo customType
+
+                            range =
+                                Node.range todo.declaration
+                        in
+                        Rule.errorForModuleWithFix
+                            moduleKey
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            }
+                            range
+                            [ Review.Fix.replaceRangeBy range fix ]
+                            |> Just
+
                     Nothing ->
-                        case find (.name >> Node.value >> (==) (Tuple.second todo.typeVar)) localCustomTypes of
-                            Just customType ->
-                                let
-                                    fix : String
-                                    fix =
-                                        generateCustomTypeCodec todo customType
-
-                                    range =
-                                        Node.range todo.declaration
-                                in
-                                Rule.errorForModuleWithFix
-                                    moduleKey
-                                    { message = "Here's my attempt to complete this stub"
-                                    , details = [ "" ]
-                                    }
-                                    range
-                                    [ Review.Fix.replaceRangeBy range fix ]
-                                    |> Just
-
-                            Nothing ->
-                                Nothing
+                        Nothing
             )
 
 
