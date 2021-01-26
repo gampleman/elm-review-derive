@@ -247,6 +247,9 @@ getCodecName text =
         "String" ->
             functionOrValue [ "Serialize" ] "string"
 
+        "Maybe" ->
+            functionOrValue [ "Serialize" ] "maybe"
+
         _ ->
             functionOrValue [] (uncapitalize text ++ "Codec")
 
