@@ -204,21 +204,13 @@ getTodo context node_ function =
 generateRecordCodec : Todo -> String -> List (Node ( Node String, Node TypeAnnotation )) -> String
 generateRecordCodec todo typeAliasName recordFields =
     List.foldl
-        (\(Node _ ( Node _ fieldName, Node _ typeAnnotation )) code ->
+        (\(Node _ ( Node _ fieldName, typeAnnotation )) code ->
             code
                 |> pipeLeft
                     (application
                         [ functionOrValue [ "Serialize" ] "field"
                         , Expression.RecordAccessFunction fieldName |> node
-                        , case typeAnnotation of
-                            TypeAnnotation.Typed (Node _ ( _, typed )) [] ->
-                                getCodecName typed
-
-                            _ ->
-                                application
-                                    [ functionOrValue [ "Debug" ] "todo"
-                                    , Expression.Literal "" |> node
-                                    ]
+                        , codecFromTypeAnnotation typeAnnotation
                         ]
                     )
         )
@@ -236,25 +228,6 @@ generateRecordCodec todo typeAliasName recordFields =
             ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
                 ++ (Node.value todo.functionName ++ " =\n    ")
             )
-
-
-getCodecName : String -> Node Expression
-getCodecName text =
-    case text of
-        "Int" ->
-            functionOrValue [ "Serialize" ] "int"
-
-        "Float" ->
-            functionOrValue [ "Serialize" ] "float"
-
-        "String" ->
-            functionOrValue [ "Serialize" ] "string"
-
-        "Maybe" ->
-            functionOrValue [ "Serialize" ] "maybe"
-
-        _ ->
-            functionOrValue [] (uncapitalize text ++ "Codec")
 
 
 generateCustomTypeCodec : Todo -> Elm.Syntax.Type.Type -> String
@@ -294,8 +267,7 @@ generateCustomTypeCodec todo customType =
                             |> node
                     }
                     |> node
-                    |> Expression.ParenthesizedExpression
-                    |> node
+                    |> parenthesis
                 ]
     in
     List.foldl
@@ -306,17 +278,7 @@ generateCustomTypeCodec todo customType =
                         (functionOrValue [ "Serialize" ] ("variant" ++ String.fromInt (List.length constructor.arguments))
                             :: functionOrValue [] (Node.value constructor.name)
                             :: List.map
-                                (\(Node _ typeAnnotation) ->
-                                    case typeAnnotation of
-                                        TypeAnnotation.Typed (Node _ ( _, typed )) [] ->
-                                            getCodecName typed
-
-                                        _ ->
-                                            application
-                                                [ functionOrValue [ "Debug" ] "todo"
-                                                , Expression.Literal "" |> node
-                                                ]
-                                )
+                                codecFromTypeAnnotation
                                 constructor.arguments
                         )
                     )
@@ -331,6 +293,51 @@ generateCustomTypeCodec todo customType =
             ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
                 ++ (Node.value todo.functionName ++ " =\n    ")
             )
+
+
+codecFromTypeAnnotation : Node TypeAnnotation -> Node Expression
+codecFromTypeAnnotation (Node _ typeAnnotation) =
+    case typeAnnotation of
+        TypeAnnotation.Typed (Node _ ( _, typed )) typeVariables ->
+            let
+                getCodecName : String -> Node Expression
+                getCodecName text =
+                    case text of
+                        "Int" ->
+                            functionOrValue [ "Serialize" ] "int"
+
+                        "Float" ->
+                            functionOrValue [ "Serialize" ] "float"
+
+                        "String" ->
+                            functionOrValue [ "Serialize" ] "string"
+
+                        "Bool" ->
+                            functionOrValue [ "Serialize" ] "bool"
+
+                        "Maybe" ->
+                            functionOrValue [ "Serialize" ] "maybe"
+
+                        "Dict" ->
+                            functionOrValue [ "Serialize" ] "dict"
+
+                        _ ->
+                            functionOrValue [] (uncapitalize text ++ "Codec")
+
+                applied =
+                    application (getCodecName typed :: List.map codecFromTypeAnnotation typeVariables)
+            in
+            if List.isEmpty typeVariables then
+                applied
+
+            else
+                parenthesis applied
+
+        _ ->
+            application
+                [ functionOrValue [ "Debug" ] "todo"
+                , Expression.Literal "" |> node
+                ]
 
 
 type TypeOrTypeAlias
@@ -444,6 +451,11 @@ functionOrValue moduleName functionOrValueName =
 pipeLeft : Node Expression -> Node Expression -> Node Expression
 pipeLeft eRight eLeft =
     Expression.OperatorApplication "|>" Infix.Left eLeft eRight |> node
+
+
+parenthesis : Node Expression -> Node Expression
+parenthesis =
+    Expression.ParenthesizedExpression >> node
 
 
 {-| Find the first element that satisfies a predicate and return

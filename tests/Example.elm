@@ -170,4 +170,94 @@ type MyType
                             ]
                           )
                         ]
+        , test "maybe codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType =
+    { fieldA : Maybe Int
+    }
+
+codec : Codec MyType
+codec =
+    Serialize.record MyType
+        |> Serialize.field .fieldA (Serialize.maybe Serialize.int)
+        |> Serialize.buildRecord
+
+"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType =
+    { fieldA : Maybe Int
+    }
+
+codec : Codec MyType
+codec = Debug.todo ""
+
+"""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "dict codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType =
+    { fieldA : Dict Int String
+    }
+
+codec : Codec MyType
+codec =
+    Codec.record MyType
+        |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string)
+        |> Serialize.finishRecord
+
+
+
+"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+            
+import Serialize exposing (Codec)
+
+type alias MyType =
+    { fieldA : Dict Int String
+    }
+
+codec : Codec MyType
+codec = Debug.todo ""
+
+"""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         ]
