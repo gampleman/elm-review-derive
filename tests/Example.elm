@@ -247,4 +247,84 @@ codec = Debug.todo ""
                             }
                             |> Review.Test.whenFixed expected
                         ]
+        , test "tuple codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : (Float, List String) }
+
+codec : Codec MyType
+codec =
+    Codec.record MyType 
+        |> Serialize.field .fieldA (Serialize.tuple Serialize.float (Serialize.list Serialize.string)) 
+        |> Serialize.finishRecord
+
+"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : (Float, List String) }
+
+codec : Codec MyType
+codec = Debug.todo ""
+
+"""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "nested record codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+            
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : { field0 : Int, field1 : () } }
+
+codec : Codec MyType
+codec =
+    Codec.record MyType
+        |> Serialize.field .fieldA (Serialize.tuple Serialize.float (Serialize.list Serialize.string))
+        |> Serialize.finishRecord
+
+"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+            
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : { field0 : Int, field1 : () } }
+
+codec : Codec MyType
+codec = Debug.todo ""
+
+"""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         ]

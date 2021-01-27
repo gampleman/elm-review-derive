@@ -81,6 +81,10 @@ type alias Todo =
     { functionName : Node String, typeVar : ( ModuleName, String ), declaration : Node Declaration }
 
 
+type alias IntermediateTodo =
+    { functionName : Node String, typeVar : ( ModuleName, String ) }
+
+
 type alias ModuleContext =
     { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
     , types : List TypeOrTypeAlias
@@ -166,7 +170,12 @@ declarationVisitor node_ context =
             ( [], { context | todos = getTodo context node_ function ++ context.todos } )
 
         Declaration.AliasDeclaration typeAlias ->
-            ( [], { context | types = TypeAliasValue typeAlias :: context.types } )
+            case Node.value typeAlias.typeAnnotation of
+                TypeAnnotation.Record record ->
+                    ( [], { context | types = TypeAliasValue (Node.value typeAlias.name) record :: context.types } )
+
+                _ ->
+                    ( [], context )
 
         _ ->
             ( [], context )
@@ -201,8 +210,8 @@ getTodo context node_ function =
             []
 
 
-generateRecordCodec : Todo -> String -> List (Node ( Node String, Node TypeAnnotation )) -> String
-generateRecordCodec todo typeAliasName recordFields =
+generateRecordCodec : Maybe String -> List (Node ( Node String, Node TypeAnnotation )) -> Node Expression
+generateRecordCodec typeAliasName recordFields =
     List.foldl
         (\(Node _ ( Node _ fieldName, typeAnnotation )) code ->
             code
@@ -216,22 +225,40 @@ generateRecordCodec todo typeAliasName recordFields =
         )
         (application
             [ functionOrValue [ "Codec" ] "record"
-            , functionOrValue [] typeAliasName
+            , case typeAliasName of
+                Just typeAliasName_ ->
+                    functionOrValue [] typeAliasName_
+
+                Nothing ->
+                    Expression.LambdaExpression
+                        { args =
+                            List.range 0 (List.length recordFields - 1)
+                                |> List.map (varFromInt >> VarPattern >> node)
+                        , expression =
+                            List.indexedMap
+                                (\index (Node _ ( fieldName, _ )) ->
+                                    ( fieldName, functionOrValue [] (varFromInt index) ) |> node
+                                )
+                                recordFields
+                                |> Expression.RecordExpr
+                                |> node
+                        }
+                        |> node
+                        |> parenthesis
             ]
         )
         recordFields
         |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishRecord" ])
-        |> Elm.Writer.writeExpression
-        |> Elm.Writer.write
-        |> String.replace "|>" "\n        |>"
-        |> (++)
-            ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
-                ++ (Node.value todo.functionName ++ " =\n    ")
-            )
 
 
-generateCustomTypeCodec : Todo -> Elm.Syntax.Type.Type -> String
-generateCustomTypeCodec todo customType =
+varFromInt =
+    (+) (Char.toCode 'a')
+        >> Char.fromCode
+        >> String.fromChar
+
+
+generateCustomTypeCodec : Elm.Syntax.Type.Type -> Node Expression
+generateCustomTypeCodec customType =
     let
         args : List ( Node Pattern, ( Node Pattern, Node Expression ) )
         args =
@@ -240,7 +267,7 @@ generateCustomTypeCodec todo customType =
                     (\index (Node _ constructor) ->
                         let
                             var =
-                                index + Char.toCode 'a' |> Char.fromCode |> String.fromChar
+                                varFromInt index
 
                             arguments =
                                 List.range 0 (List.length constructor.arguments - 1)
@@ -286,6 +313,17 @@ generateCustomTypeCodec todo customType =
         start
         customType.constructors
         |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishCustomType" ])
+
+
+generateTodoDefinition : Todo -> TypeOrTypeAlias -> String
+generateTodoDefinition todo typeOrTypeAlias =
+    (case typeOrTypeAlias of
+        TypeValue typeValue ->
+            generateCustomTypeCodec typeValue
+
+        TypeAliasValue typeAliasName fields ->
+            generateRecordCodec (Just typeAliasName) fields
+    )
         |> Elm.Writer.writeExpression
         |> Elm.Writer.write
         |> String.replace "|>" "\n        |>"
@@ -321,6 +359,18 @@ codecFromTypeAnnotation (Node _ typeAnnotation) =
                         "Dict" ->
                             functionOrValue [ "Serialize" ] "dict"
 
+                        "Set" ->
+                            functionOrValue [ "Serialize" ] "set"
+
+                        "Result" ->
+                            functionOrValue [ "Serialize" ] "result"
+
+                        "List" ->
+                            functionOrValue [ "Serialize" ] "list"
+
+                        "Array" ->
+                            functionOrValue [ "Serialize" ] "array"
+
                         _ ->
                             functionOrValue [] (uncapitalize text ++ "Codec")
 
@@ -333,16 +383,125 @@ codecFromTypeAnnotation (Node _ typeAnnotation) =
             else
                 parenthesis applied
 
-        _ ->
+        TypeAnnotation.Unit ->
+            functionOrValue [ "Serialize" ] "unit"
+
+        TypeAnnotation.Tupled [ first ] ->
+            codecFromTypeAnnotation first
+
+        TypeAnnotation.Tupled [ first, second ] ->
             application
-                [ functionOrValue [ "Debug" ] "todo"
-                , Expression.Literal "" |> node
+                [ functionOrValue [ "Serialize" ] "tuple"
+                , codecFromTypeAnnotation first
+                , codecFromTypeAnnotation second
                 ]
+                |> parenthesis
+
+        TypeAnnotation.Tupled [ first, second, third ] ->
+            application
+                [ functionOrValue [ "Serialize" ] "triple"
+                , codecFromTypeAnnotation first
+                , codecFromTypeAnnotation second
+                , codecFromTypeAnnotation third
+                ]
+                |> parenthesis
+
+        TypeAnnotation.Tupled _ ->
+            functionOrValue [ "Serialize" ] "unit"
+
+        TypeAnnotation.FunctionTypeAnnotation _ _ ->
+            errorMessage "Functions can't be serialized"
+
+        TypeAnnotation.GenericType _ ->
+            notSupportedErrorMessage
+
+        TypeAnnotation.Record fields ->
+            generateRecordCodec Nothing fields |> parenthesis
+
+        TypeAnnotation.GenericRecord _ _ ->
+            notSupportedErrorMessage
+
+
+notSupportedErrorMessage =
+    errorMessage "Not supported yet"
+
+
+errorMessage error =
+    application
+        [ functionOrValue [ "Debug" ] "todo"
+        , Expression.Literal ("Code gen error: " ++ error) |> node
+        ]
+        |> parenthesis
 
 
 type TypeOrTypeAlias
     = TypeValue Elm.Syntax.Type.Type
-    | TypeAliasValue TypeAlias
+    | TypeAliasValue String (List (Node ( Node String, Node TypeAnnotation )))
+
+
+
+--getTypes : ProjectContext -> List TypeOrTypeAlias
+--getTypes projectContext =
+--    projectContext.todos
+--        |> List.concatMap
+--            (\( moduleName, _, todo ) ->
+--                let
+--                    ( typeVarModule, typeVarName ) =
+--                        todo.typeVar
+--                            |> Tuple.mapFirst
+--                                (\a ->
+--                                    if a == [] then
+--                                        moduleName
+--
+--                                    else
+--                                        a
+--                                )
+--
+--                    maybeType : Maybe TypeOrTypeAlias
+--                    maybeType =
+--                        List.filterMap
+--                            (\( typeModule, type_ ) ->
+--                                if typeModule == typeVarModule then
+--                                    case type_ of
+--                                        TypeValue { name } ->
+--                                            if Node.value name == typeVarName then
+--                                                Just type_
+--
+--                                            else
+--                                                Nothing
+--
+--                                        TypeAliasValue { name } ->
+--                                            if Node.value name == typeVarName then
+--                                                Just type_
+--
+--                                            else
+--                                                Nothing
+--
+--                                else
+--                                    Nothing
+--                            )
+--                            projectContext.types
+--                            |> List.head
+--                in
+--                case maybeType of
+--                    Just (TypeAliasValue typeAlias) ->
+--                        case typeAlias.typeAnnotation of
+--                            Node _ (TypeAnnotation.Record fields) ->
+--                                List.map
+--                                    (\(Node _ ( _, Node _ typeAnnotation )) ->
+--                                        typeAnnotation
+--                                    )
+--                                    fields
+--
+--                            _ ->
+--                                []
+--
+--                    Just (TypeValue customType) ->
+--                        []
+--
+--                    Nothing ->
+--                        []
+--            )
 
 
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
@@ -375,8 +534,8 @@ finalProjectEvaluation projectContext =
                                             else
                                                 Nothing
 
-                                        TypeAliasValue { name } ->
-                                            if Node.value name == typeVarName then
+                                        TypeAliasValue name _ ->
+                                            if name == typeVarName then
                                                 Just type_
 
                                             else
@@ -389,34 +548,11 @@ finalProjectEvaluation projectContext =
                             |> List.head
                 in
                 case maybeType of
-                    Just (TypeAliasValue typeAlias) ->
-                        case typeAlias.typeAnnotation of
-                            Node _ (TypeAnnotation.Record fields) ->
-                                let
-                                    fix : String
-                                    fix =
-                                        generateRecordCodec todo (Node.value typeAlias.name) fields
-
-                                    range =
-                                        Node.range todo.declaration
-                                in
-                                Rule.errorForModuleWithFix
-                                    moduleKey
-                                    { message = "Here's my attempt to complete this stub"
-                                    , details = [ "" ]
-                                    }
-                                    range
-                                    [ Review.Fix.replaceRangeBy range fix ]
-                                    |> Just
-
-                            _ ->
-                                Nothing
-
-                    Just (TypeValue customType) ->
+                    Just type_ ->
                         let
                             fix : String
                             fix =
-                                generateCustomTypeCodec todo customType
+                                generateTodoDefinition todo type_
 
                             range =
                                 Node.range todo.declaration
@@ -432,6 +568,50 @@ finalProjectEvaluation projectContext =
 
                     Nothing ->
                         Nothing
+             --case maybeType of
+             --    Just (TypeAliasValue typeAlias) ->
+             --        case typeAlias.typeAnnotation of
+             --            Node _ (TypeAnnotation.Record fields) ->
+             --                let
+             --                    fix : String
+             --                    fix =
+             --                        generateRecordCodec todo (Node.value typeAlias.name) fields
+             --
+             --                    range =
+             --                        Node.range todo.declaration
+             --                in
+             --                Rule.errorForModuleWithFix
+             --                    moduleKey
+             --                    { message = "Here's my attempt to complete this stub"
+             --                    , details = [ "" ]
+             --                    }
+             --                    range
+             --                    [ Review.Fix.replaceRangeBy range fix ]
+             --                    |> Just
+             --
+             --            _ ->
+             --                Nothing
+             --
+             --    Just (TypeValue customType) ->
+             --        let
+             --            fix : String
+             --            fix =
+             --                generateCustomTypeCodec todo customType
+             --
+             --            range =
+             --                Node.range todo.declaration
+             --        in
+             --        Rule.errorForModuleWithFix
+             --            moduleKey
+             --            { message = "Here's my attempt to complete this stub"
+             --            , details = [ "" ]
+             --            }
+             --            range
+             --            [ Review.Fix.replaceRangeBy range fix ]
+             --            |> Just
+             --
+             --    Nothing ->
+             --        Nothing
             )
 
 
