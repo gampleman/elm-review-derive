@@ -1,7 +1,5 @@
 module Example exposing (suite)
 
-import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, list, string)
 import Review.Test
 import Test exposing (..)
 import TodoItForMe
@@ -179,32 +177,23 @@ type MyType
 
 import Serialize exposing (Codec)
 
-type alias MyType =
-    { fieldA : Maybe Int
-    }
+type alias MyType = { fieldA : Maybe Int }
 
 codec : Codec MyType
 codec =
-    Serialize.record MyType
-        |> Serialize.field .fieldA (Serialize.maybe Serialize.int)
-        |> Serialize.buildRecord
-
+    Codec.record MyType 
+        |> Serialize.field .fieldA (Serialize.maybe Serialize.int) 
+        |> Serialize.finishRecord
 """
-                            |> String.replace "\u{000D}" ""
                 in
-                """module A exposing (..)
-
-import Serialize exposing (Codec)
-
-type alias MyType =
-    { fieldA : Maybe Int
-    }
-
-codec : Codec MyType
-codec = Debug.todo ""
-
-"""
-                    |> String.replace "\u{000D}" ""
+                "module A exposing (..)\n"
+                    ++ "\n"
+                    ++ "import Serialize exposing (Codec)\n"
+                    ++ "\n"
+                    ++ "type alias MyType = { fieldA : Maybe Int }\n"
+                    ++ "\n"
+                    ++ "codec : Codec MyType\n"
+                    ++ "codec = Debug.todo \"\"\n"
                     |> Review.Test.run TodoItForMe.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
@@ -229,17 +218,15 @@ type alias MyType =
 
 codec : Codec MyType
 codec =
-    Codec.record MyType
-        |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string)
+    Codec.record MyType 
+        |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string) 
         |> Serialize.finishRecord
-
-
 
 """
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
-            
+
 import Serialize exposing (Codec)
 
 type alias MyType =
