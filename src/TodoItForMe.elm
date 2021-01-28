@@ -11,12 +11,13 @@ import Elm.Syntax.Module as Module exposing (Module)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
-import Elm.Syntax.Range
+import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Type
 import Elm.Syntax.TypeAlias exposing (TypeAlias)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
 import Elm.Type
 import Elm.Writer
+import QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..))
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Rule as Rule exposing (Error, Rule)
@@ -52,25 +53,6 @@ moduleVisitor schema =
 -- CONTEXT
 
 
-type alias ModuleNameAsString =
-    String
-
-
-type alias CustomTypeName =
-    String
-
-
-type alias ConstructorName =
-    String
-
-
-type ExposedConstructors
-    = ExposedConstructors
-        { moduleKey : Rule.ModuleKey
-        , customTypes : Dict CustomTypeName (Dict ConstructorName (Node ConstructorName))
-        }
-
-
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
     , todos : List ( ModuleName, Rule.ModuleKey, Todo )
@@ -78,17 +60,18 @@ type alias ProjectContext =
 
 
 type alias Todo =
-    { functionName : Node String, typeVar : ( ModuleName, String ), declaration : Node Declaration }
+    { functionName : Node String, typeVar : QualifiedType, range : Range }
 
 
 type alias IntermediateTodo =
-    { functionName : Node String, typeVar : ( ModuleName, String ) }
+    { functionName : Node String, typeVar : QualifiedType }
 
 
 type alias ModuleContext =
     { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
     , types : List TypeOrTypeAlias
     , todos : List Todo
+    , currentModule : ModuleName
     }
 
 
@@ -117,6 +100,7 @@ fromProjectToModule lookupTable metadata projectContext =
                     Nothing
             )
             projectContext.todos
+    , currentModule = moduleName
     }
 
 
@@ -182,18 +166,18 @@ declarationVisitor node_ context =
 
 
 getTodo : ModuleContext -> Node Declaration -> Function -> List Todo
-getTodo context node_ function =
+getTodo context (Node range _) function =
     case ( function.signature, function.declaration ) of
         ( Just (Node _ signature), Node _ declaration ) ->
             case signature.typeAnnotation of
                 Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType []) ]) ->
                     case declaration.expression of
                         Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
-                            case ModuleNameLookupTable.moduleNameFor context.lookupTable codecType of
-                                Just actualCodecType ->
+                            case QualifiedType.create context.lookupTable context.currentModule codecType of
+                                Just qualifiedType ->
                                     [ { functionName = signature.name
-                                      , typeVar = ( actualCodecType, Node.value codecType |> Tuple.second )
-                                      , declaration = node_
+                                      , typeVar = qualifiedType
+                                      , range = range
                                       }
                                     ]
 
@@ -328,7 +312,7 @@ generateTodoDefinition todo typeOrTypeAlias =
         |> Elm.Writer.write
         |> String.replace "|>" "\n        |>"
         |> (++)
-            ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString todo.typeVar ++ "\n")
+            ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString (QualifiedType.actualPath todo.typeVar) ++ "\n")
                 ++ (Node.value todo.functionName ++ " =\n    ")
             )
 
@@ -434,74 +418,124 @@ errorMessage error =
         |> parenthesis
 
 
-type TypeOrTypeAlias
-    = TypeValue Elm.Syntax.Type.Type
-    | TypeAliasValue String (List (Node ( Node String, Node TypeAnnotation )))
+getTypes : ModuleNameLookupTable -> ProjectContext -> List ( ModuleName, String )
+getTypes moduleNameLookupTable projectContext =
+    List.concatMap
+        (\( moduleName, _, todo ) ->
+            case todo.typeVar of
+                Just (TypeAliasValue typeAliasName fields) ->
+                    --getTypesHelper typeAlias.typeAnnotation
+                    Debug.todo ""
+
+                Just (TypeValue customType) ->
+                    List.concatMap
+                        (\(Node _ constructor) ->
+                            List.filterMap
+                                (\(Node _ argument) ->
+                                    case argument of
+                                        TypeAnnotation.Typed node_ _ ->
+                                            getModulePath moduleNameLookupTable moduleName node_
+
+                                        _ ->
+                                            Nothing
+                                )
+                                constructor.arguments
+                        )
+                        customType.constructors
+
+                Nothing ->
+                    []
+        )
+        projectContext.todos
 
 
+getTypesHelper : TypeAnnotation -> Node Expression
+getTypesHelper typeAnnotation =
+    case typeAnnotation of
+        TypeAnnotation.Typed (Node _ ( _, typed )) typeVariables ->
+            let
+                getCodecName : String -> List String
+                getCodecName text =
+                    case text of
+                        "Int" ->
+                            []
 
---getTypes : ProjectContext -> List TypeOrTypeAlias
---getTypes projectContext =
---    projectContext.todos
---        |> List.concatMap
---            (\( moduleName, _, todo ) ->
---                let
---                    ( typeVarModule, typeVarName ) =
---                        todo.typeVar
---                            |> Tuple.mapFirst
---                                (\a ->
---                                    if a == [] then
---                                        moduleName
---
---                                    else
---                                        a
---                                )
---
---                    maybeType : Maybe TypeOrTypeAlias
---                    maybeType =
---                        List.filterMap
---                            (\( typeModule, type_ ) ->
---                                if typeModule == typeVarModule then
---                                    case type_ of
---                                        TypeValue { name } ->
---                                            if Node.value name == typeVarName then
---                                                Just type_
---
---                                            else
---                                                Nothing
---
---                                        TypeAliasValue { name } ->
---                                            if Node.value name == typeVarName then
---                                                Just type_
---
---                                            else
---                                                Nothing
---
---                                else
---                                    Nothing
---                            )
---                            projectContext.types
---                            |> List.head
---                in
---                case maybeType of
---                    Just (TypeAliasValue typeAlias) ->
---                        case typeAlias.typeAnnotation of
---                            Node _ (TypeAnnotation.Record fields) ->
---                                List.map
---                                    (\(Node _ ( _, Node _ typeAnnotation )) ->
---                                        typeAnnotation
---                                    )
---                                    fields
---
---                            _ ->
---                                []
---
---                    Just (TypeValue customType) ->
---                        []
---
---                    Nothing ->
---                        []
---            )
+                        "Float" ->
+                            []
+
+                        "String" ->
+                            []
+
+                        "Bool" ->
+                            []
+
+                        "Maybe" ->
+                            []
+
+                        "Dict" ->
+                            []
+
+                        "Set" ->
+                            []
+
+                        "Result" ->
+                            []
+
+                        "List" ->
+                            []
+
+                        "Array" ->
+                            []
+
+                        _ ->
+                            [ text ]
+
+                applied =
+                    application (getCodecName typed :: List.map codecFromTypeAnnotation typeVariables)
+            in
+            if List.isEmpty typeVariables then
+                applied
+
+            else
+                parenthesis applied
+
+        TypeAnnotation.Unit ->
+            functionOrValue [ "Serialize" ] "unit"
+
+        TypeAnnotation.Tupled [ first ] ->
+            codecFromTypeAnnotation first
+
+        TypeAnnotation.Tupled [ first, second ] ->
+            application
+                [ functionOrValue [ "Serialize" ] "tuple"
+                , codecFromTypeAnnotation first
+                , codecFromTypeAnnotation second
+                ]
+                |> parenthesis
+
+        TypeAnnotation.Tupled [ first, second, third ] ->
+            application
+                [ functionOrValue [ "Serialize" ] "triple"
+                , codecFromTypeAnnotation first
+                , codecFromTypeAnnotation second
+                , codecFromTypeAnnotation third
+                ]
+                |> parenthesis
+
+        TypeAnnotation.Tupled _ ->
+            functionOrValue [ "Serialize" ] "unit"
+
+        TypeAnnotation.FunctionTypeAnnotation _ _ ->
+            errorMessage "Functions can't be serialized"
+
+        TypeAnnotation.GenericType _ ->
+            notSupportedErrorMessage
+
+        TypeAnnotation.Record fields ->
+            generateRecordCodec Nothing fields |> parenthesis
+
+        TypeAnnotation.GenericRecord _ _ ->
+            notSupportedErrorMessage
 
 
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
@@ -707,8 +741,3 @@ listAtIndex index list =
 uncapitalize : String -> String
 uncapitalize text =
     String.toLower (String.left 1 text) ++ String.dropLeft 1 text
-
-
-moduleNameToString : ( ModuleName, String ) -> String
-moduleNameToString ( moduleName, name ) =
-    String.join "." (moduleName ++ [ name ])
