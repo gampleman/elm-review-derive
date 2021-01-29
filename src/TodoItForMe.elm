@@ -418,124 +418,105 @@ errorMessage error =
         |> parenthesis
 
 
-getTypes : ModuleNameLookupTable -> ProjectContext -> List ( ModuleName, String )
+getTypes : ModuleNameLookupTable -> ProjectContext -> List ( ModuleName, TypeOrTypeAlias )
 getTypes moduleNameLookupTable projectContext =
     List.concatMap
-        (\( moduleName, _, todo ) ->
-            case todo.typeVar of
-                Just (TypeAliasValue typeAliasName fields) ->
-                    --getTypesHelper typeAlias.typeAnnotation
-                    Debug.todo ""
-
-                Just (TypeValue customType) ->
-                    List.concatMap
-                        (\(Node _ constructor) ->
-                            List.filterMap
-                                (\(Node _ argument) ->
-                                    case argument of
-                                        TypeAnnotation.Typed node_ _ ->
-                                            getModulePath moduleNameLookupTable moduleName node_
-
-                                        _ ->
-                                            Nothing
-                                )
-                                constructor.arguments
-                        )
-                        customType.constructors
-
-                Nothing ->
-                    []
+        (\( _, _, todo ) ->
+            getTypesHelper moduleNameLookupTable projectContext [] todo.typeVar
         )
         projectContext.todos
 
 
-getTypesHelper : TypeAnnotation -> Node Expression
-getTypesHelper typeAnnotation =
-    case typeAnnotation of
-        TypeAnnotation.Typed (Node _ ( _, typed )) typeVariables ->
-            let
-                getCodecName : String -> List String
-                getCodecName text =
-                    case text of
-                        "Int" ->
-                            []
+getTypesHelper :
+    ModuleNameLookupTable
+    -> ProjectContext
+    -> List QualifiedType
+    -> QualifiedType
+    -> List ( ModuleName, TypeOrTypeAlias )
+getTypesHelper moduleNameLookupTable projectContext collectedTypes typeDeclaration =
+    case QualifiedType.getTypeData projectContext.types typeDeclaration of
+        Just ( typeModuleName, TypeAliasValue typeAliasName fields ) ->
+            --getTypesHelper typeAlias.typeAnnotation
+            Debug.todo ""
 
-                        "Float" ->
-                            []
+        Just ( typeModuleName, TypeValue customType ) ->
+            List.concatMap
+                (\(Node _ constructor) ->
+                    List.filterMap
+                        (\(Node _ typeAnnotation) ->
+                            case typeAnnotation of
+                                TypeAnnotation.Typed node_ _ ->
+                                    if isPrimitiveType (Node.value node_) then
+                                        Nothing
 
-                        "String" ->
-                            []
+                                    else
+                                        case
+                                            QualifiedType.create moduleNameLookupTable typeModuleName node_
+                                                |> Maybe.andThen (QualifiedType.getTypeData projectContext.types)
+                                        of
+                                            Just ( newTypeModuleName, newType ) ->
+                                                let
+                                                    qualifiedType =
+                                                        QualifiedType.create moduleNameLookupTable ( newTypeModuleName, QualifiedType.typeOrTypeAliasName newType )
+                                                in
+                                                case find ((==) qualifiedType) collectedTypes of
+                                                    Just _ ->
+                                                        []
 
-                        "Bool" ->
-                            []
+                                                    Nothing ->
+                                                        getTypesHelper
+                                                            moduleNameLookupTable
+                                                            projectContext
+                                                            (( newTypeModuleName, newType ) :: collectedTypes)
 
-                        "Maybe" ->
-                            []
+                                            Nothing ->
+                                                Nothing
 
-                        "Dict" ->
-                            []
+                                _ ->
+                                    Nothing
+                        )
+                        constructor.arguments
+                )
+                customType.constructors
 
-                        "Set" ->
-                            []
+        Nothing ->
+            []
 
-                        "Result" ->
-                            []
 
-                        "List" ->
-                            []
+isPrimitiveType text =
+    case text of
+        "Int" ->
+            True
 
-                        "Array" ->
-                            []
+        "Float" ->
+            True
 
-                        _ ->
-                            [ text ]
+        "String" ->
+            True
 
-                applied =
-                    application (getCodecName typed :: List.map codecFromTypeAnnotation typeVariables)
-            in
-            if List.isEmpty typeVariables then
-                applied
+        "Bool" ->
+            True
 
-            else
-                parenthesis applied
+        "Maybe" ->
+            True
 
-        TypeAnnotation.Unit ->
-            functionOrValue [ "Serialize" ] "unit"
+        "Dict" ->
+            True
 
-        TypeAnnotation.Tupled [ first ] ->
-            codecFromTypeAnnotation first
+        "Set" ->
+            True
 
-        TypeAnnotation.Tupled [ first, second ] ->
-            application
-                [ functionOrValue [ "Serialize" ] "tuple"
-                , codecFromTypeAnnotation first
-                , codecFromTypeAnnotation second
-                ]
-                |> parenthesis
+        "Result" ->
+            True
 
-        TypeAnnotation.Tupled [ first, second, third ] ->
-            application
-                [ functionOrValue [ "Serialize" ] "triple"
-                , codecFromTypeAnnotation first
-                , codecFromTypeAnnotation second
-                , codecFromTypeAnnotation third
-                ]
-                |> parenthesis
+        "List" ->
+            True
 
-        TypeAnnotation.Tupled _ ->
-            functionOrValue [ "Serialize" ] "unit"
+        "Array" ->
+            True
 
-        TypeAnnotation.FunctionTypeAnnotation _ _ ->
-            errorMessage "Functions can't be serialized"
-
-        TypeAnnotation.GenericType _ ->
-            notSupportedErrorMessage
-
-        TypeAnnotation.Record fields ->
-            generateRecordCodec Nothing fields |> parenthesis
-
-        TypeAnnotation.GenericRecord _ _ ->
-            notSupportedErrorMessage
+        _ ->
+            False
 
 
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
