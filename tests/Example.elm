@@ -20,7 +20,7 @@ import Serialize exposing (Codec)
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
-codec : Codec A
+codec : Codec A.A
 codec =
     Codec.record A 
         |> Serialize.field .fieldA Serialize.int 
@@ -179,7 +179,7 @@ import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
-codec : Codec MyType
+codec : Codec A.MyType
 codec =
     Codec.record MyType 
         |> Serialize.field .fieldA (Serialize.maybe Serialize.int) 
@@ -216,7 +216,7 @@ type alias MyType =
     { fieldA : Dict Int String
     }
 
-codec : Codec MyType
+codec : Codec A.MyType
 codec =
     Codec.record MyType 
         |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string) 
@@ -258,13 +258,11 @@ import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : (Float, List String) }
 
-codec : Codec MyType
+codec : Codec A.MyType
 codec =
     Codec.record MyType 
         |> Serialize.field .fieldA (Serialize.tuple Serialize.float (Serialize.list Serialize.string)) 
-        |> Serialize.finishRecord
-
-"""
+        |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -274,9 +272,7 @@ import Serialize exposing (Codec)
 type alias MyType = { fieldA : (Float, List String) }
 
 codec : Codec MyType
-codec = Debug.todo ""
-
-"""
+codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run TodoItForMe.rule
                     |> Review.Test.expectErrors
@@ -293,33 +289,29 @@ codec = Debug.todo ""
                     expected : String
                     expected =
                         """module A exposing (..)
-            
+
 import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
-codec : Codec MyType
+codec : Codec A.MyType
 codec =
     Codec.record MyType 
         |> Serialize.field .fieldA (Codec.record (\\a b -> {field0 = a, field1 = b}) 
         |> Serialize.field .field0 Serialize.int 
         |> Serialize.field .field1 Serialize.unit 
         |> Serialize.finishRecord) 
-        |> Serialize.finishRecord
-
-"""
+        |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
-            
+
 import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
 codec : Codec MyType
-codec = Debug.todo ""
-
-"""
+codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run TodoItForMe.rule
                     |> Review.Test.expectErrors
