@@ -307,20 +307,44 @@ generateCustomTypeCodec customType =
 
 generateTodoDefinition : Todo -> TypeOrTypeAlias -> String
 generateTodoDefinition todo typeOrTypeAlias =
-    (case typeOrTypeAlias of
-        TypeValue typeValue ->
-            generateCustomTypeCodec typeValue
+    { documentation = Nothing
+    , signature =
+        { name = todo.functionName
+        , typeAnnotation =
+            TypeAnnotation.Typed
+                (node ( [], "Codec" ))
+                [ node
+                    (TypeAnnotation.Typed
+                        (node
+                            ( QualifiedType.qualifiedPath todo.typeVar
+                            , QualifiedType.name todo.typeVar
+                            )
+                        )
+                        []
+                    )
+                ]
+                |> node
+        }
+            |> node
+            |> Just
+    , declaration =
+        node
+            { name = todo.functionName
+            , arguments = []
+            , expression =
+                case typeOrTypeAlias of
+                    TypeValue typeValue ->
+                        generateCustomTypeCodec typeValue
 
-        TypeAliasValue typeAliasName fields ->
-            generateRecordCodec (Just typeAliasName) fields
-    )
-        |> Elm.Writer.writeExpression
+                    TypeAliasValue typeAliasName fields ->
+                        generateRecordCodec (Just typeAliasName) fields
+            }
+    }
+        |> Declaration.FunctionDeclaration
+        |> node
+        |> Elm.Writer.writeDeclaration
         |> Elm.Writer.write
         |> String.replace "|>" "\n        |>"
-        |> (++)
-            ((Node.value todo.functionName ++ " : Codec " ++ QualifiedType.toString todo.typeVar ++ "\n")
-                ++ (Node.value todo.functionName ++ " =\n    ")
-            )
 
 
 codecFromTypeAnnotation : Node TypeAnnotation -> Node Expression
@@ -531,34 +555,41 @@ finalProjectEvaluation projectContext =
         typeTodos : Dict ModuleName (Set QualifiedType)
         typeTodos =
             getTypes projectContext
-    in
-    projectContext.todos
-        |> List.filterMap
-            (\( moduleName, moduleKey, todo ) ->
-                let
-                    maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
-                    maybeType =
-                        QualifiedType.getTypeData projectContext.types todo.typeVar
-                in
-                case maybeType of
-                    Just ( _, type_ ) ->
-                        let
-                            fix : String
-                            fix =
-                                generateTodoDefinition todo type_
-                        in
-                        Rule.errorForModuleWithFix
-                            moduleKey
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            }
-                            todo.range
-                            [ Review.Fix.replaceRangeBy todo.range fix ]
-                            |> Just
 
-                    Nothing ->
-                        Nothing
-            )
+        todoFixes : List (Error { useErrorForModule : () })
+        todoFixes =
+            projectContext.todos
+                |> List.filterMap
+                    (\( moduleName, moduleKey, todo ) ->
+                        let
+                            maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
+                            maybeType =
+                                QualifiedType.getTypeData projectContext.types todo.typeVar
+                        in
+                        case maybeType of
+                            Just ( _, type_ ) ->
+                                let
+                                    fix : String
+                                    fix =
+                                        generateTodoDefinition todo type_
+                                in
+                                Rule.errorForModuleWithFix
+                                    moduleKey
+                                    { message = "Here's my attempt to complete this stub"
+                                    , details = [ "" ]
+                                    }
+                                    todo.range
+                                    [ Review.Fix.replaceRangeBy todo.range fix ]
+                                    |> Just
+
+                            Nothing ->
+                                Nothing
+                    )
+
+        typeTodoFixes =
+            []
+    in
+    todoFixes ++ typeTodoFixes
 
 
 node =
