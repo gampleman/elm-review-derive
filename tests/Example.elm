@@ -311,51 +311,50 @@ codec = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
+        , test "add nested codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
 
-        --        , test "add nested codec" <|
-        --            \_ ->
-        --                let
-        --                    expected : String
-        --                    expected =
-        --                        """module A exposing (..)
-        --
-        --import Serialize exposing (Codec)
-        --
-        --type alias MyType = { fieldA : MyOtherType }
-        --
-        --type alias MyOtherType = { fieldB : Int }
-        --
-        --codec : Codec A.MyType
-        --codec =
-        --    Codec.record MyType
-        --        |> Serialize.field .fieldA myOtherTypeCodec
-        --        |> Serialize.finishRecord
-        --
-        --myOtherTypeCodec : Codec A.MyOtherType
-        --myOtherTypeCodec =
-        --    Codec.record MyOtherType
-        --        |> Serialize.field .fieldB Codec.int
-        --        |> Serialize.finishRecord"""
-        --                            |> String.replace "\u{000D}" ""
-        --                in
-        --                """module A exposing (..)
-        --
-        --import Serialize exposing (Codec)
-        --
-        --type alias MyType = { fieldA : MyOtherType }
-        --
-        --type alias MyOtherType = { fieldB : Int }
-        --
-        --codec : Codec MyType
-        --codec = Debug.todo \"\""""
-        --                    |> String.replace "\u{000D}" ""
-        --                    |> Review.Test.run TodoItForMe.rule
-        --                    |> Review.Test.expectErrors
-        --                        [ Review.Test.error
-        --                            { message = "Here's my attempt to complete this stub"
-        --                            , details = [ "" ]
-        --                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
-        --                            }
-        --                            |> Review.Test.whenFixed expected
-        --                        ]
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : MyOtherType }
+
+type alias MyOtherType = { fieldB : Int }
+
+codec : Codec A.MyType
+codec =
+    Codec.record MyType
+        |> Serialize.field .fieldA myOtherTypeCodec
+        |> Serialize.finishRecord
+
+myOtherTypeCodec : Codec A.MyOtherType
+myOtherTypeCodec =
+    Codec.record MyOtherType
+        |> Serialize.field .fieldB Codec.int
+        |> Serialize.finishRecord"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : MyOtherType }
+
+type alias MyOtherType = { fieldB : Int }
+
+codec : Codec MyType
+codec = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         ]
