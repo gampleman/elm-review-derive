@@ -1,7 +1,7 @@
-module QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..), actualPath, create, getTypeData, name, qualifiedPath, toString, typeOrTypeAliasName)
+module QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..), create, getTypeData, isPrimitiveType, name, qualifiedPath, toString, typeOrTypeAliasName)
 
 import Elm.Syntax.ModuleName exposing (ModuleName)
-import Elm.Syntax.Node as Node exposing (Node)
+import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Type
 import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation)
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
@@ -11,18 +11,17 @@ type QualifiedType
     = QualifiedType
         { qualifiedPath : List String
         , name : String
-        , actualPath : List String
         }
 
 
 create : ModuleNameLookupTable -> ModuleName -> Node ( ModuleName, String ) -> Maybe QualifiedType
-create moduleNameLookupTable currentModule (Node range ( actualPath_, name_ )) =
+create moduleNameLookupTable currentModule (Node range ( _, name_ )) =
     case ModuleNameLookupTable.moduleNameAt moduleNameLookupTable range of
         Just [] ->
-            Just <| QualifiedType { qualifiedPath = currentModule, name = name_, actualPath = [] }
+            Just <| QualifiedType { qualifiedPath = currentModule, name = name_ }
 
         Just moduleName ->
-            Just <| QualifiedType { qualifiedPath = moduleName, name = name_, actualPath = actualPath_ }
+            Just <| QualifiedType { qualifiedPath = moduleName, name = name_ }
 
         Nothing ->
             Nothing
@@ -38,14 +37,9 @@ name (QualifiedType a) =
     a.name
 
 
-actualPath : QualifiedType -> List String
-actualPath (QualifiedType a) =
-    a.actualPath
-
-
 toString : QualifiedType -> String
 toString (QualifiedType a) =
-    moduleNameToString a.actualPath a.name
+    moduleNameToString a.qualifiedPath a.name
 
 
 moduleNameToString : ModuleName -> String -> String
@@ -93,3 +87,40 @@ typeOrTypeAliasName typeOrTypeAlias =
 
         TypeAliasValue name_ _ ->
             name_
+
+
+isPrimitiveType : QualifiedType -> Bool
+isPrimitiveType qualifiedType =
+    case ( qualifiedPath qualifiedType, name qualifiedType ) of
+        ( [ "Basics" ], "Int" ) ->
+            True
+
+        ( [ "Basics" ], "Float" ) ->
+            True
+
+        ( [ "Basics" ], "String" ) ->
+            True
+
+        ( [ "Basics" ], "Bool" ) ->
+            True
+
+        ( [ "Basics" ], "Maybe" ) ->
+            True
+
+        ( [ "Dict" ], "Dict" ) ->
+            True
+
+        ( [ "Set" ], "Set" ) ->
+            True
+
+        ( [ "Basics" ], "Result" ) ->
+            True
+
+        ( [ "List" ], "List" ) ->
+            True
+
+        ( [ "Array" ], "Array" ) ->
+            True
+
+        _ ->
+            False

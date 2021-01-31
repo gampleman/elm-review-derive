@@ -1,6 +1,7 @@
 module TodoItForMe exposing (rule)
 
-import Dict exposing (Dict)
+import AssocList as Dict exposing (Dict)
+import AssocSet as Set exposing (Set)
 import Elm.Module
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
@@ -21,7 +22,6 @@ import QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..))
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Rule as Rule exposing (Error, Rule)
-import Set exposing (Set)
 
 
 rule : Rule
@@ -56,6 +56,7 @@ moduleVisitor schema =
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
     , todos : List ( ModuleName, Rule.ModuleKey, Todo )
+    , moduleLookupTable : Dict ModuleName ModuleNameLookupTable
     }
 
 
@@ -72,6 +73,7 @@ type alias ModuleContext =
     , types : List TypeOrTypeAlias
     , todos : List Todo
     , currentModule : ModuleName
+    , moduleLookupTable : ModuleNameLookupTable
     }
 
 
@@ -79,6 +81,7 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , todos = []
+    , moduleLookupTable = Dict.empty
     }
 
 
@@ -101,6 +104,7 @@ fromProjectToModule lookupTable metadata projectContext =
             )
             projectContext.todos
     , currentModule = moduleName
+    , moduleLookupTable = lookupTable
     }
 
 
@@ -113,6 +117,7 @@ fromModuleToProject moduleKey metadata moduleContext =
     in
     { types = List.map (Tuple.pair moduleName) moduleContext.types
     , todos = List.map (\todo -> ( moduleName, moduleKey, todo )) moduleContext.todos
+    , moduleLookupTable = Dict.singleton moduleContext.currentModule moduleContext.moduleLookupTable
     }
 
 
@@ -120,6 +125,7 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , todos = newContext.todos ++ previousContext.todos
+    , moduleLookupTable = Dict.union newContext.moduleLookupTable previousContext.moduleLookupTable
     }
 
 
@@ -312,7 +318,7 @@ generateTodoDefinition todo typeOrTypeAlias =
         |> Elm.Writer.write
         |> String.replace "|>" "\n        |>"
         |> (++)
-            ((Node.value todo.functionName ++ " : Codec " ++ moduleNameToString (QualifiedType.actualPath todo.typeVar) ++ "\n")
+            ((Node.value todo.functionName ++ " : Codec " ++ QualifiedType.toString todo.typeVar ++ "\n")
                 ++ (Node.value todo.functionName ++ " =\n    ")
             )
 
@@ -418,215 +424,140 @@ errorMessage error =
         |> parenthesis
 
 
-getTypes : ModuleNameLookupTable -> ProjectContext -> List ( ModuleName, TypeOrTypeAlias )
-getTypes moduleNameLookupTable projectContext =
-    List.concatMap
-        (\( _, _, todo ) ->
-            getTypesHelper moduleNameLookupTable projectContext [] todo.typeVar
+getTypes : ProjectContext -> Dict ModuleName (Set QualifiedType)
+getTypes projectContext =
+    List.foldl
+        (\( moduleName, _, todo ) dict ->
+            case Dict.get moduleName projectContext.moduleLookupTable of
+                Just moduleNameLookupTable ->
+                    Dict.update
+                        moduleName
+                        (Maybe.withDefault Set.empty
+                            >> getTypesHelper
+                                moduleNameLookupTable
+                                projectContext
+                                todo.typeVar
+                            >> Just
+                        )
+                        dict
+
+                Nothing ->
+                    dict
         )
+        Dict.empty
         projectContext.todos
 
 
 getTypesHelper :
     ModuleNameLookupTable
     -> ProjectContext
-    -> List QualifiedType
     -> QualifiedType
-    -> List ( ModuleName, TypeOrTypeAlias )
-getTypesHelper moduleNameLookupTable projectContext collectedTypes typeDeclaration =
+    -> Set QualifiedType
+    -> Set QualifiedType
+getTypesHelper moduleNameLookupTable projectContext typeDeclaration collectedTypes =
     case QualifiedType.getTypeData projectContext.types typeDeclaration of
-        Just ( typeModuleName, TypeAliasValue typeAliasName fields ) ->
-            --getTypesHelper typeAlias.typeAnnotation
-            Debug.todo ""
+        Just ( typeModuleName, TypeAliasValue _ fields ) ->
+            List.foldl
+                (\(Node _ ( _, Node _ typeAnnotation )) collectedTypes_ ->
+                    case typeAnnotation of
+                        TypeAnnotation.Typed node_ _ ->
+                            case QualifiedType.create moduleNameLookupTable typeModuleName node_ of
+                                Just qualifiedType ->
+                                    if QualifiedType.isPrimitiveType qualifiedType then
+                                        collectedTypes_
 
-        Just ( typeModuleName, TypeValue customType ) ->
-            List.concatMap
-                (\(Node _ constructor) ->
-                    List.filterMap
-                        (\(Node _ typeAnnotation) ->
-                            case typeAnnotation of
-                                TypeAnnotation.Typed node_ _ ->
-                                    if isPrimitiveType (Node.value node_) then
-                                        Nothing
+                                    else if Set.member qualifiedType collectedTypes_ then
+                                        collectedTypes_
 
                                     else
-                                        case
-                                            QualifiedType.create moduleNameLookupTable typeModuleName node_
-                                                |> Maybe.andThen (QualifiedType.getTypeData projectContext.types)
-                                        of
-                                            Just ( newTypeModuleName, newType ) ->
-                                                let
-                                                    qualifiedType =
-                                                        QualifiedType.create moduleNameLookupTable ( newTypeModuleName, QualifiedType.typeOrTypeAliasName newType )
-                                                in
-                                                case find ((==) qualifiedType) collectedTypes of
-                                                    Just _ ->
-                                                        []
+                                        getTypesHelper
+                                            moduleNameLookupTable
+                                            projectContext
+                                            qualifiedType
+                                            (Set.insert qualifiedType collectedTypes_)
+                                            |> Set.union collectedTypes_
 
-                                                    Nothing ->
-                                                        getTypesHelper
-                                                            moduleNameLookupTable
-                                                            projectContext
-                                                            (( newTypeModuleName, newType ) :: collectedTypes)
+                                Nothing ->
+                                    collectedTypes_
 
-                                            Nothing ->
-                                                Nothing
+                        _ ->
+                            collectedTypes_
+                )
+                collectedTypes
+                fields
+
+        Just ( typeModuleName, TypeValue customType ) ->
+            List.foldl
+                (\(Node _ constructor) collectedTypes_ ->
+                    List.foldl
+                        (\(Node _ typeAnnotation) collectedTypes__ ->
+                            case typeAnnotation of
+                                TypeAnnotation.Typed node_ _ ->
+                                    case QualifiedType.create moduleNameLookupTable typeModuleName node_ of
+                                        Just qualifiedType ->
+                                            if QualifiedType.isPrimitiveType qualifiedType then
+                                                collectedTypes__
+
+                                            else if Set.member qualifiedType collectedTypes_ then
+                                                collectedTypes_
+
+                                            else
+                                                getTypesHelper
+                                                    moduleNameLookupTable
+                                                    projectContext
+                                                    qualifiedType
+                                                    (Set.insert qualifiedType collectedTypes__)
+                                                    |> Set.union collectedTypes__
+
+                                        Nothing ->
+                                            collectedTypes__
 
                                 _ ->
-                                    Nothing
+                                    collectedTypes__
                         )
+                        collectedTypes_
                         constructor.arguments
                 )
+                collectedTypes
                 customType.constructors
 
         Nothing ->
-            []
-
-
-isPrimitiveType text =
-    case text of
-        "Int" ->
-            True
-
-        "Float" ->
-            True
-
-        "String" ->
-            True
-
-        "Bool" ->
-            True
-
-        "Maybe" ->
-            True
-
-        "Dict" ->
-            True
-
-        "Set" ->
-            True
-
-        "Result" ->
-            True
-
-        "List" ->
-            True
-
-        "Array" ->
-            True
-
-        _ ->
-            False
+            collectedTypes
 
 
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
+    let
+        typeTodos : Dict ModuleName (Set QualifiedType)
+        typeTodos =
+            getTypes projectContext
+    in
     projectContext.todos
         |> List.filterMap
             (\( moduleName, moduleKey, todo ) ->
                 let
-                    ( typeVarModule, typeVarName ) =
-                        todo.typeVar
-                            |> Tuple.mapFirst
-                                (\a ->
-                                    if a == [] then
-                                        moduleName
-
-                                    else
-                                        a
-                                )
-
-                    maybeType : Maybe TypeOrTypeAlias
+                    maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
                     maybeType =
-                        List.filterMap
-                            (\( typeModule, type_ ) ->
-                                if typeModule == typeVarModule then
-                                    case type_ of
-                                        TypeValue { name } ->
-                                            if Node.value name == typeVarName then
-                                                Just type_
-
-                                            else
-                                                Nothing
-
-                                        TypeAliasValue name _ ->
-                                            if name == typeVarName then
-                                                Just type_
-
-                                            else
-                                                Nothing
-
-                                else
-                                    Nothing
-                            )
-                            projectContext.types
-                            |> List.head
+                        QualifiedType.getTypeData projectContext.types todo.typeVar
                 in
                 case maybeType of
-                    Just type_ ->
+                    Just ( _, type_ ) ->
                         let
                             fix : String
                             fix =
                                 generateTodoDefinition todo type_
-
-                            range =
-                                Node.range todo.declaration
                         in
                         Rule.errorForModuleWithFix
                             moduleKey
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
                             }
-                            range
-                            [ Review.Fix.replaceRangeBy range fix ]
+                            todo.range
+                            [ Review.Fix.replaceRangeBy todo.range fix ]
                             |> Just
 
                     Nothing ->
                         Nothing
-             --case maybeType of
-             --    Just (TypeAliasValue typeAlias) ->
-             --        case typeAlias.typeAnnotation of
-             --            Node _ (TypeAnnotation.Record fields) ->
-             --                let
-             --                    fix : String
-             --                    fix =
-             --                        generateRecordCodec todo (Node.value typeAlias.name) fields
-             --
-             --                    range =
-             --                        Node.range todo.declaration
-             --                in
-             --                Rule.errorForModuleWithFix
-             --                    moduleKey
-             --                    { message = "Here's my attempt to complete this stub"
-             --                    , details = [ "" ]
-             --                    }
-             --                    range
-             --                    [ Review.Fix.replaceRangeBy range fix ]
-             --                    |> Just
-             --
-             --            _ ->
-             --                Nothing
-             --
-             --    Just (TypeValue customType) ->
-             --        let
-             --            fix : String
-             --            fix =
-             --                generateCustomTypeCodec todo customType
-             --
-             --            range =
-             --                Node.range todo.declaration
-             --        in
-             --        Rule.errorForModuleWithFix
-             --            moduleKey
-             --            { message = "Here's my attempt to complete this stub"
-             --            , details = [ "" ]
-             --            }
-             --            range
-             --            [ Review.Fix.replaceRangeBy range fix ]
-             --            |> Just
-             --
-             --    Nothing ->
-             --        Nothing
             )
 
 
