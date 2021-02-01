@@ -23,13 +23,19 @@ type alias B = { fieldD : Float }
 
 codec : Codec A.A
 codec  =
-    Codec.record A 
+    Serialize.record A 
         |> Serialize.field .fieldA Serialize.int 
         |> Serialize.field .fieldB Serialize.string 
         |> Serialize.field .fieldC bCodec 
         |> Serialize.finishRecord
 
-"""
+
+
+bCodec : Codec A.B
+bCodec  =
+    Serialize.record B 
+        |> Serialize.field .fieldD Serialize.float 
+        |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -66,7 +72,7 @@ type MyType
 
 codec : Codec A.MyType
 codec  =
-    Codec.customType (\\a b c value -> 
+    Serialize.customType (\\a b c value -> 
     case value of
       VariantA  ->
         a
@@ -111,7 +117,7 @@ import OtherModule
 
 codec : Codec OtherModule.MyType
 codec  =
-    Codec.customType (\\a b c value -> 
+    Serialize.customType (\\a b c value -> 
     case value of
       VariantA  ->
         a
@@ -167,7 +173,7 @@ type alias MyType = { fieldA : Maybe Int }
 
 codec : Codec A.MyType
 codec  =
-    Codec.record MyType 
+    Serialize.record MyType 
         |> Serialize.field .fieldA (Serialize.maybe Serialize.int) 
         |> Serialize.finishRecord
 """
@@ -205,7 +211,7 @@ type alias MyType =
 
 codec : Codec A.MyType
 codec  =
-    Codec.record MyType 
+    Serialize.record MyType 
         |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string) 
         |> Serialize.finishRecord
 
@@ -248,7 +254,7 @@ type alias MyType = { fieldA : (Float, List String) }
 
 codec : Codec A.MyType
 codec  =
-    Codec.record MyType 
+    Serialize.record MyType 
         |> Serialize.field .fieldA (Serialize.tuple Serialize.float (Serialize.list Serialize.string)) 
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
@@ -285,8 +291,8 @@ type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
 codec : Codec A.MyType
 codec  =
-    Codec.record MyType 
-        |> Serialize.field .fieldA (Codec.record (\\a b -> {field0 = a, field1 = b}) 
+    Serialize.record MyType 
+        |> Serialize.field .fieldA (Serialize.record (\\a b -> {field0 = a, field1 = b}) 
         |> Serialize.field .field0 Serialize.int 
         |> Serialize.field .field1 Serialize.unit 
         |> Serialize.finishRecord) 
@@ -324,16 +330,17 @@ type alias MyType = { fieldA : MyOtherType }
 
 type alias MyOtherType = { fieldB : Int }
 
+
 codec : Codec A.MyType
-codec =
-    Codec.record MyType
-        |> Serialize.field .fieldA myOtherTypeCodec
+codec  =
+    Serialize.record MyType 
+        |> Serialize.field .fieldA myOtherTypeCodec 
         |> Serialize.finishRecord
 
 myOtherTypeCodec : Codec A.MyOtherType
-myOtherTypeCodec =
-    Codec.record MyOtherType
-        |> Serialize.field .fieldB Codec.int
+myOtherTypeCodec  =
+    Serialize.record MyOtherType 
+        |> Serialize.field .fieldB Serialize.int 
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
