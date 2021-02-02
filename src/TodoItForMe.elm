@@ -180,7 +180,7 @@ getTodo context (Node range _) function =
     case ( function.signature, function.declaration ) of
         ( Just (Node _ signature), Node _ declaration ) ->
             case signature.typeAnnotation of
-                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType []) ]) ->
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType []) ]) ->
                     case declaration.expression of
                         Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
                             case QualifiedType.create context.lookupTable context.currentModule codecType of
@@ -317,7 +317,8 @@ generateTodoDefinition todo typeOrTypeAlias =
         , typeAnnotation =
             TypeAnnotation.Typed
                 (node ( [], "Codec" ))
-                [ node
+                [ node (TypeAnnotation.GenericType "e")
+                , node
                     (TypeAnnotation.Typed
                         (node
                             ( QualifiedType.qualifiedPath todo.typeVar
