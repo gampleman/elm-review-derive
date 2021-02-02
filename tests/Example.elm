@@ -476,4 +476,56 @@ type alias B2 = { field2 : Int }"""
                             ]
                           )
                         ]
+        , test "nested codec in list" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+import B exposing (B)
+
+type alias A = { field : List B }
+
+
+codec : Codec A.A
+codec  =
+    Serialize.record A 
+        |> Serialize.field .field (Serialize.list bCodec) 
+        |> Serialize.finishRecord
+
+bCodec : Codec B.B
+bCodec  =
+    Serialize.record B 
+        |> Serialize.field .field1 Serialize.int 
+        |> Serialize.finishRecord"""
+                            |> String.replace "\u{000D}" ""
+                in
+                [ """module A exposing (..)
+
+import Serialize exposing (Codec)
+import B exposing (B)
+
+type alias A = { field : List B }
+
+codec : Codec A
+codec = Debug.todo \"\""""
+                , """module B exposing (..)
+
+type alias B = { field1 : Int }"""
+                ]
+                    |> List.map (String.replace "\u{000D}" "")
+                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.expectErrorsForModules
+                        [ ( "A"
+                          , [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+                          )
+                        ]
         ]
