@@ -528,4 +528,51 @@ type alias B = { field1 : Int }"""
                             ]
                           )
                         ]
+        , test "codec with type parameter" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type Tree a
+    = Node (Tree a) (Tree a)
+    | Leaf a
+
+
+codec : Codec a -> Codec e (Tree a)
+codec codecA =
+    Serialize.customType
+        (\\a b value ->
+            case value of
+                Node data0 data1 -> a data0 data1
+                Leaf data0 -> b data0
+        )
+        |> Serialize.variant2 Node (codec codecA) (codec codecA)
+        |> Serialize.variant1 Leaf codecA
+        |> Serialize.finishCustomType"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type Tree a
+    = Node (Tree a) (Tree a)
+    | Leaf a
+
+codec : Codec a -> Codec e (Tree a)
+codec codecA = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec a -> Codec e (Tree a)\ncodec codecA = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         ]
