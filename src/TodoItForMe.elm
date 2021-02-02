@@ -458,40 +458,35 @@ getTypes : ProjectContext -> Dict ModuleName (Set QualifiedType)
 getTypes projectContext =
     List.foldl
         (\( moduleName, todo ) dict ->
-            case Dict.get moduleName projectContext.moduleLookupTable of
-                Just moduleNameLookupTable ->
-                    Dict.update
-                        moduleName
-                        (Maybe.withDefault Set.empty
-                            >> getTypesHelper
-                                moduleNameLookupTable
-                                projectContext
-                                todo.typeVar
-                            >> Just
-                        )
-                        dict
-
-                Nothing ->
-                    dict
+            Dict.update
+                moduleName
+                (Maybe.withDefault Set.empty
+                    >> getTypesHelper
+                        projectContext.moduleLookupTable
+                        projectContext
+                        todo.typeVar
+                    >> Just
+                )
+                dict
         )
         Dict.empty
         projectContext.todos
 
 
 getTypesHelper :
-    ModuleNameLookupTable
+    Dict ModuleName ModuleNameLookupTable
     -> ProjectContext
     -> QualifiedType
     -> Set QualifiedType
     -> Set QualifiedType
-getTypesHelper moduleNameLookupTable projectContext typeDeclaration collectedTypes =
+getTypesHelper moduleNameLookupTables projectContext typeDeclaration collectedTypes =
     case QualifiedType.getTypeData projectContext.types typeDeclaration of
         Just ( typeModuleName, TypeAliasValue _ fields ) ->
             List.foldl
                 (\(Node _ ( _, Node _ typeAnnotation )) collectedTypes_ ->
-                    case typeAnnotation of
-                        TypeAnnotation.Typed node_ _ ->
-                            case QualifiedType.create moduleNameLookupTable typeModuleName node_ of
+                    case ( typeAnnotation, Dict.get typeModuleName moduleNameLookupTables ) of
+                        ( TypeAnnotation.Typed node_ _, Just moduleLookupTable ) ->
+                            case QualifiedType.create moduleLookupTable typeModuleName node_ of
                                 Just qualifiedType ->
                                     if QualifiedType.isPrimitiveType qualifiedType then
                                         collectedTypes_
@@ -501,7 +496,7 @@ getTypesHelper moduleNameLookupTable projectContext typeDeclaration collectedTyp
 
                                     else
                                         getTypesHelper
-                                            moduleNameLookupTable
+                                            moduleNameLookupTables
                                             projectContext
                                             qualifiedType
                                             (Set.insert qualifiedType collectedTypes_)
@@ -521,9 +516,9 @@ getTypesHelper moduleNameLookupTable projectContext typeDeclaration collectedTyp
                 (\(Node _ constructor) collectedTypes_ ->
                     List.foldl
                         (\(Node _ typeAnnotation) collectedTypes__ ->
-                            case typeAnnotation of
-                                TypeAnnotation.Typed node_ _ ->
-                                    case QualifiedType.create moduleNameLookupTable typeModuleName node_ of
+                            case ( typeAnnotation, Dict.get typeModuleName moduleNameLookupTables ) of
+                                ( TypeAnnotation.Typed node_ _, Just moduleLookupTable ) ->
+                                    case QualifiedType.create moduleLookupTable typeModuleName node_ of
                                         Just qualifiedType ->
                                             if QualifiedType.isPrimitiveType qualifiedType then
                                                 collectedTypes__
@@ -533,7 +528,7 @@ getTypesHelper moduleNameLookupTable projectContext typeDeclaration collectedTyp
 
                                             else
                                                 getTypesHelper
-                                                    moduleNameLookupTable
+                                                    moduleNameLookupTables
                                                     projectContext
                                                     qualifiedType
                                                     (Set.insert qualifiedType collectedTypes__)
@@ -622,8 +617,8 @@ finalProjectEvaluation projectContext =
                                         maybeType =
                                             QualifiedType.getTypeData projectContext.types qualifiedType
                                     in
-                                    case ( maybeType, Dict.get moduleName projectContext.moduleKeys ) of
-                                        ( Just ( _, type_ ), Just moduleKey ) ->
+                                    case maybeType of
+                                        Just ( _, type_ ) ->
                                             let
                                                 todo =
                                                     { functionName = uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
@@ -641,7 +636,7 @@ finalProjectEvaluation projectContext =
                                             ( moduleName, Review.Fix.insertAt todo.range.end fix )
                                                 |> Just
 
-                                        _ ->
+                                        Nothing ->
                                             Nothing
                                 )
                             |> List.filterMap identity

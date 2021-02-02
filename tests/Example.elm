@@ -424,7 +424,7 @@ type alias B = { field : Int }"""
                         """module A exposing (..)
 
 import Serialize exposing (Codec)
-import B exposing (B, B2)
+import B exposing (B)
 
 type alias A = { field : B }
 
@@ -435,16 +435,16 @@ codec  =
         |> Serialize.field .field bCodec 
         |> Serialize.finishRecord
 
+b2Codec : Codec B.B2
+b2Codec  =
+    Serialize.record B2 
+        |> Serialize.field .field2 Serialize.int 
+        |> Serialize.finishRecord
+
 bCodec : Codec B.B
 bCodec  =
     Serialize.record B 
-        |> Serialize.field .field1 b2Codec
-        |> Serialize.finishRecord
-
-b2Codec : Codec B.B2
-b2Codec  =
-    Serialize.record B2
-        |> Serialize.field .field2 Serialize.int
+        |> Serialize.field .field1 b2Codec 
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
