@@ -364,4 +364,55 @@ codec = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
+        , test "nested codec in another module" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+import B
+
+type alias A = { field : B }
+
+codec : Codec A.A
+codec  =
+    Serialize.record A
+        |> Serialize.field .field codecB
+        |> Serialize.finishRecord
+
+codecB : Codec B.B
+codecB =
+    Serialize.record B
+        |> Serialize.field .field Codec.int
+        |> Serialize.finishRecord"""
+                            |> String.replace "\u{000D}" ""
+                in
+                [ """module A exposing (..)
+
+import Serialize exposing (Codec)
+import B
+
+type alias A = { field : B }
+
+codec : Codec A
+codec = Debug.todo \"\""""
+                , """module B exposing (..)
+
+type alias B = { field : Int }"""
+                ]
+                    |> List.map (String.replace "\u{000D}" "")
+                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.expectErrorsForModules
+                        [ ( "A"
+                          , [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+                          )
+                        ]
         ]
