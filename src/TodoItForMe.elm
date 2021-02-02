@@ -695,50 +695,6 @@ find predicate list =
                 find predicate rest
 
 
-
--- TYPE ANNOTATION UTILITY FUNCTIONS
-
-
-collectGenericsFromTypeAnnotation : Node TypeAnnotation -> List String
-collectGenericsFromTypeAnnotation node_ =
-    case Node.value node_ of
-        TypeAnnotation.FunctionTypeAnnotation a b ->
-            collectGenericsFromTypeAnnotation a ++ collectGenericsFromTypeAnnotation b
-
-        TypeAnnotation.Typed _ params ->
-            List.concatMap collectGenericsFromTypeAnnotation params
-
-        TypeAnnotation.Record list ->
-            list
-                |> List.concatMap (Node.value >> Tuple.second >> collectGenericsFromTypeAnnotation)
-
-        TypeAnnotation.GenericRecord _ list ->
-            Node.value list
-                |> List.concatMap (Node.value >> Tuple.second >> collectGenericsFromTypeAnnotation)
-
-        TypeAnnotation.Tupled list ->
-            List.concatMap collectGenericsFromTypeAnnotation list
-
-        TypeAnnotation.GenericType var ->
-            [ var ]
-
-        TypeAnnotation.Unit ->
-            []
-
-
-listAtIndex : Int -> List a -> Maybe a
-listAtIndex index list =
-    case ( index, list ) of
-        ( 0, a :: [] ) ->
-            Just a
-
-        ( _, [] ) ->
-            Nothing
-
-        ( n, _ :: rest ) ->
-            listAtIndex (n - 1) rest
-
-
 uncapitalize : String -> String
 uncapitalize text =
     String.toLower (String.left 1 text) ++ String.dropLeft 1 text

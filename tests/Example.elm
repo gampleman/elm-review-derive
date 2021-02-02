@@ -372,27 +372,28 @@ codec = Debug.todo \"\""""
                         """module A exposing (..)
 
 import Serialize exposing (Codec)
-import B
+import B exposing (B)
 
 type alias A = { field : B }
 
+
 codec : Codec A.A
 codec  =
-    Serialize.record A
-        |> Serialize.field .field codecB
+    Serialize.record A 
+        |> Serialize.field .field bCodec 
         |> Serialize.finishRecord
 
-codecB : Codec B.B
-codecB =
-    Serialize.record B
-        |> Serialize.field .field Codec.int
+bCodec : Codec B.B
+bCodec  =
+    Serialize.record B 
+        |> Serialize.field .field Serialize.int 
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
 
 import Serialize exposing (Codec)
-import B
+import B exposing (B)
 
 type alias A = { field : B }
 
