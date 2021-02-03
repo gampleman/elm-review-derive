@@ -2,21 +2,18 @@ module TodoItForMe exposing (rule)
 
 import AssocList as Dict exposing (Dict)
 import AssocSet as Set exposing (Set)
-import Elm.Module
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
-import Elm.Syntax.Exposing as Exposing
 import Elm.Syntax.Expression as Expression exposing (Expression, Function)
 import Elm.Syntax.Infix as Infix
-import Elm.Syntax.Module as Module exposing (Module)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
+import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.Type
 import Elm.Syntax.TypeAlias exposing (TypeAlias)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
-import Elm.Type
 import Elm.Writer
 import QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..))
 import Review.Fix
@@ -62,7 +59,12 @@ type alias ProjectContext =
 
 
 type alias Todo =
-    { functionName : String, typeVar : QualifiedType, range : Range }
+    { functionName : String
+    , typeVar : QualifiedType
+    , range : Range
+    , parameters : List (Node Pattern)
+    , signature : Signature
+    }
 
 
 type alias IntermediateTodo =
@@ -175,12 +177,22 @@ declarationVisitor node_ context =
             ( [], context )
 
 
+typeAnnotationReturnValue : Node TypeAnnotation -> Node TypeAnnotation
+typeAnnotationReturnValue typeAnnotation =
+    case typeAnnotation of
+        Node _ (TypeAnnotation.FunctionTypeAnnotation _ node_) ->
+            typeAnnotationReturnValue node_
+
+        _ ->
+            typeAnnotation
+
+
 getTodo : ModuleContext -> Node Declaration -> Function -> List Todo
 getTodo context (Node range _) function =
     case ( function.signature, function.declaration ) of
         ( Just (Node _ signature), Node _ declaration ) ->
-            case signature.typeAnnotation of
-                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType []) ]) ->
+            case Debug.log "typeAnnotationReturnValue signature.typeAnnotation" (typeAnnotationReturnValue signature.typeAnnotation) of
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
                     case declaration.expression of
                         Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
                             case QualifiedType.create context.lookupTable context.currentModule codecType of
@@ -188,6 +200,8 @@ getTodo context (Node range _) function =
                                     [ { functionName = Node.value signature.name
                                       , typeVar = qualifiedType
                                       , range = range
+                                      , parameters = declaration.arguments
+                                      , signature = signature
                                       }
                                     ]
 
@@ -312,30 +326,11 @@ generateCustomTypeCodec customType =
 generateTodoDefinition : Todo -> TypeOrTypeAlias -> String
 generateTodoDefinition todo typeOrTypeAlias =
     { documentation = Nothing
-    , signature =
-        { name = node todo.functionName
-        , typeAnnotation =
-            TypeAnnotation.Typed
-                (node ( [], "Codec" ))
-                [ node (TypeAnnotation.GenericType "e")
-                , node
-                    (TypeAnnotation.Typed
-                        (node
-                            ( QualifiedType.qualifiedPath todo.typeVar
-                            , QualifiedType.name todo.typeVar
-                            )
-                        )
-                        []
-                    )
-                ]
-                |> node
-        }
-            |> node
-            |> Just
+    , signature = node todo.signature |> Just
     , declaration =
         node
             { name = node todo.functionName
-            , arguments = []
+            , arguments = todo.parameters
             , expression =
                 case typeOrTypeAlias of
                     TypeValue typeValue ->
@@ -450,7 +445,7 @@ errorMessage : String -> Node Expression
 errorMessage error =
     application
         [ functionOrValue [ "Debug" ] "todo"
-        , Expression.Literal ("Code gen error: " ++ error) |> node
+        , Expression.Literal error |> node
         ]
         |> parenthesis
 
@@ -611,13 +606,28 @@ finalProjectEvaluation projectContext =
                                     case maybeType of
                                         Just ( _, type_ ) ->
                                             let
+                                                name =
+                                                    uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
+
                                                 todo =
-                                                    { functionName = uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
+                                                    { functionName = name
                                                     , typeVar = qualifiedType
                                                     , range =
                                                         { start = { column = 0, row = 99999 + index }
                                                         , end = { column = 0, row = 99999 + index }
                                                         }
+                                                    , signature =
+                                                        { name = node name
+                                                        , typeAnnotation =
+                                                            TypeAnnotation.Typed
+                                                                (node ( [], "Codec" ))
+                                                                [ QualifiedType.name qualifiedType
+                                                                    |> TypeAnnotation.GenericType
+                                                                    |> node
+                                                                ]
+                                                                |> node
+                                                        }
+                                                    , parameters = []
                                                     }
 
                                                 fix : String

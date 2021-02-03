@@ -544,14 +544,15 @@ type Tree a
 
 codec : Codec a -> Codec e (Tree a)
 codec codecA =
-    Serialize.customType
-        (\\a b value ->
-            case value of
-                Node data0 data1 -> a data0 data1
-                Leaf data0 -> b data0
-        )
-        |> Serialize.variant2 Node (codec codecA) (codec codecA)
-        |> Serialize.variant1 Leaf codecA
+    Serialize.customType (\\a b value -> 
+    case value of
+      Node data0 data1 ->
+        a data0 data1
+      Leaf data0 ->
+        b data0
+    ) 
+        |> Serialize.variant2 Node (treeCodec (Debug.todo "Not supported yet")) (treeCodec (Debug.todo "Not supported yet")) 
+        |> Serialize.variant1 Leaf (Debug.todo "Not supported yet") 
         |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
