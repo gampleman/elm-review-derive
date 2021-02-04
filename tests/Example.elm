@@ -476,12 +476,13 @@ type alias B2 = { field2 : Int }"""
                             ]
                           )
                         ]
-        , test "nested codec in list" <|
-            \_ ->
-                let
-                    expected : String
-                    expected =
-                        """module A exposing (..)
+        , only <|
+            test "nested codec in list" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
 
 import Serialize exposing (Codec)
 import B exposing (B)

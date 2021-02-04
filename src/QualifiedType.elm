@@ -1,4 +1,4 @@
-module QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..), create, getTypeData, isPrimitiveType, name, qualifiedPath, toString, typeOrTypeAliasName)
+module QualifiedType exposing (QualifiedType, RecordField_, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, getTypeData, isPrimitiveType, name, qualifiedPath, toString, typeOrTypeAliasName)
 
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
@@ -54,7 +54,7 @@ getTypeData types qualifiedType =
             if typeModule == qualifiedPath qualifiedType then
                 case type_ of
                     TypeValue typeValue ->
-                        if Node.value typeValue.name == name qualifiedType then
+                        if typeValue.name == name qualifiedType then
                             Just ( typeModule, type_ )
 
                         else
@@ -74,16 +74,41 @@ getTypeData types qualifiedType =
         |> List.head
 
 
+type alias Type_ =
+    { name : String
+    , generics : List String
+    , constructors : List ValueConstructor_
+    }
+
+
+{-| Syntax for a custom type value constructor
+-}
+type alias ValueConstructor_ =
+    { name : String
+    , arguments : List TypeAnnotation_
+    }
+
+
+type TypeAnnotation_
+    = GenericType_ String
+    | Typed_ QualifiedType (List TypeAnnotation_)
+    | Unit_
+    | Tupled_ (List TypeAnnotation_)
+    | Record_ (List ( String, TypeAnnotation_ ))
+    | GenericRecord_ String (List ( String, TypeAnnotation_ ))
+    | FunctionTypeAnnotation_ TypeAnnotation_ TypeAnnotation_
+
+
 type TypeOrTypeAlias
-    = TypeValue Elm.Syntax.Type.Type
-    | TypeAliasValue String (List (Node ( Node String, Node TypeAnnotation )))
+    = TypeValue Type_
+    | TypeAliasValue String (List ( String, TypeAnnotation_ ))
 
 
 typeOrTypeAliasName : TypeOrTypeAlias -> String
 typeOrTypeAliasName typeOrTypeAlias =
     case typeOrTypeAlias of
         TypeValue type_ ->
-            Node.value type_.name
+            type_.name
 
         TypeAliasValue name_ _ ->
             name_

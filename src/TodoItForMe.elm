@@ -15,7 +15,7 @@ import Elm.Syntax.Type
 import Elm.Syntax.TypeAlias exposing (TypeAlias)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
 import Elm.Writer
-import QualifiedType exposing (QualifiedType, TypeOrTypeAlias(..))
+import QualifiedType exposing (QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_)
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
@@ -23,7 +23,7 @@ import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
 
 rule : Rule
 rule =
-    Rule.newProjectRuleSchema "NoUnused.CustomTypeConstructors" initialProjectContext
+    Rule.newProjectRuleSchema "TodoItForMe" initialProjectContext
         |> Rule.withContextFromImportedModules
         |> Rule.withModuleVisitor moduleVisitor
         |> Rule.withModuleContextUsingContextCreator
@@ -53,7 +53,6 @@ moduleVisitor schema =
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
     , todos : List ( ModuleName, Todo )
-    , moduleLookupTable : Dict ModuleName ModuleNameLookupTable
     , moduleKeys : Dict ModuleName ModuleKey
     }
 
@@ -84,7 +83,6 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , todos = []
-    , moduleLookupTable = Dict.empty
     , moduleKeys = Dict.empty
     }
 
@@ -121,7 +119,6 @@ fromModuleToProject moduleKey metadata moduleContext =
     in
     { types = List.map (Tuple.pair moduleName) moduleContext.types
     , todos = List.map (\todo -> ( moduleName, todo )) moduleContext.todos
-    , moduleLookupTable = Dict.singleton moduleContext.currentModule moduleContext.moduleLookupTable
     , moduleKeys = Dict.singleton moduleName moduleKey
     }
 
@@ -130,7 +127,6 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , todos = newContext.todos ++ previousContext.todos
-    , moduleLookupTable = Dict.union newContext.moduleLookupTable previousContext.moduleLookupTable
     , moduleKeys = Dict.union newContext.moduleKeys previousContext.moduleKeys
     }
 
@@ -191,7 +187,7 @@ getTodo : ModuleContext -> Node Declaration -> Function -> List Todo
 getTodo context (Node range _) function =
     case ( function.signature, function.declaration ) of
         ( Just (Node _ signature), Node _ declaration ) ->
-            case Debug.log "typeAnnotationReturnValue signature.typeAnnotation" (typeAnnotationReturnValue signature.typeAnnotation) of
+            case typeAnnotationReturnValue signature.typeAnnotation of
                 Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
                     case declaration.expression of
                         Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
@@ -218,10 +214,10 @@ getTodo context (Node range _) function =
             []
 
 
-generateRecordCodec : Maybe String -> List (Node ( Node String, Node TypeAnnotation )) -> Node Expression
+generateRecordCodec : Maybe String -> List ( String, TypeAnnotation_ ) -> Node Expression
 generateRecordCodec typeAliasName recordFields =
     List.foldl
-        (\(Node _ ( Node _ fieldName, typeAnnotation )) code ->
+        (\( fieldName, typeAnnotation ) code ->
             code
                 |> pipeLeft
                     (application
@@ -244,8 +240,8 @@ generateRecordCodec typeAliasName recordFields =
                                 |> List.map (varFromInt >> VarPattern >> node)
                         , expression =
                             List.indexedMap
-                                (\index (Node _ ( fieldName, _ )) ->
-                                    ( fieldName, functionOrValue [] (varFromInt index) ) |> node
+                                (\index ( fieldName, _ ) ->
+                                    ( node fieldName, functionOrValue [] (varFromInt index) ) |> node
                                 )
                                 recordFields
                                 |> Expression.RecordExpr
@@ -265,14 +261,14 @@ varFromInt =
         >> String.fromChar
 
 
-generateCustomTypeCodec : Elm.Syntax.Type.Type -> Node Expression
+generateCustomTypeCodec : Type_ -> Node Expression
 generateCustomTypeCodec customType =
     let
         args : List ( Node Pattern, ( Node Pattern, Node Expression ) )
         args =
             customType.constructors
                 |> List.indexedMap
-                    (\index (Node _ constructor) ->
+                    (\index constructor ->
                         let
                             var =
                                 varFromInt index
@@ -283,7 +279,7 @@ generateCustomTypeCodec customType =
                         in
                         ( VarPattern var |> node
                         , ( NamedPattern
-                                { moduleName = [], name = Node.value constructor.name }
+                                { moduleName = [], name = constructor.name }
                                 (List.map (VarPattern >> node) arguments)
                                 |> node
                           , application (functionOrValue [] var :: List.map (functionOrValue []) arguments)
@@ -306,12 +302,12 @@ generateCustomTypeCodec customType =
                 ]
     in
     List.foldl
-        (\(Node _ constructor) code ->
+        (\constructor code ->
             code
                 |> pipeLeft
                     (application
                         (functionOrValue [ "Serialize" ] ("variant" ++ String.fromInt (List.length constructor.arguments))
-                            :: functionOrValue [] (Node.value constructor.name)
+                            :: functionOrValue [] constructor.name
                             :: List.map
                                 codecFromTypeAnnotation
                                 constructor.arguments
@@ -347,10 +343,10 @@ generateTodoDefinition todo typeOrTypeAlias =
         |> String.replace "|>" "\n        |>"
 
 
-codecFromTypeAnnotation : Node TypeAnnotation -> Node Expression
-codecFromTypeAnnotation (Node _ typeAnnotation) =
+codecFromTypeAnnotation : TypeAnnotation_ -> Node Expression
+codecFromTypeAnnotation typeAnnotation =
     case typeAnnotation of
-        TypeAnnotation.Typed (Node _ ( _, typed )) typeVariables ->
+        Typed_ qualifiedType typeVariables ->
             let
                 getCodecName : String -> Node Expression
                 getCodecName text =
@@ -389,7 +385,10 @@ codecFromTypeAnnotation (Node _ typeAnnotation) =
                             functionOrValue [] (uncapitalize text ++ "Codec")
 
                 applied =
-                    application (getCodecName typed :: List.map codecFromTypeAnnotation typeVariables)
+                    application
+                        (getCodecName (QualifiedType.name qualifiedType)
+                            :: List.map codecFromTypeAnnotation typeVariables
+                        )
             in
             if List.isEmpty typeVariables then
                 applied
@@ -397,13 +396,13 @@ codecFromTypeAnnotation (Node _ typeAnnotation) =
             else
                 parenthesis applied
 
-        TypeAnnotation.Unit ->
+        Unit_ ->
             functionOrValue [ "Serialize" ] "unit"
 
-        TypeAnnotation.Tupled [ first ] ->
+        Tupled_ [ first ] ->
             codecFromTypeAnnotation first
 
-        TypeAnnotation.Tupled [ first, second ] ->
+        Tupled_ [ first, second ] ->
             application
                 [ functionOrValue [ "Serialize" ] "tuple"
                 , codecFromTypeAnnotation first
@@ -411,7 +410,7 @@ codecFromTypeAnnotation (Node _ typeAnnotation) =
                 ]
                 |> parenthesis
 
-        TypeAnnotation.Tupled [ first, second, third ] ->
+        Tupled_ [ first, second, third ] ->
             application
                 [ functionOrValue [ "Serialize" ] "triple"
                 , codecFromTypeAnnotation first
@@ -420,19 +419,19 @@ codecFromTypeAnnotation (Node _ typeAnnotation) =
                 ]
                 |> parenthesis
 
-        TypeAnnotation.Tupled _ ->
+        Tupled_ _ ->
             functionOrValue [ "Serialize" ] "unit"
 
-        TypeAnnotation.FunctionTypeAnnotation _ _ ->
+        FunctionTypeAnnotation_ _ _ ->
             errorMessage "Functions can't be serialized"
 
-        TypeAnnotation.GenericType _ ->
+        GenericType_ _ ->
             notSupportedErrorMessage
 
-        TypeAnnotation.Record fields ->
+        Record_ fields ->
             generateRecordCodec Nothing fields |> parenthesis
 
-        TypeAnnotation.GenericRecord _ _ ->
+        GenericRecord_ _ _ ->
             notSupportedErrorMessage
 
 
@@ -468,32 +467,27 @@ getTypes projectContext =
         projectContext.todos
 
 
-getTypesFromTypeAnnotation : ProjectContext -> ModuleName -> Set QualifiedType -> TypeAnnotation -> Set QualifiedType
+getTypesFromTypeAnnotation : ProjectContext -> ModuleName -> Set QualifiedType -> TypeAnnotation_ -> Set QualifiedType
 getTypesFromTypeAnnotation projectContext typeModuleName collectedTypes typeAnnotation =
-    case ( typeAnnotation, Dict.get typeModuleName projectContext.moduleLookupTable ) of
-        ( TypeAnnotation.Typed node_ typeParameters, Just moduleLookupTable ) ->
+    case typeAnnotation of
+        Typed_ qualifiedType typeParameters ->
             let
                 collectedTypes_ =
-                    case QualifiedType.create moduleLookupTable typeModuleName node_ of
-                        Just qualifiedType ->
-                            if QualifiedType.isPrimitiveType qualifiedType then
-                                collectedTypes
+                    if QualifiedType.isPrimitiveType qualifiedType then
+                        collectedTypes
 
-                            else if Set.member qualifiedType collectedTypes then
-                                collectedTypes
+                    else if Set.member qualifiedType collectedTypes then
+                        collectedTypes
 
-                            else
-                                getTypesHelper
-                                    projectContext
-                                    qualifiedType
-                                    (Set.insert qualifiedType collectedTypes)
-                                    |> Set.union collectedTypes
-
-                        Nothing ->
-                            collectedTypes
+                    else
+                        getTypesHelper
+                            projectContext
+                            qualifiedType
+                            (Set.insert qualifiedType collectedTypes)
+                            |> Set.union collectedTypes
             in
             List.foldl
-                (\(Node _ typeParameter) collectedTypes__ ->
+                (\typeParameter collectedTypes__ ->
                     getTypesFromTypeAnnotation projectContext typeModuleName collectedTypes__ typeParameter
                         |> Set.union collectedTypes__
                 )
@@ -513,7 +507,7 @@ getTypesHelper projectContext typeDeclaration collectedTypes =
     case QualifiedType.getTypeData projectContext.types typeDeclaration of
         Just ( typeModuleName, TypeAliasValue _ fields ) ->
             List.foldl
-                (\(Node _ ( _, Node _ typeAnnotation )) collectedTypes_ ->
+                (\( _, typeAnnotation ) collectedTypes_ ->
                     getTypesFromTypeAnnotation projectContext typeModuleName collectedTypes_ typeAnnotation
                 )
                 collectedTypes
@@ -521,9 +515,9 @@ getTypesHelper projectContext typeDeclaration collectedTypes =
 
         Just ( typeModuleName, TypeValue customType ) ->
             List.foldl
-                (\(Node _ constructor) collectedTypes_ ->
+                (\constructor collectedTypes_ ->
                     List.foldl
-                        (\(Node _ typeAnnotation) collectedTypes__ ->
+                        (\typeAnnotation collectedTypes__ ->
                             getTypesFromTypeAnnotation projectContext typeModuleName collectedTypes__ typeAnnotation
                         )
                         collectedTypes_
