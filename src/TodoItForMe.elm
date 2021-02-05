@@ -43,7 +43,7 @@ rule =
 moduleVisitor : Rule.ModuleRuleSchema {} ModuleContext -> Rule.ModuleRuleSchema { hasAtLeastOneVisitor : () } ModuleContext
 moduleVisitor schema =
     schema
-        |> Rule.withDeclarationEnterVisitor declarationVisitor
+        |> Rule.withDeclarationListVisitor declarationVisitor
 
 
 
@@ -57,13 +57,27 @@ type alias ProjectContext =
     }
 
 
-type alias Todo =
+type alias CodecTodoData =
     { functionName : String
     , typeVar : QualifiedType
     , range : Range
     , parameters : List (Node Pattern)
     , signature : Signature
     }
+
+
+type alias ToStringTodoData =
+    { functionName : String
+    , typeVar : QualifiedType
+    , range : Range
+    , parameterName : String
+    , signature : Signature
+    }
+
+
+type Todo
+    = CodecTodo CodecTodoData
+    | ToStringTodo ToStringTodoData
 
 
 type alias IntermediateTodo =
@@ -215,33 +229,55 @@ convertType moduleContext type_ =
     }
 
 
-declarationVisitor : Node Declaration -> ModuleContext -> ( List nothing, ModuleContext )
-declarationVisitor node_ context =
+declarationVisitor : List (Node Declaration) -> ModuleContext -> ( List a, ModuleContext )
+declarationVisitor declarations context =
+    let
+        context2 =
+            { context
+                | types =
+                    List.filterMap
+                        (declarationVisitorGetTypes context)
+                        declarations
+                        ++ context.types
+            }
+    in
+    ( []
+    , { context2
+        | todos =
+            List.filterMap
+                (\declaration ->
+                    case declaration of
+                        Node range (Declaration.FunctionDeclaration function) ->
+                            getCodecTodo context range function
+
+                        _ ->
+                            Nothing
+                )
+                declarations
+                ++ context.todos
+      }
+    )
+
+
+declarationVisitorGetTypes : ModuleContext -> Node Declaration -> Maybe TypeOrTypeAlias
+declarationVisitorGetTypes context node_ =
     case Node.value node_ of
         Declaration.CustomTypeDeclaration customType ->
-            ( [], { context | types = TypeValue (convertType context customType) :: context.types } )
-
-        Declaration.FunctionDeclaration function ->
-            ( [], { context | todos = getTodo context node_ function ++ context.todos } )
+            TypeValue (convertType context customType) |> Just
 
         Declaration.AliasDeclaration typeAlias ->
             case Node.value typeAlias.typeAnnotation of
                 TypeAnnotation.Record record ->
-                    ( []
-                    , { context
-                        | types =
-                            TypeAliasValue
-                                (Node.value typeAlias.name)
-                                (convertRecordDefinition context record)
-                                :: context.types
-                      }
-                    )
+                    TypeAliasValue
+                        (Node.value typeAlias.name)
+                        (convertRecordDefinition context record)
+                        |> Just
 
                 _ ->
-                    ( [], context )
+                    Nothing
 
         _ ->
-            ( [], context )
+            Nothing
 
 
 typeAnnotationReturnValue : Node TypeAnnotation -> Node TypeAnnotation
@@ -254,8 +290,8 @@ typeAnnotationReturnValue typeAnnotation =
             typeAnnotation
 
 
-getTodo : ModuleContext -> Node Declaration -> Function -> List Todo
-getTodo context (Node range _) function =
+getCodecTodo : ModuleContext -> Range -> Function -> Maybe Todo
+getCodecTodo context declarationRange function =
     case ( function.signature, function.declaration ) of
         ( Just (Node _ signature), Node _ declaration ) ->
             case typeAnnotationReturnValue signature.typeAnnotation of
@@ -264,25 +300,63 @@ getTodo context (Node range _) function =
                         Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
                             case QualifiedType.create context.lookupTable context.currentModule codecType of
                                 Just qualifiedType ->
-                                    [ { functionName = Node.value signature.name
-                                      , typeVar = qualifiedType
-                                      , range = range
-                                      , parameters = declaration.arguments
-                                      , signature = signature
-                                      }
-                                    ]
+                                    CodecTodo
+                                        { functionName = Node.value signature.name
+                                        , typeVar = qualifiedType
+                                        , range = declarationRange
+                                        , parameters = declaration.arguments
+                                        , signature = signature
+                                        }
+                                        |> Just
 
                                 Nothing ->
-                                    []
+                                    Nothing
 
                         _ ->
-                            []
+                            Nothing
 
                 _ ->
-                    []
+                    Nothing
 
         _ ->
-            []
+            Nothing
+
+
+getToStringTodo : ModuleContext -> Range -> Function -> Maybe Todo
+getToStringTodo context declarationRange function =
+    case ( function.signature, function.declaration ) of
+        ( Just (Node _ signature), Node _ declaration ) ->
+            case signature.typeAnnotation of
+                Node _ (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed customType _)) (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) []))) ->
+                    case declaration.expression of
+                        Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
+                            case QualifiedType.create context.lookupTable context.currentModule customType of
+                                Just qualifiedType ->
+                                    case declaration.arguments of
+                                        (Node _ (VarPattern parameter)) :: [] ->
+                                            ToStringTodo
+                                                { functionName = Node.value signature.name
+                                                , typeVar = qualifiedType
+                                                , range = declarationRange
+                                                , parameterName = parameter
+                                                , signature = signature
+                                                }
+                                                |> Just
+
+                                        _ ->
+                                            Nothing
+
+                                Nothing ->
+                                    Nothing
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 generateRecordCodec : Maybe String -> List ( String, TypeAnnotation_ ) -> Node Expression
@@ -392,22 +466,28 @@ generateCustomTypeCodec customType =
 
 generateTodoDefinition : Todo -> TypeOrTypeAlias -> String
 generateTodoDefinition todo typeOrTypeAlias =
-    { documentation = Nothing
-    , signature = node todo.signature |> Just
-    , declaration =
-        node
-            { name = node todo.functionName
-            , arguments = todo.parameters
-            , expression =
-                case typeOrTypeAlias of
-                    TypeValue typeValue ->
-                        generateCustomTypeCodec typeValue
+    (case todo of
+        CodecTodo codecTodo ->
+            { documentation = Nothing
+            , signature = node codecTodo.signature |> Just
+            , declaration =
+                node
+                    { name = node codecTodo.functionName
+                    , arguments = codecTodo.parameters
+                    , expression =
+                        case typeOrTypeAlias of
+                            TypeValue typeValue ->
+                                generateCustomTypeCodec typeValue
 
-                    TypeAliasValue typeAliasName fields ->
-                        generateRecordCodec (Just typeAliasName) fields
+                            TypeAliasValue typeAliasName fields ->
+                                generateRecordCodec (Just typeAliasName) fields
+                    }
             }
-    }
-        |> Declaration.FunctionDeclaration
+                |> Declaration.FunctionDeclaration
+
+        ToStringTodo _ ->
+            Debug.todo ""
+    )
         |> node
         |> Elm.Writer.writeDeclaration
         |> Elm.Writer.write
@@ -508,7 +588,7 @@ codecFromTypeAnnotation typeAnnotation =
 
 notSupportedErrorMessage : Node Expression
 notSupportedErrorMessage =
-    errorMessage "Not supported yet"
+    errorMessage "I can't handle this"
 
 
 errorMessage : String -> Node Expression
@@ -520,19 +600,24 @@ errorMessage error =
         |> parenthesis
 
 
-getTypes : ProjectContext -> Dict ModuleName (Set QualifiedType)
-getTypes projectContext =
+getCodecTypes : ProjectContext -> Dict ModuleName (Set QualifiedType)
+getCodecTypes projectContext =
     List.foldl
         (\( moduleName, todo ) dict ->
-            Dict.update
-                moduleName
-                (Maybe.withDefault Set.empty
-                    >> getTypesHelper
-                        projectContext
-                        todo.typeVar
-                    >> Just
-                )
-                dict
+            case todo of
+                CodecTodo codecTodo ->
+                    Dict.update
+                        moduleName
+                        (Maybe.withDefault Set.empty
+                            >> getTypesHelper
+                                projectContext
+                                codecTodo.typeVar
+                            >> Just
+                        )
+                        dict
+
+                ToStringTodo _ ->
+                    dict
         )
         Dict.empty
         projectContext.todos
@@ -601,50 +686,65 @@ getTypesHelper projectContext typeDeclaration collectedTypes =
             collectedTypes
 
 
+todoRange : Todo -> Range
+todoRange todo =
+    case todo of
+        CodecTodo codecTodoData ->
+            codecTodoData.range
+
+        ToStringTodo toStringTodoData ->
+            toStringTodoData.range
+
+
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
     let
         typeTodos : Dict ModuleName (Set QualifiedType)
         typeTodos =
-            getTypes projectContext
+            getCodecTypes projectContext
 
         todoFixes : List (Error { useErrorForModule : () })
         todoFixes =
             projectContext.todos
                 |> List.filterMap
                     (\( moduleName, todo ) ->
-                        let
-                            maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
-                            maybeType =
-                                QualifiedType.getTypeData projectContext.types todo.typeVar
-                        in
-                        case ( maybeType, Dict.get moduleName projectContext.moduleKeys ) of
-                            ( Just ( _, type_ ), Just moduleKey ) ->
+                        case todo of
+                            CodecTodo codecTodo ->
                                 let
-                                    fix : String
-                                    fix =
-                                        generateTodoDefinition todo type_
+                                    maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                    maybeType =
+                                        QualifiedType.getTypeData projectContext.types codecTodo.typeVar
                                 in
-                                Rule.errorForModuleWithFix
-                                    moduleKey
-                                    { message = "Here's my attempt to complete this stub"
-                                    , details = [ "" ]
-                                    }
-                                    todo.range
-                                    (Review.Fix.replaceRangeBy todo.range fix
-                                        :: List.filterMap
-                                            (\( moduleName_, fix_ ) ->
-                                                if moduleName_ == moduleName then
-                                                    Just fix_
+                                case ( maybeType, Dict.get moduleName projectContext.moduleKeys ) of
+                                    ( Just ( _, type_ ), Just moduleKey ) ->
+                                        let
+                                            fix : String
+                                            fix =
+                                                generateTodoDefinition todo type_
+                                        in
+                                        Rule.errorForModuleWithFix
+                                            moduleKey
+                                            { message = "Here's my attempt to complete this stub"
+                                            , details = [ "" ]
+                                            }
+                                            codecTodo.range
+                                            (Review.Fix.replaceRangeBy codecTodo.range fix
+                                                :: List.filterMap
+                                                    (\( moduleName_, fix_ ) ->
+                                                        if moduleName_ == moduleName then
+                                                            Just fix_
 
-                                                else
-                                                    Nothing
+                                                        else
+                                                            Nothing
+                                                    )
+                                                    typeTodoFixes
                                             )
-                                            typeTodoFixes
-                                    )
-                                    |> Just
+                                            |> Just
 
-                            _ ->
+                                    _ ->
+                                        Nothing
+
+                            ToStringTodo _ ->
                                 Nothing
                     )
 
@@ -655,12 +755,25 @@ finalProjectEvaluation projectContext =
                 |> List.concatMap
                     (\( moduleName, qualifiedTypes ) ->
                         let
-                            todosInModule : List ( ModuleName, Todo )
+                            todosInModule : List CodecTodoData
                             todosInModule =
-                                List.filter (Tuple.first >> (==) moduleName) projectContext.todos
+                                List.filterMap
+                                    (\( moduleName_, todo ) ->
+                                        case todo of
+                                            CodecTodo codecTodo ->
+                                                if moduleName_ == moduleName then
+                                                    Just codecTodo
+
+                                                else
+                                                    Nothing
+
+                                            ToStringTodo _ ->
+                                                Nothing
+                                    )
+                                    projectContext.todos
                         in
                         Set.toList qualifiedTypes
-                            |> List.filter (\a -> List.any (Tuple.second >> .typeVar >> (/=) a) todosInModule)
+                            |> List.filter (\a -> List.any (.typeVar >> (/=) a) todosInModule)
                             |> List.indexedMap
                                 (\index qualifiedType ->
                                     let
@@ -675,32 +788,33 @@ finalProjectEvaluation projectContext =
                                                     uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
 
                                                 todo =
-                                                    { functionName = name
-                                                    , typeVar = qualifiedType
-                                                    , range =
-                                                        { start = { column = 0, row = 99999 + index }
-                                                        , end = { column = 0, row = 99999 + index }
-                                                        }
-                                                    , signature =
-                                                        { name = node name
-                                                        , typeAnnotation =
-                                                            TypeAnnotation.Typed
-                                                                (node ( [], "Codec" ))
-                                                                [ TypeAnnotation.GenericType "e" |> node
-                                                                , QualifiedType.name qualifiedType
-                                                                    |> TypeAnnotation.GenericType
+                                                    CodecTodo
+                                                        { functionName = name
+                                                        , typeVar = qualifiedType
+                                                        , range =
+                                                            { start = { column = 0, row = 99999 + index }
+                                                            , end = { column = 0, row = 99999 + index }
+                                                            }
+                                                        , signature =
+                                                            { name = node name
+                                                            , typeAnnotation =
+                                                                TypeAnnotation.Typed
+                                                                    (node ( [], "Codec" ))
+                                                                    [ TypeAnnotation.GenericType "e" |> node
+                                                                    , QualifiedType.name qualifiedType
+                                                                        |> TypeAnnotation.GenericType
+                                                                        |> node
+                                                                    ]
                                                                     |> node
-                                                                ]
-                                                                |> node
+                                                            }
+                                                        , parameters = []
                                                         }
-                                                    , parameters = []
-                                                    }
 
                                                 fix : String
                                                 fix =
                                                     generateTodoDefinition todo type_
                                             in
-                                            ( moduleName, Review.Fix.insertAt todo.range.end fix )
+                                            ( moduleName, Review.Fix.insertAt (todoRange todo).end fix )
                                                 |> Just
 
                                         Nothing ->
