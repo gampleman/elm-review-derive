@@ -1,4 +1,4 @@
-module QualifiedType exposing (QualifiedType, RecordField_, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, getTypeData, isPrimitiveType, name, qualifiedPath, toString, typeOrTypeAliasName)
+module QualifiedType exposing (QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, getTypeData, isPrimitiveType, name, qualifiedPath, toString, typeOrTypeAliasName)
 
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))

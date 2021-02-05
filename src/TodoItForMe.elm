@@ -152,11 +152,74 @@ elmJsonVisitor maybeElmJson projectContext =
 -- DECLARATION VISITOR
 
 
+convertTypeAnnotation : ModuleContext -> TypeAnnotation -> TypeAnnotation_
+convertTypeAnnotation moduleContext typeAnnotation =
+    case typeAnnotation of
+        TypeAnnotation.GenericType string ->
+            QualifiedType.GenericType_ string
+
+        TypeAnnotation.Typed a nodes ->
+            case QualifiedType.create moduleContext.moduleLookupTable moduleContext.currentModule a of
+                Just qualified ->
+                    QualifiedType.Typed_
+                        qualified
+                        (List.map (Node.value >> convertTypeAnnotation moduleContext) nodes)
+
+                Nothing ->
+                    QualifiedType.Unit_
+
+        TypeAnnotation.Unit ->
+            QualifiedType.Unit_
+
+        TypeAnnotation.Tupled nodes ->
+            QualifiedType.Tupled_ (List.map (Node.value >> convertTypeAnnotation moduleContext) nodes)
+
+        TypeAnnotation.Record recordDefinition ->
+            QualifiedType.Record_ (convertRecordDefinition moduleContext recordDefinition)
+
+        TypeAnnotation.GenericRecord a (Node _ recordDefinition) ->
+            QualifiedType.GenericRecord_
+                (Node.value a)
+                (convertRecordDefinition moduleContext recordDefinition)
+
+        TypeAnnotation.FunctionTypeAnnotation (Node _ a) (Node _ b) ->
+            QualifiedType.FunctionTypeAnnotation_
+                (convertTypeAnnotation moduleContext a)
+                (convertTypeAnnotation moduleContext b)
+
+
+convertRecordDefinition : ModuleContext -> List (Node ( Node a, Node TypeAnnotation )) -> List ( a, TypeAnnotation_ )
+convertRecordDefinition moduleContext recordDefinition =
+    List.map
+        (\(Node _ ( Node _ fieldName, Node _ fieldValue )) ->
+            ( fieldName, convertTypeAnnotation moduleContext fieldValue )
+        )
+        recordDefinition
+
+
+convertType : ModuleContext -> Elm.Syntax.Type.Type -> Type_
+convertType moduleContext type_ =
+    { name = Node.value type_.name
+    , generics = List.map Node.value type_.generics
+    , constructors =
+        List.map
+            (\(Node _ constructor) ->
+                { name = Node.value constructor.name
+                , arguments =
+                    List.map
+                        (Node.value >> convertTypeAnnotation moduleContext)
+                        constructor.arguments
+                }
+            )
+            type_.constructors
+    }
+
+
 declarationVisitor : Node Declaration -> ModuleContext -> ( List nothing, ModuleContext )
 declarationVisitor node_ context =
     case Node.value node_ of
         Declaration.CustomTypeDeclaration customType ->
-            ( [], { context | types = TypeValue customType :: context.types } )
+            ( [], { context | types = TypeValue (convertType context customType) :: context.types } )
 
         Declaration.FunctionDeclaration function ->
             ( [], { context | todos = getTodo context node_ function ++ context.todos } )
@@ -164,7 +227,15 @@ declarationVisitor node_ context =
         Declaration.AliasDeclaration typeAlias ->
             case Node.value typeAlias.typeAnnotation of
                 TypeAnnotation.Record record ->
-                    ( [], { context | types = TypeAliasValue (Node.value typeAlias.name) record :: context.types } )
+                    ( []
+                    , { context
+                        | types =
+                            TypeAliasValue
+                                (Node.value typeAlias.name)
+                                (convertRecordDefinition context record)
+                                :: context.types
+                      }
+                    )
 
                 _ ->
                     ( [], context )
@@ -615,7 +686,8 @@ finalProjectEvaluation projectContext =
                                                         , typeAnnotation =
                                                             TypeAnnotation.Typed
                                                                 (node ( [], "Codec" ))
-                                                                [ QualifiedType.name qualifiedType
+                                                                [ TypeAnnotation.GenericType "e" |> node
+                                                                , QualifiedType.name qualifiedType
                                                                     |> TypeAnnotation.GenericType
                                                                     |> node
                                                                 ]

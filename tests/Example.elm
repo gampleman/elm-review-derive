@@ -21,7 +21,7 @@ type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
 
-codec : Codec e A.A
+codec : Codec e A
 codec  =
     Serialize.record A 
         |> Serialize.field .fieldA Serialize.int 
@@ -31,7 +31,7 @@ codec  =
 
 
 
-bCodec : Codec e A.B
+bCodec : Codec e B
 bCodec  =
     Serialize.record B 
         |> Serialize.field .fieldD Serialize.float 
@@ -70,7 +70,7 @@ type MyType
     | VariantC MyType
 
 
-codec : Codec e A.MyType
+codec : Codec e MyType
 codec  =
     Serialize.customType (\\a b c value -> 
     case value of
@@ -159,42 +159,44 @@ type MyType
                             ]
                           )
                         ]
-        , test "maybe codec" <|
-            \_ ->
-                let
-                    expected : String
-                    expected =
-                        """module A exposing (..)
 
-import Serialize exposing (Codec)
-
-type alias MyType = { fieldA : Maybe Int }
-
-
-codec : Codec e A.MyType
-codec  =
-    Serialize.record MyType 
-        |> Serialize.field .fieldA (Serialize.maybe Serialize.int) 
-        |> Serialize.finishRecord
-"""
-                in
-                "module A exposing (..)\n"
-                    ++ "\n"
-                    ++ "import Serialize exposing (Codec)\n"
-                    ++ "\n"
-                    ++ "type alias MyType = { fieldA : Maybe Int }\n"
-                    ++ "\n"
-                    ++ "codec : Codec e MyType\n"
-                    ++ "codec = Debug.todo \"\"\n"
-                    |> Review.Test.run TodoItForMe.rule
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
-                            }
-                            |> Review.Test.whenFixed expected
-                        ]
+        --        , test "maybe codec" <|
+        --            \_ ->
+        --                let
+        --                    expected : String
+        --                    expected =
+        --                        """module A exposing (..)
+        --
+        --import Serialize exposing (Codec)
+        --
+        --type alias MyType = { fieldA : Maybe Int }
+        --
+        --
+        --codec : Codec e MyType
+        --codec  =
+        --    Serialize.record MyType
+        --        |> Serialize.field .fieldA (Serialize.maybe Serialize.int)
+        --        |> Serialize.finishRecord"""
+        --                in
+        --                """module A exposing (..)
+        --
+        --import Serialize exposing (Codec)
+        --
+        --type alias MyType = { fieldA : Maybe Int }
+        --
+        --codec : Codec e MyType
+        --codec = Debug.todo \"\""""
+        --                    |> Review.Test.run TodoItForMe.rule
+        --                    |> Review.Test.expectErrors
+        --                        [ Review.Test.error
+        --                            { message = "Here's my attempt to complete this stub"
+        --                            , details = [ "" ]
+        --                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
+        --                            }
+        --                            |> Review.Test.atExactly
+        --                                { start = { row = 7, column = 1 }, end = { row = 8, column = 22 } }
+        --                            |> Review.Test.whenFixed expected
+        --                        ]
         , test "dict codec" <|
             \_ ->
                 let
@@ -209,7 +211,7 @@ type alias MyType =
     }
 
 
-codec : Codec e A.MyType
+codec : Codec e MyType
 codec  =
     Serialize.record MyType 
         |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string) 
@@ -252,7 +254,7 @@ import Serialize exposing (Codec)
 type alias MyType = { fieldA : (Float, List String) }
 
 
-codec : Codec e A.MyType
+codec : Codec e MyType
 codec  =
     Serialize.record MyType 
         |> Serialize.field .fieldA (Serialize.tuple Serialize.float (Serialize.list Serialize.string)) 
@@ -289,7 +291,7 @@ import Serialize exposing (Codec)
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
 
-codec : Codec e A.MyType
+codec : Codec e MyType
 codec  =
     Serialize.record MyType 
         |> Serialize.field .fieldA (Serialize.record (\\a b -> {field0 = a, field1 = b}) 
@@ -331,13 +333,13 @@ type alias MyType = { fieldA : MyOtherType }
 type alias MyOtherType = { fieldB : Int }
 
 
-codec : Codec e A.MyType
+codec : Codec e MyType
 codec  =
     Serialize.record MyType 
         |> Serialize.field .fieldA myOtherTypeCodec 
         |> Serialize.finishRecord
 
-myOtherTypeCodec : Codec e A.MyOtherType
+myOtherTypeCodec : Codec e MyOtherType
 myOtherTypeCodec  =
     Serialize.record MyOtherType 
         |> Serialize.field .fieldB Serialize.int 
@@ -377,13 +379,13 @@ import B exposing (B)
 type alias A = { field : B }
 
 
-codec : Codec e A.A
+codec : Codec e A
 codec  =
     Serialize.record A 
         |> Serialize.field .field bCodec 
         |> Serialize.finishRecord
 
-bCodec : Codec e B.B
+bCodec : Codec e B
 bCodec  =
     Serialize.record B 
         |> Serialize.field .field Serialize.int 
@@ -429,19 +431,19 @@ import B exposing (B)
 type alias A = { field : B }
 
 
-codec : Codec e A.A
+codec : Codec e A
 codec  =
     Serialize.record A 
         |> Serialize.field .field bCodec 
         |> Serialize.finishRecord
 
-b2Codec : Codec e B.B2
+b2Codec : Codec e B2
 b2Codec  =
     Serialize.record B2 
         |> Serialize.field .field2 Serialize.int 
         |> Serialize.finishRecord
 
-bCodec : Codec e B.B
+bCodec : Codec e B
 bCodec  =
     Serialize.record B 
         |> Serialize.field .field1 b2Codec 
@@ -476,13 +478,12 @@ type alias B2 = { field2 : Int }"""
                             ]
                           )
                         ]
-        , only <|
-            test "nested codec in list" <|
-                \_ ->
-                    let
-                        expected : String
-                        expected =
-                            """module A exposing (..)
+        , test "nested codec in list" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
 
 import Serialize exposing (Codec)
 import B exposing (B)
@@ -490,13 +491,13 @@ import B exposing (B)
 type alias A = { field : List B }
 
 
-codec : Codec e A.A
+codec : Codec e A
 codec  =
     Serialize.record A 
         |> Serialize.field .field (Serialize.list bCodec) 
         |> Serialize.finishRecord
 
-bCodec : Codec e B.B
+bCodec : Codec e B
 bCodec  =
     Serialize.record B 
         |> Serialize.field .field1 Serialize.int 
