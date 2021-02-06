@@ -71,13 +71,13 @@ type alias ToStringTodoData =
     , typeVar : QualifiedType
     , range : Range
     , parameterName : String
-    , signature : Signature
     }
 
 
 type Todo
     = CodecTodo CodecTodoData
     | ToStringTodo ToStringTodoData
+    | FromStringTodo ToStringTodoData
 
 
 type alias IntermediateTodo =
@@ -250,6 +250,7 @@ declarationVisitor declarations context =
                         Node range (Declaration.FunctionDeclaration function) ->
                             getCodecTodo context range function
                                 |> orMaybe (getToStringTodo context range function)
+                                |> orMaybe (getFromStringTodo context range function)
 
                         _ ->
                             Nothing
@@ -345,13 +346,21 @@ getToStringTodo context declarationRange function =
                                 Just qualifiedType ->
                                     case declaration.arguments of
                                         (Node _ (VarPattern parameter)) :: [] ->
-                                            ToStringTodo
-                                                { functionName = Node.value signature.name
-                                                , typeVar = qualifiedType
-                                                , range = declarationRange
-                                                , parameterName = parameter
-                                                , signature = signature
-                                                }
+                                            { functionName = Node.value signature.name
+                                            , typeVar = qualifiedType
+                                            , range = declarationRange
+                                            , parameterName = parameter
+                                            }
+                                                |> ToStringTodo
+                                                |> Just
+
+                                        [] ->
+                                            { functionName = Node.value signature.name
+                                            , typeVar = qualifiedType
+                                            , range = declarationRange
+                                            , parameterName = "value"
+                                            }
+                                                |> ToStringTodo
                                                 |> Just
 
                                         _ ->
@@ -367,6 +376,63 @@ getToStringTodo context declarationRange function =
                     Nothing
 
         _ ->
+            Nothing
+
+
+getFromStringTodo : ModuleContext -> Range -> Function -> Maybe Todo
+getFromStringTodo context declarationRange function =
+    let
+        declaration : Expression.FunctionImplementation
+        declaration =
+            Node.value function.declaration
+
+        createTodo : Signature -> Node ( ModuleName, String ) -> Maybe Todo
+        createTodo signature customType =
+            case declaration.expression of
+                Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
+                    case QualifiedType.create context.lookupTable context.currentModule customType of
+                        Just qualifiedType ->
+                            case declaration.arguments of
+                                (Node _ (VarPattern parameter)) :: [] ->
+                                    { functionName = Node.value signature.name
+                                    , typeVar = qualifiedType
+                                    , range = declarationRange
+                                    , parameterName = parameter
+                                    }
+                                        |> FromStringTodo
+                                        |> Just
+
+                                [] ->
+                                    { functionName = Node.value signature.name
+                                    , typeVar = qualifiedType
+                                    , range = declarationRange
+                                    , parameterName = "text"
+                                    }
+                                        |> FromStringTodo
+                                        |> Just
+
+                                _ ->
+                                    Nothing
+
+                        Nothing ->
+                            Nothing
+
+                _ ->
+                    Nothing
+    in
+    case function.signature of
+        Just (Node _ signature) ->
+            case signature.typeAnnotation of
+                Node _ (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed (Node _ ( [], "Maybe" )) [ Node _ (TypeAnnotation.Typed customType _) ]))) ->
+                    createTodo signature customType
+
+                Node _ (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed customType _))) ->
+                    createTodo signature customType
+
+                _ ->
+                    Nothing
+
+        Nothing ->
             Nothing
 
 
@@ -502,7 +568,18 @@ generateCodecTodoDefinition codecTodo typeOrTypeAlias =
 generateToStringDefinition : ToStringTodoData -> Type_ -> String
 generateToStringDefinition toStringTodo type_ =
     { documentation = Nothing
-    , signature = node toStringTodo.signature |> Just
+    , signature =
+        { name = node toStringTodo.functionName
+        , typeAnnotation =
+            TypeAnnotation.FunctionTypeAnnotation
+                (TypeAnnotation.Typed (node ( [], QualifiedType.name toStringTodo.typeVar )) []
+                    |> node
+                )
+                (TypeAnnotation.Typed (node ( [], "String" )) [] |> node)
+                |> node
+        }
+            |> node
+            |> Just
     , declaration =
         node
             { name = node toStringTodo.functionName
@@ -520,6 +597,51 @@ generateToStringDefinition toStringTodo type_ =
                                     (List.repeat (List.length constructor.arguments) (node AllPattern))
                                     |> node
                                 , Expression.Literal constructor.name |> node
+                                )
+                            )
+                            type_.constructors
+                    }
+                    |> node
+            }
+    }
+        |> Declaration.FunctionDeclaration
+        |> node
+        |> Elm.Writer.writeDeclaration
+        |> Elm.Writer.write
+        |> String.replace "|>" "\n        |>"
+
+
+generateFromStringDefinition : ToStringTodoData -> Type_ -> String
+generateFromStringDefinition toStringTodo type_ =
+    { documentation = Nothing
+    , signature =
+        { name = node toStringTodo.functionName
+        , typeAnnotation =
+            TypeAnnotation.FunctionTypeAnnotation
+                (TypeAnnotation.Typed (node ( [], "String" )) [] |> node)
+                (TypeAnnotation.Typed
+                    (node ( [], "Maybe" ))
+                    [ TypeAnnotation.Typed (node ( [], QualifiedType.name toStringTodo.typeVar )) [] |> node ]
+                    |> node
+                )
+                |> node
+        }
+            |> node
+            |> Just
+    , declaration =
+        node
+            { name = node toStringTodo.functionName
+            , arguments = [ VarPattern toStringTodo.parameterName |> node ]
+            , expression =
+                Expression.CaseExpression
+                    { expression = functionOrValue [] toStringTodo.parameterName
+                    , cases =
+                        List.map
+                            (\constructor ->
+                                ( StringPattern constructor.name |> node
+                                , functionOrValue [] constructor.name
+                                    :: List.repeat (List.length constructor.arguments) notSupportedErrorMessage
+                                    |> application
                                 )
                             )
                             type_.constructors
@@ -657,6 +779,9 @@ getCodecTypes projectContext =
                         dict
 
                 ToStringTodo _ ->
+                    dict
+
+                FromStringTodo _ ->
                     dict
         )
         Dict.empty
@@ -797,6 +922,30 @@ finalProjectEvaluation projectContext =
 
                                     _ ->
                                         Nothing
+
+                            FromStringTodo toStringTodo ->
+                                let
+                                    maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                    maybeType =
+                                        QualifiedType.getTypeData projectContext.types toStringTodo.typeVar
+                                in
+                                case ( maybeType, Dict.get moduleName projectContext.moduleKeys ) of
+                                    ( Just ( _, TypeValue type_ ), Just moduleKey ) ->
+                                        let
+                                            fix =
+                                                generateFromStringDefinition toStringTodo type_
+                                        in
+                                        Rule.errorForModuleWithFix
+                                            moduleKey
+                                            { message = "Here's my attempt to complete this stub"
+                                            , details = [ "" ]
+                                            }
+                                            toStringTodo.range
+                                            [ Review.Fix.replaceRangeBy toStringTodo.range fix ]
+                                            |> Just
+
+                                    _ ->
+                                        Nothing
                     )
 
         typeTodoFixes : List ( ModuleName, Review.Fix.Fix )
@@ -819,6 +968,9 @@ finalProjectEvaluation projectContext =
                                                     Nothing
 
                                             ToStringTodo _ ->
+                                                Nothing
+
+                                            FromStringTodo _ ->
                                                 Nothing
                                     )
                                     projectContext.todos
