@@ -623,6 +623,51 @@ treeToString tree = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
+        , test "tree to string missing parameter" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type Tree a
+    = Node (Tree a) (Tree a)
+    | Leaf a
+
+
+treeToString : Tree -> String
+treeToString value =
+    
+    case value of
+      Node _ _ ->
+        "Node"
+      Leaf _ ->
+        "Leaf"
+    """
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type Tree a
+    = Node (Tree a) (Tree a)
+    | Leaf a
+
+treeToString : Tree a -> String
+treeToString = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "treeToString : Tree a -> String\ntreeToString = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         , test "custom type from string" <|
             \_ ->
                 let
@@ -718,6 +763,55 @@ fromString a = Debug.todo \"\""""
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
                             , under = "fromString : String -> A a\nfromString a = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "custom type from string missing parameter" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type A a
+    = A a
+    | B Int String
+    | C
+
+
+fromString : String -> Maybe A
+fromString text =
+    
+    case text of
+      A ->
+        A (Debug.todo "Can't handle this")
+      B ->
+        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
+      C ->
+        C
+    """
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type A a
+    = A a
+    | B Int String
+    | C
+
+fromString : String -> Maybe (A a)
+fromString = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "fromString : String -> Maybe (A a)\nfromString = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
