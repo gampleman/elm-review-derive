@@ -830,4 +830,47 @@ fromString = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
+        , test "list all variants" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type A a
+    = A a
+    | B Int String
+    | C
+
+
+list : List A
+list  =
+    [A (Debug.todo "Can't handle this")
+    , B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
+    , C]"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type A a
+    = A a
+    | B Int String
+    | C
+
+list : List (A a)
+list = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "list : List (A a)\nlist = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         ]

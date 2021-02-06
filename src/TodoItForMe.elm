@@ -691,6 +691,45 @@ generateFromStringDefinition toStringTodo type_ =
         |> writeDeclaration
 
 
+generateListAllDefinition : ListAllTodoData -> Type_ -> String
+generateListAllDefinition toStringTodo type_ =
+    { documentation = Nothing
+    , signature =
+        { name = node toStringTodo.functionName
+        , typeAnnotation =
+            TypeAnnotation.Typed
+                (node ( [], "List" ))
+                [ TypeAnnotation.Typed
+                    (node ( [], QualifiedType.name toStringTodo.typeVar ))
+                    []
+                    |> node
+                ]
+                |> node
+        }
+            |> node
+            |> Just
+    , declaration =
+        node
+            { name = node toStringTodo.functionName
+            , arguments = []
+            , expression =
+                List.map
+                    (\constructor ->
+                        functionOrValue [] constructor.name
+                            :: List.repeat
+                                (List.length constructor.arguments)
+                                notSupportedErrorMessage
+                            |> application
+                    )
+                    type_.constructors
+                    |> Expression.ListExpr
+                    |> node
+            }
+    }
+        |> writeDeclaration
+        |> String.replace "," "\n    ,"
+
+
 writeDeclaration =
     Declaration.FunctionDeclaration
         >> node
@@ -1003,9 +1042,7 @@ finalProjectEvaluation projectContext =
                                     ( Just ( _, TypeValue type_ ), Just moduleKey ) ->
                                         let
                                             fix =
-                                                Debug.todo ""
-
-                                            --generateListAllDefinition listAllTodo type_
+                                                generateListAllDefinition listAllTodo type_
                                         in
                                         Rule.errorForModuleWithFix
                                             moduleKey
