@@ -688,11 +688,16 @@ fromString a =
     
     case a of
       A ->
-        A (Debug.todo "Can't handle this")
+        A (Debug.todo "Can't handle this") 
+        |> Just
       B ->
-        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
+        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
+        |> Just
       C ->
-        C
+        C 
+        |> Just
+      _ ->
+        Nothing
     """
                             |> String.replace "\u{000D}" ""
                 in
@@ -737,11 +742,16 @@ fromString a =
     
     case a of
       A ->
-        A (Debug.todo "Can't handle this")
+        A (Debug.todo "Can't handle this") 
+        |> Just
       B ->
-        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
+        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
+        |> Just
       C ->
-        C
+        C 
+        |> Just
+      _ ->
+        Nothing
     """
                             |> String.replace "\u{000D}" ""
                 in
@@ -786,11 +796,16 @@ fromString text =
     
     case text of
       A ->
-        A (Debug.todo "Can't handle this")
+        A (Debug.todo "Can't handle this") 
+        |> Just
       B ->
-        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
+        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
+        |> Just
       C ->
-        C
+        C 
+        |> Just
+      _ ->
+        Nothing
     """
                             |> String.replace "\u{000D}" ""
                 in
