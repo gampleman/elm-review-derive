@@ -553,8 +553,8 @@ codec codecA =
       Leaf data0 ->
         b data0
     ) 
-        |> Serialize.variant2 Node (treeCodec (Debug.todo "Not supported yet")) (treeCodec (Debug.todo "Not supported yet")) 
-        |> Serialize.variant1 Leaf (Debug.todo "Not supported yet") 
+        |> Serialize.variant2 Node (treeCodec (Debug.todo "Can't handle this")) (treeCodec (Debug.todo "Can't handle this")) 
+        |> Serialize.variant1 Leaf (Debug.todo "Can't handle this") 
         |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
@@ -575,6 +575,51 @@ codec codecA = Debug.todo \"\""""
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
                             , under = "codec : Codec a -> Codec e (Tree a)\ncodec codecA = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "tree to string" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type Tree a
+    = Node (Tree a) (Tree a)
+    | Leaf a
+
+
+treeToString : Tree a -> String
+treeToString tree =
+    
+    case tree of
+      Node _ _ ->
+        "Node"
+      Leaf _ ->
+        "Leaf"
+    """
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type Tree a
+    = Node (Tree a) (Tree a)
+    | Leaf a
+
+treeToString : Tree a -> String
+treeToString tree = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "treeToString : Tree a -> String\ntreeToString tree = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
