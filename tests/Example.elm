@@ -159,6 +159,70 @@ type MyType
                             ]
                           )
                         ]
+        , test "reuse existing codec in another module" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+import OtherModule
+
+type alias A = { field : MyType }
+
+codec : Codec e A
+codec  =
+    Serialize.record A
+        |> Serialize.field .field OtherModule.codec
+        |> Serialize.finishRecord"""
+                            |> String.replace "\u{000D}" ""
+                in
+                [ """module A exposing (..)
+
+import Serialize exposing (Codec)
+import OtherModule exposing (MyType)
+
+type alias A = { field : MyType }
+
+codec : Codec e A
+codec = Debug.todo \"\""""
+                , """module OtherModule exposing (..)
+
+type MyType
+    = VariantA
+    | VariantB Int String Float
+    | VariantC MyType
+    
+codec : Codec e MyType
+codec  =
+    Serialize.customType (\\a b c value -> 
+    case value of
+      VariantA  ->
+        a
+      VariantB data0 data1 data2 ->
+        b data0 data1 data2
+      VariantC data0 ->
+        c data0
+    ) 
+        |> Serialize.variant0 VariantA 
+        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float 
+        |> Serialize.variant1 VariantC myTypeCodec 
+        |> Serialize.finishCustomType"""
+                ]
+                    |> List.map (String.replace "\u{000D}" "")
+                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.expectErrorsForModules
+                        [ ( "A"
+                          , [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+                          )
+                        ]
 
         --        , test "maybe codec" <|
         --            \_ ->
