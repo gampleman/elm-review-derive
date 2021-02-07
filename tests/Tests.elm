@@ -826,13 +826,13 @@ fromString : String -> Maybe A
 fromString a =
     
     case a of
-      A ->
+      "A" ->
         A (Debug.todo "Can't handle this") 
         |> Just
-      B ->
+      "B" ->
         B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
         |> Just
-      C ->
+      "C" ->
         C 
         |> Just
       _ ->
@@ -880,13 +880,13 @@ fromString : String -> Maybe A
 fromString a =
     
     case a of
-      A ->
+      "A" ->
         A (Debug.todo "Can't handle this") 
         |> Just
-      B ->
+      "B" ->
         B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
         |> Just
-      C ->
+      "C" ->
         C 
         |> Just
       _ ->
@@ -934,13 +934,13 @@ fromString : String -> Maybe A
 fromString text =
     
     case text of
-      A ->
+      "A" ->
         A (Debug.todo "Can't handle this") 
         |> Just
-      B ->
+      "B" ->
         B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
         |> Just
-      C ->
+      "C" ->
         C 
         |> Just
       _ ->
