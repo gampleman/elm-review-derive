@@ -55,6 +55,80 @@ codec = Debug.todo ""
                         [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec e A\ncodec = Debug.todo \"\"" }
                             |> Review.Test.whenFixed expected
                         ]
+        , test "codec missing error type" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias A = { fieldA : Int }
+
+
+codec : Codec A
+codec  =
+    Serialize.record A 
+        |> Serialize.field .fieldA Serialize.int 
+        |> Serialize.finishRecord"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias A = { fieldA : Int }
+
+codec : Codec A
+codec = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "qualified codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias A = { fieldA : Int }
+
+
+codec : Serialize.Codec e A
+codec  =
+    Serialize.record A 
+        |> Serialize.field .fieldA Serialize.int 
+        |> Serialize.finishRecord"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias A = { fieldA : Int }
+
+codec : Serialize.Codec e A
+codec = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Serialize.Codec e A\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         , test "custom type codec" <|
             \_ ->
                 let

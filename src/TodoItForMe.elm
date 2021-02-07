@@ -364,27 +364,43 @@ typeAnnotationReturnValue typeAnnotation =
 
 getCodecTodo : ModuleContext -> Range -> Function -> Maybe Todo
 getCodecTodo context declarationRange function =
-    case ( function.signature, function.declaration ) of
-        ( Just (Node _ signature), Node _ declaration ) ->
+    let
+        declaration =
+            Node.value function.declaration
+
+        abc signature codecType =
+            if hasDebugTodo declaration then
+                case QualifiedType.create context.lookupTable context.currentModule codecType of
+                    Just qualifiedType ->
+                        CodecTodo
+                            { functionName = Node.value signature.name
+                            , typeVar = qualifiedType
+                            , range = declarationRange
+                            , parameters = declaration.arguments
+                            , signature = signature
+                            }
+                            |> Just
+
+                    Nothing ->
+                        Nothing
+
+            else
+                Nothing
+    in
+    case function.signature of
+        Just (Node _ signature) ->
             case typeAnnotationReturnValue signature.typeAnnotation of
                 Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
-                    if hasDebugTodo declaration then
-                        case QualifiedType.create context.lookupTable context.currentModule codecType of
-                            Just qualifiedType ->
-                                CodecTodo
-                                    { functionName = Node.value signature.name
-                                    , typeVar = qualifiedType
-                                    , range = declarationRange
-                                    , parameters = declaration.arguments
-                                    , signature = signature
-                                    }
-                                    |> Just
+                    abc signature codecType
 
-                            Nothing ->
-                                Nothing
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType _) ]) ->
+                    abc signature codecType
 
-                    else
-                        Nothing
+                Node _ (TypeAnnotation.Typed (Node _ ( [ "Serialize" ], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
+                    abc signature codecType
+
+                Node _ (TypeAnnotation.Typed (Node _ ( [ "Serialize" ], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType _) ]) ->
+                    abc signature codecType
 
                 _ ->
                     Nothing
