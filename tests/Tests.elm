@@ -1,4 +1,4 @@
-module Example exposing (suite)
+module Tests exposing (suite)
 
 import Review.Test
 import Test exposing (..)
@@ -167,14 +167,15 @@ type MyType
                         """module A exposing (..)
 
 import Serialize exposing (Codec)
-import OtherModule
+import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
 
+
 codec : Codec e A
 codec  =
-    Serialize.record A
-        |> Serialize.field .field OtherModule.codec
+    Serialize.record A 
+        |> Serialize.field .field OtherModule.codec 
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in

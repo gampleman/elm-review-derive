@@ -52,6 +52,7 @@ moduleVisitor schema =
 
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
+    , codecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
     , todos : List ( ModuleName, Todo )
     , moduleKeys : Dict ModuleName ModuleKey
     }
@@ -95,6 +96,7 @@ type alias IntermediateTodo =
 type alias ModuleContext =
     { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
     , types : List TypeOrTypeAlias
+    , codecs : List { functionName : String, typeVar : QualifiedType }
     , todos : List Todo
     , currentModule : ModuleName
     , moduleLookupTable : ModuleNameLookupTable
@@ -104,6 +106,7 @@ type alias ModuleContext =
 initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
+    , codecs = []
     , todos = []
     , moduleKeys = Dict.empty
     }
@@ -117,6 +120,10 @@ fromProjectToModule lookupTable metadata projectContext =
     in
     { lookupTable = lookupTable
     , types = projectContext.types |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
+    , codecs =
+        List.map
+            (\a -> { functionName = a.functionName, typeVar = a.typeVar })
+            projectContext.codecs
     , todos =
         List.filterMap
             (\( moduleName_, todo ) ->
@@ -140,6 +147,10 @@ fromModuleToProject moduleKey metadata moduleContext =
             Rule.moduleNameFromMetadata metadata
     in
     { types = List.map (Tuple.pair moduleName) moduleContext.types
+    , codecs =
+        List.map
+            (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
+            moduleContext.codecs
     , todos = List.map (\todo -> ( moduleName, todo )) moduleContext.todos
     , moduleKeys = Dict.singleton moduleName moduleKey
     }
@@ -148,6 +159,7 @@ fromModuleToProject moduleKey metadata moduleContext =
 foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
+    , codecs = newContext.codecs ++ previousContext.codecs
     , todos = newContext.todos ++ previousContext.todos
     , moduleKeys = Dict.union newContext.moduleKeys previousContext.moduleKeys
     }
@@ -247,6 +259,18 @@ declarationVisitor declarations context =
                         (declarationVisitorGetTypes context)
                         declarations
                         ++ context.types
+                , codecs =
+                    List.filterMap
+                        (\declaration ->
+                            case declaration of
+                                Node _ (Declaration.FunctionDeclaration function) ->
+                                    declarationVisitorGetCodecs context function
+
+                                _ ->
+                                    Nothing
+                        )
+                        declarations
+                        ++ context.codecs
             }
     in
     ( []
@@ -278,6 +302,33 @@ orMaybe maybeA maybeB =
 
         Nothing ->
             maybeA
+
+
+declarationVisitorGetCodecs : ModuleContext -> Function -> Maybe { functionName : String, typeVar : QualifiedType }
+declarationVisitorGetCodecs context function =
+    case ( function.signature, function.declaration ) of
+        ( Just (Node _ signature), Node _ declaration ) ->
+            case typeAnnotationReturnValue signature.typeAnnotation of
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
+                    if hasDebugTodo declaration then
+                        Nothing
+
+                    else
+                        case QualifiedType.create context.lookupTable context.currentModule codecType of
+                            Just qualifiedType ->
+                                { functionName = Node.value signature.name
+                                , typeVar = qualifiedType
+                                }
+                                    |> Just
+
+                            Nothing ->
+                                Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 declarationVisitorGetTypes : ModuleContext -> Node Declaration -> Maybe TypeOrTypeAlias
@@ -317,9 +368,8 @@ getCodecTodo context declarationRange function =
         ( Just (Node _ signature), Node _ declaration ) ->
             case typeAnnotationReturnValue signature.typeAnnotation of
                 Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
-                    checkDebugTodo
-                        declaration
-                        (case QualifiedType.create context.lookupTable context.currentModule codecType of
+                    if hasDebugTodo declaration then
+                        case QualifiedType.create context.lookupTable context.currentModule codecType of
                             Just qualifiedType ->
                                 CodecTodo
                                     { functionName = Node.value signature.name
@@ -332,7 +382,9 @@ getCodecTodo context declarationRange function =
 
                             Nothing ->
                                 Nothing
-                        )
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -347,9 +399,8 @@ getToStringTodo context declarationRange function =
         ( Just (Node _ signature), Node _ declaration ) ->
             case signature.typeAnnotation of
                 Node _ (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed customType _)) (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) []))) ->
-                    checkDebugTodo
-                        declaration
-                        (case QualifiedType.create context.lookupTable context.currentModule customType of
+                    if hasDebugTodo declaration then
+                        case QualifiedType.create context.lookupTable context.currentModule customType of
                             Just qualifiedType ->
                                 case declaration.arguments of
                                     (Node _ (VarPattern parameter)) :: [] ->
@@ -375,7 +426,9 @@ getToStringTodo context declarationRange function =
 
                             Nothing ->
                                 Nothing
-                        )
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -393,9 +446,8 @@ getFromStringTodo context declarationRange function =
 
         createTodo : Signature -> Node ( ModuleName, String ) -> Maybe Todo
         createTodo signature customType =
-            checkDebugTodo
-                declaration
-                (case QualifiedType.create context.lookupTable context.currentModule customType of
+            if hasDebugTodo declaration then
+                case QualifiedType.create context.lookupTable context.currentModule customType of
                     Just qualifiedType ->
                         case declaration.arguments of
                             (Node _ (VarPattern parameter)) :: [] ->
@@ -421,7 +473,9 @@ getFromStringTodo context declarationRange function =
 
                     Nothing ->
                         Nothing
-                )
+
+            else
+                Nothing
     in
     case function.signature of
         Just (Node _ signature) ->
@@ -445,9 +499,8 @@ getListAllTodo context declarationRange function =
         ( Just (Node _ signature), Node _ declaration ) ->
             case signature.typeAnnotation of
                 Node _ (TypeAnnotation.Typed (Node _ ( [], "List" )) [ Node _ (TypeAnnotation.Typed codecType _) ]) ->
-                    checkDebugTodo
-                        declaration
-                        (case QualifiedType.create context.lookupTable context.currentModule codecType of
+                    if hasDebugTodo declaration then
+                        case QualifiedType.create context.lookupTable context.currentModule codecType of
                             Just qualifiedType ->
                                 ListAllTodo
                                     { functionName = Node.value signature.name
@@ -458,7 +511,9 @@ getListAllTodo context declarationRange function =
 
                             Nothing ->
                                 Nothing
-                        )
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -467,18 +522,18 @@ getListAllTodo context declarationRange function =
             Nothing
 
 
-checkDebugTodo : { a | expression : Node Expression } -> Maybe b -> Maybe b
-checkDebugTodo declaration function =
+hasDebugTodo : { a | expression : Node Expression } -> Bool
+hasDebugTodo declaration =
     case declaration.expression of
         Node _ (Expression.Application ((Node _ (Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
-            function
+            True
 
         _ ->
-            Nothing
+            False
 
 
-generateRecordCodec : Maybe String -> List ( String, TypeAnnotation_ ) -> Node Expression
-generateRecordCodec typeAliasName recordFields =
+generateRecordCodec : ProjectContext -> Maybe String -> List ( String, TypeAnnotation_ ) -> Node Expression
+generateRecordCodec projectContext typeAliasName recordFields =
     List.foldl
         (\( fieldName, typeAnnotation ) code ->
             code
@@ -486,7 +541,7 @@ generateRecordCodec typeAliasName recordFields =
                     (application
                         [ functionOrValue [ "Serialize" ] "field"
                         , Expression.RecordAccessFunction fieldName |> node
-                        , codecFromTypeAnnotation typeAnnotation
+                        , codecFromTypeAnnotation projectContext typeAnnotation
                         ]
                     )
         )
@@ -524,8 +579,8 @@ varFromInt =
         >> String.fromChar
 
 
-generateCustomTypeCodec : Type_ -> Node Expression
-generateCustomTypeCodec customType =
+generateCustomTypeCodec : ProjectContext -> Type_ -> Node Expression
+generateCustomTypeCodec projectContext customType =
     let
         args : List ( Node Pattern, ( Node Pattern, Node Expression ) )
         args =
@@ -572,7 +627,7 @@ generateCustomTypeCodec customType =
                         (functionOrValue [ "Serialize" ] ("variant" ++ String.fromInt (List.length constructor.arguments))
                             :: functionOrValue [] constructor.name
                             :: List.map
-                                codecFromTypeAnnotation
+                                (codecFromTypeAnnotation projectContext)
                                 constructor.arguments
                         )
                     )
@@ -582,8 +637,8 @@ generateCustomTypeCodec customType =
         |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishCustomType" ])
 
 
-generateCodecTodoDefinition : CodecTodoData -> TypeOrTypeAlias -> String
-generateCodecTodoDefinition codecTodo typeOrTypeAlias =
+generateCodecTodoDefinition : ProjectContext -> CodecTodoData -> TypeOrTypeAlias -> String
+generateCodecTodoDefinition projectContext codecTodo typeOrTypeAlias =
     { documentation = Nothing
     , signature = node codecTodo.signature |> Just
     , declaration =
@@ -593,10 +648,10 @@ generateCodecTodoDefinition codecTodo typeOrTypeAlias =
             , expression =
                 case typeOrTypeAlias of
                     TypeValue typeValue ->
-                        generateCustomTypeCodec typeValue
+                        generateCustomTypeCodec projectContext typeValue
 
                     TypeAliasValue typeAliasName fields ->
-                        generateRecordCodec (Just typeAliasName) fields
+                        generateRecordCodec projectContext (Just typeAliasName) fields
             }
     }
         |> writeDeclaration
@@ -738,8 +793,8 @@ writeDeclaration =
         >> String.replace "|>" "\n        |>"
 
 
-codecFromTypeAnnotation : TypeAnnotation_ -> Node Expression
-codecFromTypeAnnotation typeAnnotation =
+codecFromTypeAnnotation : ProjectContext -> TypeAnnotation_ -> Node Expression
+codecFromTypeAnnotation projectContext typeAnnotation =
     case typeAnnotation of
         Typed_ qualifiedType typeVariables ->
             let
@@ -779,11 +834,17 @@ codecFromTypeAnnotation typeAnnotation =
                         _ ->
                             functionOrValue [] (uncapitalize text ++ "Codec")
 
+                applied : Node Expression
                 applied =
-                    application
-                        (getCodecName (QualifiedType.name qualifiedType)
-                            :: List.map codecFromTypeAnnotation typeVariables
-                        )
+                    (case find (.typeVar >> (==) qualifiedType) projectContext.codecs of
+                        Just codec ->
+                            functionOrValue codec.moduleName codec.functionName
+
+                        Nothing ->
+                            getCodecName (QualifiedType.name qualifiedType)
+                    )
+                        :: List.map (codecFromTypeAnnotation projectContext) typeVariables
+                        |> application
             in
             if List.isEmpty typeVariables then
                 applied
@@ -795,22 +856,22 @@ codecFromTypeAnnotation typeAnnotation =
             functionOrValue [ "Serialize" ] "unit"
 
         Tupled_ [ first ] ->
-            codecFromTypeAnnotation first
+            codecFromTypeAnnotation projectContext first
 
         Tupled_ [ first, second ] ->
             application
                 [ functionOrValue [ "Serialize" ] "tuple"
-                , codecFromTypeAnnotation first
-                , codecFromTypeAnnotation second
+                , codecFromTypeAnnotation projectContext first
+                , codecFromTypeAnnotation projectContext second
                 ]
                 |> parenthesis
 
         Tupled_ [ first, second, third ] ->
             application
                 [ functionOrValue [ "Serialize" ] "triple"
-                , codecFromTypeAnnotation first
-                , codecFromTypeAnnotation second
-                , codecFromTypeAnnotation third
+                , codecFromTypeAnnotation projectContext first
+                , codecFromTypeAnnotation projectContext second
+                , codecFromTypeAnnotation projectContext third
                 ]
                 |> parenthesis
 
@@ -824,7 +885,7 @@ codecFromTypeAnnotation typeAnnotation =
             notSupportedErrorMessage
 
         Record_ fields ->
-            generateRecordCodec Nothing fields |> parenthesis
+            generateRecordCodec projectContext Nothing fields |> parenthesis
 
         GenericRecord_ _ _ ->
             notSupportedErrorMessage
@@ -960,7 +1021,7 @@ finalProjectEvaluation projectContext =
                                         let
                                             fix : String
                                             fix =
-                                                generateCodecTodoDefinition codecTodo type_
+                                                generateCodecTodoDefinition projectContext codecTodo type_
                                         in
                                         Rule.errorForModuleWithFix
                                             moduleKey
@@ -1089,6 +1150,7 @@ finalProjectEvaluation projectContext =
                         in
                         Set.toList qualifiedTypes
                             |> List.filter (\a -> List.any (.typeVar >> (/=) a) todosInModule)
+                            |> List.filter (\a -> List.all (.typeVar >> (/=) a) projectContext.codecs)
                             |> List.indexedMap
                                 (\index qualifiedType ->
                                     let
@@ -1129,7 +1191,7 @@ finalProjectEvaluation projectContext =
 
                                                 fix : String
                                                 fix =
-                                                    generateCodecTodoDefinition todo type_
+                                                    generateCodecTodoDefinition projectContext todo type_
                                             in
                                             ( moduleName, Review.Fix.insertAt position fix )
                                                 |> Just
