@@ -743,14 +743,21 @@ generateFromStringDefinition toStringTodo type_ =
                         List.map
                             (\constructor ->
                                 ( StringPattern constructor.name |> node
-                                , Expression.OperatorApplication "|>"
-                                    Right
-                                    (functionOrValue [] constructor.name
-                                        :: List.repeat (List.length constructor.arguments) notSupportedErrorMessage
-                                        |> application
-                                    )
-                                    (functionOrValue [] "Just")
-                                    |> node
+                                , if List.isEmpty constructor.arguments then
+                                    application
+                                        [ functionOrValue [] "Just"
+                                        , functionOrValue [] constructor.name
+                                        ]
+
+                                  else
+                                    Expression.OperatorApplication "|>"
+                                        Right
+                                        (functionOrValue [] constructor.name
+                                            :: List.repeat (List.length constructor.arguments) notSupportedErrorMessage
+                                            |> application
+                                        )
+                                        (functionOrValue [] "Just")
+                                        |> node
                                 )
                             )
                             type_.constructors

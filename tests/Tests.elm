@@ -833,8 +833,7 @@ fromString a =
         B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
         |> Just
       "C" ->
-        C 
-        |> Just
+        Just C
       _ ->
         Nothing
     """
@@ -887,8 +886,7 @@ fromString a =
         B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
         |> Just
       "C" ->
-        C 
-        |> Just
+        Just C
       _ ->
         Nothing
     """
@@ -941,8 +939,7 @@ fromString text =
         B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
         |> Just
       "C" ->
-        C 
-        |> Just
+        Just C
       _ ->
         Nothing
     """
