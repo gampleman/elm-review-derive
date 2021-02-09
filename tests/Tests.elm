@@ -1009,4 +1009,57 @@ list = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
+                , test "random generator" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
+
+type MyType
+    = Variant0
+    | Variant1
+    | Variant2 NestedType
+
+type alias NestedType = { field : (Int, Float) }
+
+randomMyType : Random.Generator MyType
+randomMyType =
+    Random.uniform
+        (Random.constant Variant1)
+        [ Random.constant Variant2
+        , randomNestedType |> Random.map Variant3
         ]
+        |> Random.andThen identity
+
+
+randomNestedType : Random.Generator NestedType
+randomNestedType =
+    Random.map2 NestedType
+        (Debug.todo "Can't handle this")
+        (Random.map2 Tuple.pair (Random.int 0 10) (Random.float 0 10))"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+type MyType
+    = Variant0
+    | Variant1
+    | Variant2 NestedType
+
+type alias NestedType = { field : (Int, Float) }
+
+randomMyType : Random.Generator MyType
+randomMyType = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "randomMyType : Random.Generator MyType\nrandomMyType = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        ]
+

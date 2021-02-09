@@ -87,7 +87,7 @@ type Todo
     | ToStringTodo ToStringTodoData
     | FromStringTodo ToStringTodoData
     | ListAllTodo ListAllTodoData
-
+    | RandomGeneratorTodo  CodecTodoData
 
 type alias IntermediateTodo =
     { functionName : Node String, typeVar : QualifiedType }
@@ -284,6 +284,7 @@ declarationVisitor declarations context =
                                 |> orMaybe (getToStringTodo context range function)
                                 |> orMaybe (getFromStringTodo context range function)
                                 |> orMaybe (getListAllTodo context range function)
+                                |> orMaybe (randomGeneratorTodo context range function)
 
                         _ ->
                             Nothing
@@ -495,11 +496,11 @@ getFromStringTodo context declarationRange function =
     in
     case function.signature of
         Just (Node _ signature) ->
-            case signature.typeAnnotation of
-                Node _ (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed (Node _ ( [], "Maybe" )) [ Node _ (TypeAnnotation.Typed customType _) ]))) ->
+            case Node.value signature.typeAnnotation of
+                (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed (Node _ ( [], "Maybe" )) [ Node _ (TypeAnnotation.Typed customType _) ]))) ->
                     createTodo signature customType
 
-                Node _ (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed customType _))) ->
+                (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed customType _))) ->
                     createTodo signature customType
 
                 _ ->
@@ -537,6 +538,47 @@ getListAllTodo context declarationRange function =
         _ ->
             Nothing
 
+
+
+randomGeneratorTodo : ModuleContext -> Range -> Function -> Maybe Todo
+randomGeneratorTodo context declarationRange function =
+    let
+        declaration =
+            Node.value function.declaration
+
+        abc signature randomType =
+            if hasDebugTodo declaration then
+                case QualifiedType.create context.lookupTable context.currentModule randomType of
+                    Just qualifiedType ->
+                        RandomGeneratorTodo
+                            { functionName = Node.value signature.name
+                            , typeVar = qualifiedType
+                            , range = declarationRange
+                            , parameters = declaration.arguments
+                            , signature = signature
+                            }
+                            |> Just
+
+                    Nothing ->
+                        Nothing
+
+            else
+                Nothing
+    in
+    case function.signature of
+        Just (Node _ signature) ->
+            case typeAnnotationReturnValue signature.typeAnnotation of
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Generator" )) [ Node _ (TypeAnnotation.Typed randomType _) ]) ->
+                    abc signature randomType
+
+                Node _ (TypeAnnotation.Typed (Node _ ( [ "Random" ], "Generator" )) [ Node _ (TypeAnnotation.Typed randomType _) ]) ->
+                    abc signature randomType
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 hasDebugTodo : { a | expression : Node Expression } -> Bool
 hasDebugTodo declaration =
@@ -807,6 +849,199 @@ generateListAllDefinition toStringTodo type_ =
         |> writeDeclaration
         |> String.replace "," "\n    ,"
 
+generateRandomGeneratorDefinition : ProjectContext -> CodecTodoData -> TypeOrTypeAlias -> String
+generateRandomGeneratorDefinition projectContext randomGeneratorTodo_ typeOrTypeAlias =
+    { documentation = Nothing
+    , signature = node randomGeneratorTodo_.signature |> Just
+    , declaration =
+        node
+            { name = node randomGeneratorTodo_.functionName
+            , arguments = randomGeneratorTodo_.parameters
+            , expression =
+                case typeOrTypeAlias of
+                    TypeValue typeValue ->
+                        generateCustomTypeRandomGenerator projectContext typeValue
+
+                    TypeAliasValue typeAliasName fields ->
+                        generateRecordCodec projectContext (Just typeAliasName) fields
+            }
+    }
+        |> writeDeclaration
+
+
+generateCustomTypeRandomGenerator : ProjectContext -> Type_ -> Node Expression
+generateCustomTypeRandomGenerator projectContext customType =
+    let
+        args : List ( Node Pattern, ( Node Pattern, Node Expression ) )
+        args =
+            customType.constructors
+                |> List.indexedMap
+                    (\index constructor ->
+                        let
+                            var =
+                                varFromInt index
+
+                            arguments =
+                                List.range 0 (List.length constructor.arguments - 1)
+                                    |> List.map (String.fromInt >> (++) "data")
+                        in
+                        ( VarPattern var |> node
+                        , ( NamedPattern
+                                { moduleName = [], name = constructor.name }
+                                (List.map (VarPattern >> node) arguments)
+                                |> node
+                          , application (functionOrValue [] var :: List.map (functionOrValue []) arguments)
+                          )
+                        )
+                    )
+
+        start =
+            application
+                [ functionOrValue [ "Serialize" ] "customType"
+                , Expression.LambdaExpression
+                    { args = List.map Tuple.first args ++ [ VarPattern "value" |> node ]
+                    , expression =
+                        Expression.CaseExpression
+                            { expression = functionOrValue [] "value", cases = List.map Tuple.second args }
+                            |> node
+                    }
+                    |> node
+                    |> parenthesis
+                ]
+    in
+    case customType.constructors of
+        head :: rest ->
+            let
+                uniformChoice constructor =
+                    case constructor.arguments of
+                        [] ->
+                            application
+                                    [ functionOrValue [ "Random"] "constant"
+                                    , functionOrValue [] constructor.name
+                                    ]
+
+                        arguments ->
+                            let
+                                startCode =
+                                    application
+                                        [ functionOrValue [ "Random"] "constant"
+                                        , functionOrValue [] constructor.name]
+                            in
+                            List.foldl
+                                    (\argument code ->
+                                        code
+                                            |> pipeLeft
+                                                (application
+                                                    (functionOrValue [  ] ("andRandomMap")
+                                                        :: functionOrValue [] argument
+                                                        :: List.map
+                                                            (randomGeneratorFromTypeAnnotation projectContext)
+                                                            constructor.arguments
+                                                    )
+                                                )
+                                    )
+                                    startCode
+                                    arguments
+
+
+
+
+                uniformList = List.map uniformChoice rest
+                                    |> Expression.ListExpr
+                                    |> node
+            in
+            application ((functionOrValue [ "Random"] "uniform")
+                :: (uniformChoice head |> parenthesis)
+                 :: uniformList
+                 :: [])
+                 |> pipeLeft (application [
+                    functionOrValue [ "Random"] "andThen",
+                    functionOrValue [] "identity" ] )
+
+        [] -> node Expression.UnitExpr
+
+randomGeneratorFromTypeAnnotation : ProjectContext -> TypeAnnotation_ -> Node Expression
+randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
+    case typeAnnotation of
+        Typed_ qualifiedType typeVariables ->
+            let
+                getCodecName : String -> Node Expression
+                getCodecName text =
+                    case text of
+                        "Int" ->
+                            application [ functionOrValue [ "Random" ] "int"
+                                        , Expression.Integer 0 |> node
+                                        , Expression.Integer 10 |> node    ]
+
+                        "Float" ->
+                            application [ functionOrValue [ "Random" ] "float"
+                                        , Expression.Integer 0 |> node
+                                        , Expression.Integer 10 |> node
+                                        ]
+
+                        "List" ->
+                            functionOrValue [ "Serialize" ] "list"
+
+                        _ ->
+                            functionOrValue [] ("random" ++ text)
+
+                applied : Node Expression
+                applied =
+                    (case find (.typeVar >> (==) qualifiedType) projectContext.codecs of
+                        Just codec ->
+                            functionOrValue codec.moduleName codec.functionName
+
+                        Nothing ->
+                            getCodecName (QualifiedType.name qualifiedType)
+                    )
+                        :: List.map (codecFromTypeAnnotation projectContext) typeVariables
+                        |> application
+            in
+            if List.isEmpty typeVariables then
+                applied
+
+            else
+                parenthesis applied
+
+        Unit_ ->
+            functionOrValue [ "Serialize" ] "unit"
+
+        Tupled_ [ first ] ->
+            codecFromTypeAnnotation projectContext first
+
+        Tupled_ [ first, second ] ->
+            application
+                [ functionOrValue [ "Serialize" ] "tuple"
+                , codecFromTypeAnnotation projectContext first
+                , codecFromTypeAnnotation projectContext second
+                ]
+                |> parenthesis
+
+        Tupled_ [ first, second, third ] ->
+            application
+                [ functionOrValue [ "Serialize" ] "triple"
+                , codecFromTypeAnnotation projectContext first
+                , codecFromTypeAnnotation projectContext second
+                , codecFromTypeAnnotation projectContext third
+                ]
+                |> parenthesis
+
+        Tupled_ _ ->
+            functionOrValue [ "Serialize" ] "unit"
+
+        FunctionTypeAnnotation_ _ _ ->
+            errorMessage "Functions can't be serialized"
+
+        GenericType_ _ ->
+            notSupportedErrorMessage
+
+        Record_ fields ->
+            generateRecordCodec projectContext Nothing fields |> parenthesis
+
+        GenericRecord_ _ _ ->
+            notSupportedErrorMessage
+
+
 
 writeDeclaration =
     Declaration.FunctionDeclaration
@@ -951,6 +1186,9 @@ getCodecTypes projectContext =
                     dict
 
                 ListAllTodo _ ->
+                    dict
+
+                RandomGeneratorTodo _ ->
                     dict
         )
         Dict.empty
@@ -1139,7 +1377,43 @@ finalProjectEvaluation projectContext =
 
                                     _ ->
                                         Nothing
-                    )
+
+
+                            RandomGeneratorTodo randomTodoData ->
+                                let
+                                    maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                    maybeType =
+                                        QualifiedType.getTypeData projectContext.types randomTodoData.typeVar
+                                in
+                                case ( maybeType, Dict.get moduleName projectContext.moduleKeys ) of
+                                    ( Just ( _, type_ ), Just moduleKey ) ->
+                                        let
+                                            fix : String
+                                            fix =
+                                                generateRandomGeneratorDefinition projectContext randomTodoData type_
+                                        in
+                                        Rule.errorForModuleWithFix
+                                            moduleKey
+                                            { message = "Here's my attempt to complete this stub"
+                                            , details = [ "" ]
+                                            }
+                                            randomTodoData.range
+                                            (Review.Fix.replaceRangeBy randomTodoData.range fix
+                                                :: List.filterMap
+                                                    (\( moduleName_, fix_ ) ->
+                                                        if moduleName_ == moduleName then
+                                                            Just fix_
+
+                                                        else
+                                                            Nothing
+                                                    )
+                                                    typeTodoFixes
+                                            )
+                                            |> Just
+
+                                    _ ->
+                                        Nothing
+                )
 
         typeTodoFixes : List ( ModuleName, Review.Fix.Fix )
         typeTodoFixes =
@@ -1167,6 +1441,9 @@ finalProjectEvaluation projectContext =
                                                 Nothing
 
                                             ListAllTodo _ ->
+                                                Nothing
+
+                                            RandomGeneratorTodo _ ->
                                                 Nothing
                                     )
                                     projectContext.todos
