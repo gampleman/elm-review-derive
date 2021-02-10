@@ -632,6 +632,7 @@ generateRecordCodec projectContext typeAliasName recordFields =
         |> pipeRight (application [ functionOrValue [ "Serialize" ] "finishRecord" ])
 
 
+varFromInt : Int -> String
 varFromInt =
     (+) (Char.toCode 'a')
         >> Char.fromCode
@@ -873,44 +874,6 @@ generateRandomGeneratorDefinition projectContext randomGeneratorTodo_ typeOrType
 
 generateCustomTypeRandomGenerator : ProjectContext -> Type_ -> Node Expression
 generateCustomTypeRandomGenerator projectContext customType =
-    let
-        args : List ( Node Pattern, ( Node Pattern, Node Expression ) )
-        args =
-            customType.constructors
-                |> List.indexedMap
-                    (\index constructor ->
-                        let
-                            var =
-                                varFromInt index
-
-                            arguments =
-                                List.range 0 (List.length constructor.arguments - 1)
-                                    |> List.map (String.fromInt >> (++) "data")
-                        in
-                        ( VarPattern var |> node
-                        , ( NamedPattern
-                                { moduleName = [], name = constructor.name }
-                                (List.map (VarPattern >> node) arguments)
-                                |> node
-                          , application (functionOrValue [] var :: List.map (functionOrValue []) arguments)
-                          )
-                        )
-                    )
-
-        start =
-            application
-                [ functionOrValue [ "Serialize" ] "customType"
-                , Expression.LambdaExpression
-                    { args = List.map Tuple.first args ++ [ VarPattern "value" |> node ]
-                    , expression =
-                        Expression.CaseExpression
-                            { expression = functionOrValue [] "value", cases = List.map Tuple.second args }
-                            |> node
-                    }
-                    |> node
-                    |> parenthesis
-                ]
-    in
     case customType.constructors of
         head :: rest ->
             let
@@ -1240,6 +1203,38 @@ getCodecTypes projectContext =
         projectContext.todos
 
 
+getRandomGeneratorTypes : ProjectContext -> Dict ModuleName (Set QualifiedType)
+getRandomGeneratorTypes projectContext =
+    List.foldl
+        (\( moduleName, todo ) dict ->
+            case todo of
+                CodecTodo _ ->
+                    dict
+
+                ToStringTodo _ ->
+                    dict
+
+                FromStringTodo _ ->
+                    dict
+
+                ListAllTodo _ ->
+                    dict
+
+                RandomGeneratorTodo randomGeneratorTodo_ ->
+                    Dict.update
+                        moduleName
+                        (Maybe.withDefault Set.empty
+                            >> getTypesHelper
+                                projectContext
+                                randomGeneratorTodo_.typeVar
+                            >> Just
+                        )
+                        dict
+        )
+        Dict.empty
+        projectContext.todos
+
+
 getTypesFromTypeAnnotation : ProjectContext -> ModuleName -> Set QualifiedType -> TypeAnnotation_ -> Set QualifiedType
 getTypesFromTypeAnnotation projectContext typeModuleName collectedTypes typeAnnotation =
     case typeAnnotation of
@@ -1306,9 +1301,13 @@ getTypesHelper projectContext typeDeclaration collectedTypes =
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
     let
-        typeTodos : Dict ModuleName (Set QualifiedType)
-        typeTodos =
+        codecTypeTodos : Dict ModuleName (Set QualifiedType)
+        codecTypeTodos =
             getCodecTypes projectContext
+
+        randomGeneratorTypeTodos : Dict ModuleName (Set QualifiedType)
+        randomGeneratorTypeTodos =
+            getRandomGeneratorTypes projectContext
 
         todoFixes : List (Error { useErrorForModule : () })
         todoFixes =
@@ -1344,7 +1343,7 @@ finalProjectEvaluation projectContext =
                                                         else
                                                             Nothing
                                                     )
-                                                    typeTodoFixes
+                                                    codecTypeTodoFixes
                                             )
                                             |> Just
 
@@ -1451,7 +1450,7 @@ finalProjectEvaluation projectContext =
                                                         else
                                                             Nothing
                                                     )
-                                                    typeTodoFixes
+                                                    randomGeneratorTypeTodoFixes
                                             )
                                             |> Just
 
@@ -1459,9 +1458,9 @@ finalProjectEvaluation projectContext =
                                         Nothing
                     )
 
-        typeTodoFixes : List ( ModuleName, Review.Fix.Fix )
-        typeTodoFixes =
-            typeTodos
+        codecTypeTodoFixes : List ( ModuleName, Review.Fix.Fix )
+        codecTypeTodoFixes =
+            codecTypeTodos
                 |> Dict.toList
                 |> List.concatMap
                     (\( moduleName, qualifiedTypes ) ->
@@ -1536,6 +1535,92 @@ finalProjectEvaluation projectContext =
                                                 fix : String
                                                 fix =
                                                     generateCodecTodoDefinition projectContext todo type_
+                                            in
+                                            ( moduleName, Review.Fix.insertAt position fix )
+                                                |> Just
+
+                                        Nothing ->
+                                            Nothing
+                                )
+                            |> List.filterMap identity
+                    )
+
+        randomGeneratorTypeTodoFixes : List ( ModuleName, Review.Fix.Fix )
+        randomGeneratorTypeTodoFixes =
+            randomGeneratorTypeTodos
+                |> Dict.toList
+                |> List.concatMap
+                    (\( moduleName, qualifiedTypes ) ->
+                        let
+                            todosInModule : List CodecTodoData
+                            todosInModule =
+                                List.filterMap
+                                    (\( moduleName_, todo ) ->
+                                        case todo of
+                                            CodecTodo _ ->
+                                                Nothing
+
+                                            ToStringTodo _ ->
+                                                Nothing
+
+                                            FromStringTodo _ ->
+                                                Nothing
+
+                                            ListAllTodo _ ->
+                                                Nothing
+
+                                            RandomGeneratorTodo randomTodo ->
+                                                if moduleName_ == moduleName then
+                                                    Just randomTodo
+
+                                                else
+                                                    Nothing
+                                    )
+                                    projectContext.todos
+                        in
+                        Set.toList qualifiedTypes
+                            |> List.filter (\a -> List.any (.typeVar >> (/=) a) todosInModule)
+                            |> List.filter (\a -> List.all (.typeVar >> (/=) a) projectContext.codecs)
+                            |> List.indexedMap
+                                (\index qualifiedType ->
+                                    let
+                                        maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                        maybeType =
+                                            QualifiedType.getTypeData projectContext.types qualifiedType
+                                    in
+                                    case maybeType of
+                                        Just ( _, type_ ) ->
+                                            let
+                                                name =
+                                                    "random" ++ QualifiedType.name qualifiedType
+
+                                                position =
+                                                    { column = 0, row = 99999 + index }
+
+                                                todo =
+                                                    { functionName = name
+                                                    , typeVar = qualifiedType
+                                                    , range =
+                                                        { start = position
+                                                        , end = position
+                                                        }
+                                                    , signature =
+                                                        { name = node name
+                                                        , typeAnnotation =
+                                                            TypeAnnotation.Typed
+                                                                (node ( [ "Random" ], "Generator" ))
+                                                                [ QualifiedType.name qualifiedType
+                                                                    |> TypeAnnotation.GenericType
+                                                                    |> node
+                                                                ]
+                                                                |> node
+                                                        }
+                                                    , parameters = []
+                                                    }
+
+                                                fix : String
+                                                fix =
+                                                    generateRandomGeneratorDefinition projectContext todo type_
                                             in
                                             ( moduleName, Review.Fix.insertAt position fix )
                                                 |> Just
