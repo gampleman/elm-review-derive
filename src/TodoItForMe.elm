@@ -15,7 +15,7 @@ import Elm.Syntax.Type
 import Elm.Syntax.TypeAlias exposing (TypeAlias)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
 import Elm.Writer
-import QualifiedType exposing (QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_)
+import QualifiedType exposing (QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_)
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
@@ -87,7 +87,8 @@ type Todo
     | ToStringTodo ToStringTodoData
     | FromStringTodo ToStringTodoData
     | ListAllTodo ListAllTodoData
-    | RandomGeneratorTodo  CodecTodoData
+    | RandomGeneratorTodo CodecTodoData
+
 
 type alias IntermediateTodo =
     { functionName : Node String, typeVar : QualifiedType }
@@ -497,10 +498,10 @@ getFromStringTodo context declarationRange function =
     case function.signature of
         Just (Node _ signature) ->
             case Node.value signature.typeAnnotation of
-                (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed (Node _ ( [], "Maybe" )) [ Node _ (TypeAnnotation.Typed customType _) ]))) ->
+                TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed (Node _ ( [], "Maybe" )) [ Node _ (TypeAnnotation.Typed customType _) ])) ->
                     createTodo signature customType
 
-                (TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed customType _))) ->
+                TypeAnnotation.FunctionTypeAnnotation (Node _ (TypeAnnotation.Typed (Node _ ( [], "String" )) [])) (Node _ (TypeAnnotation.Typed customType _)) ->
                     createTodo signature customType
 
                 _ ->
@@ -537,7 +538,6 @@ getListAllTodo context declarationRange function =
 
         _ ->
             Nothing
-
 
 
 randomGeneratorTodo : ModuleContext -> Range -> Function -> Maybe Todo
@@ -580,6 +580,7 @@ randomGeneratorTodo context declarationRange function =
         _ ->
             Nothing
 
+
 hasDebugTodo : { a | expression : Node Expression } -> Bool
 hasDebugTodo declaration =
     case declaration.expression of
@@ -595,7 +596,7 @@ generateRecordCodec projectContext typeAliasName recordFields =
     List.foldl
         (\( fieldName, typeAnnotation ) code ->
             code
-                |> pipeLeft
+                |> pipeRight
                     (application
                         [ functionOrValue [ "Serialize" ] "field"
                         , Expression.RecordAccessFunction fieldName |> node
@@ -628,7 +629,7 @@ generateRecordCodec projectContext typeAliasName recordFields =
             ]
         )
         recordFields
-        |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishRecord" ])
+        |> pipeRight (application [ functionOrValue [ "Serialize" ] "finishRecord" ])
 
 
 varFromInt =
@@ -680,7 +681,7 @@ generateCustomTypeCodec projectContext customType =
     List.foldl
         (\constructor code ->
             code
-                |> pipeLeft
+                |> pipeRight
                     (application
                         (functionOrValue [ "Serialize" ] ("variant" ++ String.fromInt (List.length constructor.arguments))
                             :: functionOrValue [] constructor.name
@@ -692,7 +693,7 @@ generateCustomTypeCodec projectContext customType =
         )
         start
         customType.constructors
-        |> pipeLeft (application [ functionOrValue [ "Serialize" ] "finishCustomType" ])
+        |> pipeRight (application [ functionOrValue [ "Serialize" ] "finishCustomType" ])
 
 
 generateCodecTodoDefinition : ProjectContext -> CodecTodoData -> TypeOrTypeAlias -> String
@@ -849,6 +850,7 @@ generateListAllDefinition toStringTodo type_ =
         |> writeDeclaration
         |> String.replace "," "\n    ,"
 
+
 generateRandomGeneratorDefinition : ProjectContext -> CodecTodoData -> TypeOrTypeAlias -> String
 generateRandomGeneratorDefinition projectContext randomGeneratorTodo_ typeOrTypeAlias =
     { documentation = Nothing
@@ -912,53 +914,65 @@ generateCustomTypeRandomGenerator projectContext customType =
     case customType.constructors of
         head :: rest ->
             let
+                uniformChoice : ValueConstructor_ -> Node Expression
                 uniformChoice constructor =
                     case constructor.arguments of
                         [] ->
                             application
-                                    [ functionOrValue [ "Random"] "constant"
-                                    , functionOrValue [] constructor.name
-                                    ]
+                                [ functionOrValue [ "Random" ] "constant"
+                                , functionOrValue [] constructor.name
+                                ]
+
+                        argument :: [] ->
+                            application
+                                [ functionOrValue [ "Random" ] "map"
+                                , functionOrValue [] constructor.name
+                                , randomGeneratorFromTypeAnnotation projectContext argument
+                                ]
 
                         arguments ->
                             let
                                 startCode =
                                     application
-                                        [ functionOrValue [ "Random"] "constant"
-                                        , functionOrValue [] constructor.name]
+                                        [ functionOrValue [ "Random" ] "constant"
+                                        , functionOrValue [] constructor.name
+                                        ]
                             in
                             List.foldl
-                                    (\argument code ->
-                                        code
-                                            |> pipeLeft
-                                                (application
-                                                    (functionOrValue [  ] ("andRandomMap")
-                                                        :: functionOrValue [] argument
-                                                        :: List.map
-                                                            (randomGeneratorFromTypeAnnotation projectContext)
-                                                            constructor.arguments
-                                                    )
-                                                )
-                                    )
-                                    startCode
-                                    arguments
+                                (\argument code ->
+                                    code
+                                        |> pipeRight
+                                            (application
+                                                [ functionOrValue [] "andRandomMap"
+                                                , randomGeneratorFromTypeAnnotation projectContext argument
+                                                ]
+                                            )
+                                )
+                                startCode
+                                arguments
 
-
-
-
-                uniformList = List.map uniformChoice rest
-                                    |> Expression.ListExpr
-                                    |> node
+                uniformList : Node Expression
+                uniformList =
+                    List.map uniformChoice rest
+                        |> Expression.ListExpr
+                        |> node
             in
-            application ((functionOrValue [ "Random"] "uniform")
-                :: (uniformChoice head |> parenthesis)
-                 :: uniformList
-                 :: [])
-                 |> pipeLeft (application [
-                    functionOrValue [ "Random"] "andThen",
-                    functionOrValue [] "identity" ] )
+            application
+                (functionOrValue [ "Random" ] "uniform"
+                    :: (uniformChoice head |> parenthesis)
+                    :: uniformList
+                    :: []
+                )
+                |> pipeRight
+                    (application
+                        [ functionOrValue [ "Random" ] "andThen"
+                        , functionOrValue [] "identity"
+                        ]
+                    )
 
-        [] -> node Expression.UnitExpr
+        [] ->
+            node Expression.UnitExpr
+
 
 randomGeneratorFromTypeAnnotation : ProjectContext -> TypeAnnotation_ -> Node Expression
 randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
@@ -969,18 +983,40 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
                 getCodecName text =
                     case text of
                         "Int" ->
-                            application [ functionOrValue [ "Random" ] "int"
-                                        , Expression.Integer 0 |> node
-                                        , Expression.Integer 10 |> node    ]
+                            application
+                                [ functionOrValue [ "Random" ] "int"
+                                , Expression.Integer 0 |> node
+                                , Expression.Integer 10 |> node
+                                ]
 
                         "Float" ->
-                            application [ functionOrValue [ "Random" ] "float"
-                                        , Expression.Integer 0 |> node
-                                        , Expression.Integer 10 |> node
-                                        ]
+                            application
+                                [ functionOrValue [ "Random" ] "float"
+                                , Expression.Floatable 0 |> node
+                                , Expression.Floatable 10 |> node
+                                ]
 
                         "List" ->
-                            functionOrValue [ "Serialize" ] "list"
+                            application
+                                [ functionOrValue [ "Random" ] "int"
+                                , Expression.Integer 0 |> node
+                                , Expression.Integer 10 |> node
+                                ]
+                                |> pipeRight
+                                    (application
+                                        [ functionOrValue [ "Random" ] "andThen"
+                                        , Expression.LambdaExpression
+                                            { args = [ VarPattern "count" |> node ]
+                                            , expression =
+                                                application
+                                                    [ functionOrValue [ "Random" ] "list"
+                                                    , functionOrValue [] "count"
+                                                    ]
+                                            }
+                                            |> node
+                                            |> parenthesis
+                                        ]
+                                    )
 
                         _ ->
                             functionOrValue [] ("random" ++ text)
@@ -994,7 +1030,7 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
                         Nothing ->
                             getCodecName (QualifiedType.name qualifiedType)
                     )
-                        :: List.map (codecFromTypeAnnotation projectContext) typeVariables
+                        :: List.map (randomGeneratorFromTypeAnnotation projectContext) typeVariables
                         |> application
             in
             if List.isEmpty typeVariables then
@@ -1004,45 +1040,54 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
                 parenthesis applied
 
         Unit_ ->
-            functionOrValue [ "Serialize" ] "unit"
+            application [ functionOrValue [ "Random" ] "constant", node Expression.UnitExpr ]
 
         Tupled_ [ first ] ->
-            codecFromTypeAnnotation projectContext first
+            randomGeneratorFromTypeAnnotation projectContext first
 
         Tupled_ [ first, second ] ->
             application
-                [ functionOrValue [ "Serialize" ] "tuple"
-                , codecFromTypeAnnotation projectContext first
-                , codecFromTypeAnnotation projectContext second
+                [ functionOrValue [ "Random" ] "pair"
+                , randomGeneratorFromTypeAnnotation projectContext first
+                , randomGeneratorFromTypeAnnotation projectContext second
                 ]
                 |> parenthesis
 
         Tupled_ [ first, second, third ] ->
             application
-                [ functionOrValue [ "Serialize" ] "triple"
-                , codecFromTypeAnnotation projectContext first
-                , codecFromTypeAnnotation projectContext second
-                , codecFromTypeAnnotation projectContext third
+                [ functionOrValue [ "Random" ] "map3"
+                , Expression.LambdaExpression
+                    { args = [ VarPattern "a" |> node, VarPattern "b" |> node, VarPattern "c" |> node ]
+                    , expression =
+                        Expression.TupledExpression
+                            [ functionOrValue [] "a", functionOrValue [] "b", functionOrValue [] "c" ]
+                            |> node
+                    }
+                    |> node
+                , randomGeneratorFromTypeAnnotation projectContext first
+                , randomGeneratorFromTypeAnnotation projectContext second
+                , randomGeneratorFromTypeAnnotation projectContext third
                 ]
                 |> parenthesis
 
         Tupled_ _ ->
-            functionOrValue [ "Serialize" ] "unit"
+            application [ functionOrValue [ "Random" ] "constant", node Expression.UnitExpr ]
 
         FunctionTypeAnnotation_ _ _ ->
-            errorMessage "Functions can't be serialized"
+            errorMessage "Functions can't be randomly generated"
 
         GenericType_ _ ->
             notSupportedErrorMessage
 
         Record_ fields ->
-            generateRecordCodec projectContext Nothing fields |> parenthesis
+            notSupportedErrorMessage
 
+        --generateRandomGeneratorRecord projectContext Nothing fields |> parenthesis
         GenericRecord_ _ _ ->
             notSupportedErrorMessage
 
 
-
+writeDeclaration : Function -> String
 writeDeclaration =
     Declaration.FunctionDeclaration
         >> node
@@ -1378,7 +1423,6 @@ finalProjectEvaluation projectContext =
                                     _ ->
                                         Nothing
 
-
                             RandomGeneratorTodo randomTodoData ->
                                 let
                                     maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
@@ -1413,7 +1457,7 @@ finalProjectEvaluation projectContext =
 
                                     _ ->
                                         Nothing
-                )
+                    )
 
         typeTodoFixes : List ( ModuleName, Review.Fix.Fix )
         typeTodoFixes =
@@ -1518,8 +1562,8 @@ functionOrValue moduleName functionOrValueName =
     Expression.FunctionOrValue moduleName functionOrValueName |> node
 
 
-pipeLeft : Node Expression -> Node Expression -> Node Expression
-pipeLeft eRight eLeft =
+pipeRight : Node Expression -> Node Expression -> Node Expression
+pipeRight eRight eLeft =
     Expression.OperatorApplication "|>" Infix.Left eLeft eRight |> node
 
 
