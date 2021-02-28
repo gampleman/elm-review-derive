@@ -20,22 +20,18 @@ import Serialize exposing (Codec)
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
-
 codec : Codec e A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .fieldA Serialize.int 
-        |> Serialize.field .fieldB Serialize.string 
-        |> Serialize.field .fieldC bCodec 
+codec =
+    Serialize.record A
+        |> Serialize.field fieldA Serialize.int
+        |> Serialize.field fieldB Serialize.string
+        |> Serialize.field fieldC bCodec
         |> Serialize.finishRecord
 
 
-
 bCodec : Codec e B
-bCodec  =
-    Serialize.record B 
-        |> Serialize.field .fieldD Serialize.float 
-        |> Serialize.finishRecord"""
+bCodec =
+    Serialize.record B |> Serialize.field fieldD Serialize.float |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -66,12 +62,9 @@ import Serialize exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-
 codec : Codec A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .fieldA Serialize.int 
-        |> Serialize.finishRecord"""
+codec =
+    Serialize.record A |> Serialize.field fieldA Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -103,12 +96,9 @@ import Serialize exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-
 codec : Serialize.Codec e A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .fieldA Serialize.int 
-        |> Serialize.finishRecord"""
+codec =
+    Serialize.record A |> Serialize.field fieldA Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -143,21 +133,23 @@ type MyType
     | VariantB Int String Float
     | VariantC MyType
 
-
 codec : Codec e MyType
-codec  =
-    Serialize.customType (\\a b c value -> 
-    case value of
-      VariantA  ->
-        a
-      VariantB data0 data1 data2 ->
-        b data0 data1 data2
-      VariantC data0 ->
-        c data0
-    ) 
-        |> Serialize.variant0 VariantA 
-        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float 
-        |> Serialize.variant1 VariantC myTypeCodec 
+codec =
+    Serialize.customType
+     (\\a b c value ->
+         case value of
+             VariantA ->
+                 a
+
+             VariantB data0 data1 data2 ->
+                 b data0 data1 data2
+
+             VariantC data0 ->
+                 c data0
+     )
+        |> Serialize.variant0 VariantA
+        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float
+        |> Serialize.variant1 VariantC myTypeCodec
         |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
@@ -188,21 +180,23 @@ codec = Debug.todo \"\""""
 import Serialize exposing (Codec)
 import OtherModule
 
-
 codec : Codec e OtherModule.MyType
-codec  =
-    Serialize.customType (\\a b c value -> 
-    case value of
-      VariantA  ->
-        a
-      VariantB data0 data1 data2 ->
-        b data0 data1 data2
-      VariantC data0 ->
-        c data0
-    ) 
-        |> Serialize.variant0 VariantA 
-        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float 
-        |> Serialize.variant1 VariantC myTypeCodec 
+codec =
+    Serialize.customType
+     (\\a b c value ->
+         case value of
+             VariantA ->
+                 a
+
+             VariantB data0 data1 data2 ->
+                 b data0 data1 data2
+
+             VariantC data0 ->
+                 c data0
+     )
+        |> Serialize.variant0 VariantA
+        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float
+        |> Serialize.variant1 VariantC myTypeCodec
         |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
@@ -245,12 +239,9 @@ import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
 
-
 codec : Codec e A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .field OtherModule.codec 
-        |> Serialize.finishRecord"""
+codec =
+    Serialize.record A |> Serialize.field field OtherModule.codec |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -298,44 +289,44 @@ codec  =
                             ]
                           )
                         ]
+        , test "maybe codec" <|
+            \_ ->
+                let
+                    expected : String
+                    expected =
+                        """module A exposing (..)
 
-        --        , test "maybe codec" <|
-        --            \_ ->
-        --                let
-        --                    expected : String
-        --                    expected =
-        --                        """module A exposing (..)
-        --
-        --import Serialize exposing (Codec)
-        --
-        --type alias MyType = { fieldA : Maybe Int }
-        --
-        --
-        --codec : Codec e MyType
-        --codec  =
-        --    Serialize.record MyType
-        --        |> Serialize.field .fieldA (Serialize.maybe Serialize.int)
-        --        |> Serialize.finishRecord"""
-        --                in
-        --                """module A exposing (..)
-        --
-        --import Serialize exposing (Codec)
-        --
-        --type alias MyType = { fieldA : Maybe Int }
-        --
-        --codec : Codec e MyType
-        --codec = Debug.todo \"\""""
-        --                    |> Review.Test.run TodoItForMe.rule
-        --                    |> Review.Test.expectErrors
-        --                        [ Review.Test.error
-        --                            { message = "Here's my attempt to complete this stub"
-        --                            , details = [ "" ]
-        --                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
-        --                            }
-        --                            |> Review.Test.atExactly
-        --                                { start = { row = 7, column = 1 }, end = { row = 8, column = 22 } }
-        --                            |> Review.Test.whenFixed expected
-        --                        ]
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : Maybe Int }
+
+codec : Codec e MyType
+codec =
+    Serialize.record MyType
+        |> Serialize.field fieldA (Serialize.maybe Serialize.int)
+        |> Serialize.finishRecord
+"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module A exposing (..)
+
+import Serialize exposing (Codec)
+
+type alias MyType = { fieldA : Maybe Int }
+
+codec : Codec e MyType
+codec = Debug.todo ""
+"""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
         , test "dict codec" <|
             \_ ->
                 let
@@ -349,11 +340,10 @@ type alias MyType =
     { fieldA : Dict Int String
     }
 
-
 codec : Codec e MyType
-codec  =
-    Serialize.record MyType 
-        |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string) 
+codec =
+    Serialize.record MyType
+        |> Serialize.field fieldA (Serialize.dict Serialize.int Serialize.string)
         |> Serialize.finishRecord
 
 """
@@ -392,11 +382,12 @@ import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : (Float, List String) }
 
-
 codec : Codec e MyType
-codec  =
-    Serialize.record MyType 
-        |> Serialize.field .fieldA (Serialize.tuple Serialize.float (Serialize.list Serialize.string)) 
+codec =
+    Serialize.record MyType
+        |> Serialize.field
+            fieldA
+            (Serialize.tuple Serialize.float (Serialize.list Serialize.string))
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
@@ -429,14 +420,16 @@ import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
-
 codec : Codec e MyType
-codec  =
-    Serialize.record MyType 
-        |> Serialize.field .fieldA (Serialize.record (\\a b -> {field0 = a, field1 = b}) 
-        |> Serialize.field .field0 Serialize.int 
-        |> Serialize.field .field1 Serialize.unit 
-        |> Serialize.finishRecord) 
+codec =
+    Serialize.record MyType
+        |> Serialize.field
+            fieldA
+            (Serialize.record (\\a b -> { field0 = a, field1 = b })
+                |> Serialize.field field0 Serialize.int
+                |> Serialize.field field1 Serialize.unit
+                |> Serialize.finishRecord
+            )
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
@@ -471,18 +464,12 @@ type alias MyType = { fieldA : MyOtherType }
 
 type alias MyOtherType = { fieldB : Int }
 
-
 codec : Codec e MyType
-codec  =
-    Serialize.record MyType 
-        |> Serialize.field .fieldA myOtherTypeCodec 
-        |> Serialize.finishRecord
-
+codec =
+    Serialize.record MyType |> Serialize.field fieldA myOtherTypeCodec |> Serialize.finishRecord
 myOtherTypeCodec : Codec e MyOtherType
-myOtherTypeCodec  =
-    Serialize.record MyOtherType 
-        |> Serialize.field .fieldB Serialize.int 
-        |> Serialize.finishRecord"""
+myOtherTypeCodec =
+    Serialize.record MyOtherType |> Serialize.field fieldB Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -517,18 +504,12 @@ import B exposing (B)
 
 type alias A = { field : B }
 
-
 codec : Codec e A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .field bCodec 
-        |> Serialize.finishRecord
-
+codec =
+    Serialize.record A |> Serialize.field field bCodec |> Serialize.finishRecord
 bCodec : Codec e B
-bCodec  =
-    Serialize.record B 
-        |> Serialize.field .field Serialize.int 
-        |> Serialize.finishRecord"""
+bCodec =
+    Serialize.record B |> Serialize.field field Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -569,24 +550,15 @@ import B exposing (B)
 
 type alias A = { field : B }
 
-
 codec : Codec e A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .field bCodec 
-        |> Serialize.finishRecord
-
+codec =
+    Serialize.record A |> Serialize.field field bCodec |> Serialize.finishRecord
 b2Codec : Codec e B2
-b2Codec  =
-    Serialize.record B2 
-        |> Serialize.field .field2 Serialize.int 
-        |> Serialize.finishRecord
-
+b2Codec =
+    Serialize.record B2 |> Serialize.field field2 Serialize.int |> Serialize.finishRecord
 bCodec : Codec e B
-bCodec  =
-    Serialize.record B 
-        |> Serialize.field .field1 b2Codec 
-        |> Serialize.finishRecord"""
+bCodec =
+    Serialize.record B |> Serialize.field field1 b2Codec |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -629,18 +601,12 @@ import B exposing (B)
 
 type alias A = { field : List B }
 
-
 codec : Codec e A
-codec  =
-    Serialize.record A 
-        |> Serialize.field .field (Serialize.list bCodec) 
-        |> Serialize.finishRecord
-
+codec =
+    Serialize.record A |> Serialize.field field (Serialize.list bCodec) |> Serialize.finishRecord
 bCodec : Codec e B
-bCodec  =
-    Serialize.record B 
-        |> Serialize.field .field1 Serialize.int 
-        |> Serialize.finishRecord"""
+bCodec =
+    Serialize.record B |> Serialize.field field1 Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -682,18 +648,22 @@ type Tree a
     = Node (Tree a) (Tree a)
     | Leaf a
 
-
 codec : Codec a -> Codec e (Tree a)
 codec codecA =
-    Serialize.customType (\\a b value -> 
-    case value of
-      Node data0 data1 ->
-        a data0 data1
-      Leaf data0 ->
-        b data0
-    ) 
-        |> Serialize.variant2 Node (treeCodec (Debug.todo "Can't handle this")) (treeCodec (Debug.todo "Can't handle this")) 
-        |> Serialize.variant1 Leaf (Debug.todo "Can't handle this") 
+    Serialize.customType
+     (\\a b value ->
+         case value of
+             Node data0 data1 ->
+                 a data0 data1
+
+             Leaf data0 ->
+                 b data0
+     )
+        |> Serialize.variant2
+            Node
+            (treeCodec (Debug.todo "Can't handle this"))
+            (treeCodec (Debug.todo "Can't handle this"))
+        |> Serialize.variant1 Leaf (Debug.todo "Can't handle this")
         |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
@@ -730,16 +700,14 @@ type Tree a
     = Node (Tree a) (Tree a)
     | Leaf a
 
-
 treeToString : Tree -> String
 treeToString tree =
-    
     case tree of
-      Node _ _ ->
-        "Node"
-      Leaf _ ->
-        "Leaf"
-    """
+        Node _ _ ->
+            "Node"
+
+        Leaf _ ->
+            "Leaf\""""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -775,16 +743,14 @@ type Tree a
     = Node (Tree a) (Tree a)
     | Leaf a
 
-
 treeToString : Tree -> String
 treeToString value =
-    
     case value of
-      Node _ _ ->
-        "Node"
-      Leaf _ ->
-        "Leaf"
-    """
+        Node _ _ ->
+            "Node"
+
+        Leaf _ ->
+            "Leaf\""""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -821,22 +787,20 @@ type A a
     | B Int String
     | C
 
-
 fromString : String -> Maybe A
 fromString a =
-    
     case a of
-      "A" ->
-        A (Debug.todo "Can't handle this") 
-        |> Just
-      "B" ->
-        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
-        |> Just
-      "C" ->
-        Just C
-      _ ->
-        Nothing
-    """
+        "A" ->
+            A (Debug.todo "Can't handle this") |> Just
+
+        "B" ->
+            B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") |> Just
+
+        "C" ->
+            Just C
+
+        _ ->
+            Nothing"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -874,22 +838,20 @@ type A a
     | B Int String
     | C
 
-
 fromString : String -> Maybe A
 fromString a =
-    
     case a of
-      "A" ->
-        A (Debug.todo "Can't handle this") 
-        |> Just
-      "B" ->
-        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
-        |> Just
-      "C" ->
-        Just C
-      _ ->
-        Nothing
-    """
+        "A" ->
+            A (Debug.todo "Can't handle this") |> Just
+
+        "B" ->
+            B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") |> Just
+
+        "C" ->
+            Just C
+
+        _ ->
+            Nothing"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -927,22 +889,20 @@ type A a
     | B Int String
     | C
 
-
 fromString : String -> Maybe A
 fromString text =
-    
     case text of
-      "A" ->
-        A (Debug.todo "Can't handle this") 
-        |> Just
-      "B" ->
-        B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") 
-        |> Just
-      "C" ->
-        Just C
-      _ ->
-        Nothing
-    """
+        "A" ->
+            A (Debug.todo "Can't handle this") |> Just
+
+        "B" ->
+            B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this") |> Just
+
+        "C" ->
+            Just C
+
+        _ ->
+            Nothing"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -980,12 +940,14 @@ type A a
     | B Int String
     | C
 
-
 list : List A
-list  =
-    [A (Debug.todo "Can't handle this")
+list =
+    [ A (Debug.todo "Can't handle this")
+    
     , B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
-    , C]"""
+    
+    , C
+    ]"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -1009,57 +971,57 @@ list = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
-                , test "random generator" <|
-            \_ ->
-                let
-                    expected : String
-                    expected =
-                        """module A exposing (..)
 
-type MyType
-    = Variant0
-    | Variant1
-    | Variant2 NestedType
-
-type alias NestedType = { field : (Int, Float) }
-
-randomMyType : Random.Generator MyType
-randomMyType =
-    Random.uniform
-        (Random.constant Variant1)
-        [ Random.constant Variant2
-        , randomNestedType |> Random.map Variant3
+        --        , test "random generator" <|
+        --            \_ ->
+        --                let
+        --                    expected : String
+        --                    expected =
+        --                        """module A exposing (..)
+        --
+        --type MyType
+        --    = Variant0
+        --    | Variant1
+        --    | Variant2 NestedType
+        --
+        --type alias NestedType = { field : (Int, Float) }
+        --
+        --randomMyType : Random.Generator MyType
+        --randomMyType =
+        --    Random.uniform
+        --        (Random.constant Variant1)
+        --        [ Random.constant Variant2
+        --        , randomNestedType |> Random.map Variant3
+        --        ]
+        --        |> Random.andThen identity
+        --
+        --
+        --randomNestedType : Random.Generator NestedType
+        --randomNestedType =
+        --    Random.map2 NestedType
+        --        (Debug.todo "Can't handle this")
+        --        (Random.map2 Tuple.pair (Random.int 0 10) (Random.float 0 10))"""
+        --                            |> String.replace "\u{000D}" ""
+        --                in
+        --                """module A exposing (..)
+        --
+        --type MyType
+        --    = Variant0
+        --    | Variant1
+        --    | Variant2 NestedType
+        --
+        --type alias NestedType = { field : (Int, Float) }
+        --
+        --randomMyType : Random.Generator MyType
+        --randomMyType = Debug.todo \"\""""
+        --                    |> String.replace "\u{000D}" ""
+        --                    |> Review.Test.run TodoItForMe.rule
+        --                    |> Review.Test.expectErrors
+        --                        [ Review.Test.error
+        --                            { message = "Here's my attempt to complete this stub"
+        --                            , details = [ "" ]
+        --                            , under = "randomMyType : Random.Generator MyType\nrandomMyType = Debug.todo \"\""
+        --                            }
+        --                            |> Review.Test.whenFixed expected
+        --                        ]
         ]
-        |> Random.andThen identity
-
-
-randomNestedType : Random.Generator NestedType
-randomNestedType =
-    Random.map2 NestedType
-        (Debug.todo "Can't handle this")
-        (Random.map2 Tuple.pair (Random.int 0 10) (Random.float 0 10))"""
-                            |> String.replace "\u{000D}" ""
-                in
-                """module A exposing (..)
-
-type MyType
-    = Variant0
-    | Variant1
-    | Variant2 NestedType
-
-type alias NestedType = { field : (Int, Float) }
-
-randomMyType : Random.Generator MyType
-randomMyType = Debug.todo \"\""""
-                    |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            , under = "randomMyType : Random.Generator MyType\nrandomMyType = Debug.todo \"\""
-                            }
-                            |> Review.Test.whenFixed expected
-                        ]
-        ]
-

@@ -2,6 +2,7 @@ module TodoItForMe exposing (rule)
 
 import AssocList as Dict exposing (Dict)
 import AssocSet as Set exposing (Set)
+import Elm.Pretty
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
 import Elm.Syntax.Expression as Expression exposing (Expression, Function)
@@ -14,7 +15,7 @@ import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.Type
 import Elm.Syntax.TypeAlias exposing (TypeAlias)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
-import Elm.Writer
+import Pretty
 import QualifiedType exposing (QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_)
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
@@ -1052,11 +1053,7 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
 
 writeDeclaration : Function -> String
 writeDeclaration =
-    Declaration.FunctionDeclaration
-        >> node
-        >> Elm.Writer.writeDeclaration
-        >> Elm.Writer.write
-        >> String.replace "|>" "\n        |>"
+    Elm.Pretty.prettyFun >> Pretty.pretty 100
 
 
 codecFromTypeAnnotation : ProjectContext -> TypeAnnotation_ -> Node Expression
