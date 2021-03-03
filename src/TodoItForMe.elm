@@ -867,10 +867,49 @@ generateRandomGeneratorDefinition projectContext randomGeneratorTodo_ typeOrType
                         generateCustomTypeRandomGenerator projectContext typeValue
 
                     TypeAliasValue typeAliasName fields ->
-                        generateRecordCodec projectContext (Just typeAliasName) fields
+                        generateRecordRandomGenerator projectContext (Just typeAliasName) fields
             }
     }
         |> writeDeclaration
+
+
+generateRecordRandomGenerator : ProjectContext -> Maybe String -> List ( String, TypeAnnotation_ ) -> Node Expression
+generateRecordRandomGenerator projectContext typeAliasName recordFields =
+    List.foldl
+        (\( _, typeAnnotation ) code ->
+            code
+                |> pipeRight
+                    (application
+                        [ functionOrValue [ "Random" ] "andMap"
+                        , codecFromTypeAnnotation projectContext typeAnnotation
+                        ]
+                    )
+        )
+        (application
+            [ functionOrValue [ "Random" ] "constant"
+            , case typeAliasName of
+                Just typeAliasName_ ->
+                    functionOrValue [] typeAliasName_
+
+                Nothing ->
+                    Expression.LambdaExpression
+                        { args =
+                            List.range 0 (List.length recordFields - 1)
+                                |> List.map (varFromInt >> VarPattern >> node)
+                        , expression =
+                            List.indexedMap
+                                (\index ( fieldName, _ ) ->
+                                    ( node fieldName, functionOrValue [] (varFromInt index) ) |> node
+                                )
+                                recordFields
+                                |> Expression.RecordExpr
+                                |> node
+                        }
+                        |> node
+                        |> parenthesis
+            ]
+        )
+        recordFields
 
 
 generateCustomTypeRandomGenerator : ProjectContext -> Type_ -> Node Expression
@@ -907,7 +946,7 @@ generateCustomTypeRandomGenerator projectContext customType =
                                     code
                                         |> pipeRight
                                             (application
-                                                [ functionOrValue [] "andRandomMap"
+                                                [ functionOrValue [ "Random" ] "andMap"
                                                 , randomGeneratorFromTypeAnnotation projectContext argument
                                                 ]
                                             )
