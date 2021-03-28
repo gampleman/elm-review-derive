@@ -600,7 +600,7 @@ generateRecordCodec projectContext typeAliasName recordFields =
                 |> pipeRight
                     (application
                         [ functionOrValue [ "Serialize" ] "field"
-                        , Expression.RecordAccessFunction fieldName |> node
+                        , Expression.FunctionOrValue [ "" ] fieldName |> node
                         , codecFromTypeAnnotation projectContext typeAnnotation
                         ]
                     )
