@@ -386,7 +386,7 @@ codec : Codec e MyType
 codec =
     Serialize.record MyType
         |> Serialize.field
-            fieldA
+            .fieldA
             (Serialize.tuple Serialize.float (Serialize.list Serialize.string))
         |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
@@ -424,7 +424,7 @@ codec : Codec e MyType
 codec =
     Serialize.record MyType
         |> Serialize.field
-            fieldA
+            .fieldA
             (Serialize.record (\\a b -> { field0 = a, field1 = b })
                 |> Serialize.field .field0 Serialize.int
                 |> Serialize.field .field1 Serialize.unit
