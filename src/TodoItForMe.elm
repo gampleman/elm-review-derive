@@ -101,7 +101,6 @@ type alias ModuleContext =
     , codecs : List { functionName : String, typeVar : QualifiedType }
     , todos : List Todo
     , currentModule : ModuleName
-    , moduleLookupTable : ModuleNameLookupTable
     }
 
 
@@ -123,8 +122,14 @@ fromProjectToModule lookupTable metadata projectContext =
     { lookupTable = lookupTable
     , types = projectContext.types |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
     , codecs =
-        List.map
-            (\a -> { functionName = a.functionName, typeVar = a.typeVar })
+        List.filterMap
+            (\a ->
+                if a.moduleName == moduleName then
+                    Just { functionName = a.functionName, typeVar = a.typeVar }
+
+                else
+                    Nothing
+            )
             projectContext.codecs
     , todos =
         List.filterMap
@@ -137,7 +142,6 @@ fromProjectToModule lookupTable metadata projectContext =
             )
             projectContext.todos
     , currentModule = moduleName
-    , moduleLookupTable = lookupTable
     }
 
 
@@ -195,7 +199,7 @@ convertTypeAnnotation moduleContext typeAnnotation =
             QualifiedType.GenericType_ string
 
         TypeAnnotation.Typed a nodes ->
-            case QualifiedType.create moduleContext.moduleLookupTable moduleContext.currentModule a of
+            case QualifiedType.create moduleContext.lookupTable moduleContext.currentModule a of
                 Just qualified ->
                     QualifiedType.Typed_
                         qualified
