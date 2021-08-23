@@ -2,7 +2,6 @@ module CodeGen exposing (rule)
 
 import AssocList as Dict exposing (Dict)
 import AssocSet exposing (Set)
-import CodeGen.AutoCodecTodo as AutoCodecTodo exposing (AutoCodecTodo)
 import CodeGen.CodecTodo as CodecTodo exposing (CodecTodo)
 import CodeGen.FromStringTodo as FromStringTodo exposing (FromStringTodo)
 import CodeGen.ListVariantsTodo as ListVariantsTodo exposing (ListVariantsTodo)
@@ -63,9 +62,7 @@ importVisitor (Node _ import_) context =
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
     , codecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
-    , autoCodecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
     , codecTodos : List ( ModuleName, CodecTodo )
-    , autoCodecTodos : List ( ModuleName, AutoCodecTodo )
     , toStringTodos : List ( ModuleName, ToStringTodo )
     , fromStringTodos : List ( ModuleName, FromStringTodo )
     , listVariantsTodos : List ( ModuleName, ListVariantsTodo )
@@ -79,9 +76,7 @@ type alias ModuleContext =
     { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
     , types : List TypeOrTypeAlias
     , codecs : List { functionName : String, typeVar : QualifiedType }
-    , autoCodecs : List { functionName : String, typeVar : QualifiedType }
     , codecTodos : List CodecTodo
-    , autoCodecTodos : List AutoCodecTodo
     , toStringTodos : List ToStringTodo
     , fromStringTodos : List FromStringTodo
     , listVariantsTodos : List ListVariantsTodo
@@ -96,9 +91,7 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , codecs = []
-    , autoCodecs = []
     , codecTodos = []
-    , autoCodecTodos = []
     , toStringTodos = []
     , fromStringTodos = []
     , listVariantsTodos = []
@@ -137,18 +130,7 @@ fromProjectToModule lookupTable metadata projectContext =
                     Nothing
             )
             projectContext.codecs
-    , autoCodecs =
-        List.filterMap
-            (\a ->
-                if a.moduleName == moduleName then
-                    Just { functionName = a.functionName, typeVar = a.typeVar }
-
-                else
-                    Nothing
-            )
-            projectContext.autoCodecs
     , codecTodos = filterTodos projectContext.codecTodos
-    , autoCodecTodos = filterTodos projectContext.autoCodecTodos
     , toStringTodos = filterTodos projectContext.toStringTodos
     , fromStringTodos = filterTodos projectContext.fromStringTodos
     , listVariantsTodos = filterTodos projectContext.listVariantsTodos
@@ -175,12 +157,7 @@ fromModuleToProject moduleKey metadata moduleContext =
         List.map
             (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
             moduleContext.codecs
-    , autoCodecs =
-        List.map
-            (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
-            moduleContext.autoCodecs
     , codecTodos = mapTodo moduleContext.codecTodos
-    , autoCodecTodos = mapTodo moduleContext.autoCodecTodos
     , toStringTodos = mapTodo moduleContext.toStringTodos
     , fromStringTodos = mapTodo moduleContext.fromStringTodos
     , listVariantsTodos = mapTodo moduleContext.listVariantsTodos
@@ -199,9 +176,7 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , codecs = newContext.codecs ++ previousContext.codecs
-    , autoCodecs = newContext.autoCodecs ++ previousContext.autoCodecs
     , codecTodos = newContext.codecTodos ++ previousContext.codecTodos
-    , autoCodecTodos = newContext.autoCodecTodos ++ previousContext.autoCodecTodos
     , toStringTodos = newContext.toStringTodos ++ previousContext.toStringTodos
     , fromStringTodos = newContext.fromStringTodos ++ previousContext.fromStringTodos
     , listVariantsTodos = newContext.listVariantsTodos ++ previousContext.listVariantsTodos
@@ -297,7 +272,6 @@ declarationVisitor declarations context =
     ( []
     , { context
         | codecTodos = getTodos (CodecTodo.getTodos context) ++ context.codecTodos
-        , autoCodecTodos = getTodos (AutoCodecTodo.getTodos context) ++ context.autoCodecTodos
         , toStringTodos = getTodos (ToStringTodo.getTodos context) ++ context.toStringTodos
         , fromStringTodos = getTodos (FromStringTodo.getTodos context) ++ context.fromStringTodos
         , listVariantsTodos = getTodos (ListVariantsTodo.getListAllTodo context) ++ context.listVariantsTodos
@@ -311,18 +285,6 @@ declarationVisitor declarations context =
                     case declaration of
                         Node _ (Declaration.FunctionDeclaration function) ->
                             CodecTodo.declarationVisitorGetCodecs context function
-
-                        _ ->
-                            Nothing
-                )
-                declarations
-                ++ context.codecs
-        , autoCodecs =
-            List.filterMap
-                (\declaration ->
-                    case declaration of
-                        Node _ (Declaration.FunctionDeclaration function) ->
-                            AutoCodecTodo.declarationVisitorGetCodecs context function
 
                         _ ->
                             Nothing
@@ -363,10 +325,6 @@ finalProjectEvaluation projectContext =
         codecTypeTodoFixes =
             CodecTodo.codecTypeTodoFixes projectContext
 
-        autoCodecTypeTodoFixes : List { moduleName : ModuleName, fix : Review.Fix.Fix, newImports : Set ModuleName }
-        autoCodecTypeTodoFixes =
-            AutoCodecTodo.codecTypeTodoFixes projectContext
-
         randomGeneratorTypeTodoFixes : List ( ModuleName, Review.Fix.Fix )
         randomGeneratorTypeTodoFixes =
             RandomGeneratorTodo.randomGeneratorTypeTodoFixes projectContext
@@ -374,9 +332,6 @@ finalProjectEvaluation projectContext =
     List.filterMap
         (\( moduleName, todo ) -> CodecTodo.todoErrors projectContext moduleName codecTypeTodoFixes todo)
         projectContext.codecTodos
-        ++ List.filterMap
-            (\( moduleName, todo ) -> AutoCodecTodo.todoErrors projectContext moduleName autoCodecTypeTodoFixes todo)
-            projectContext.autoCodecTodos
         ++ List.filterMap
             (\( moduleName, todo ) -> ToStringTodo.todoErrors projectContext moduleName todo)
             projectContext.toStringTodos
