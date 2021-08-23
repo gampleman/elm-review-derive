@@ -1,9 +1,11 @@
-module QualifiedType exposing (QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, getTypeData, isPrimitiveType, name, qualifiedPath, toString, typeOrTypeAliasName)
+module QualifiedType exposing (ExistingImport, QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, createFromType, createFromTypeAlias, getTypeData, isPrimitiveType, moduleName, name, qualifiedPath, toString)
 
+import Elm.Syntax.Exposing exposing (Exposing)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Type
-import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation)
+import Elm.Syntax.TypeAlias exposing (TypeAlias)
+import List.Extra as List
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 
 
@@ -14,17 +16,31 @@ type QualifiedType
         }
 
 
-create : ModuleNameLookupTable -> ModuleName -> Node ( ModuleName, String ) -> Maybe QualifiedType
+type alias ExistingImport =
+    { moduleName : ModuleName, moduleAlias : Maybe String, exposingList : Exposing }
+
+
+create : ModuleNameLookupTable -> ModuleName -> Node ( a, String ) -> Maybe QualifiedType
 create moduleNameLookupTable currentModule (Node range ( _, name_ )) =
     case ModuleNameLookupTable.moduleNameAt moduleNameLookupTable range of
         Just [] ->
             Just <| QualifiedType { qualifiedPath = currentModule, name = name_ }
 
-        Just moduleName ->
-            Just <| QualifiedType { qualifiedPath = moduleName, name = name_ }
+        Just moduleName_ ->
+            Just <| QualifiedType { qualifiedPath = moduleName_, name = name_ }
 
         Nothing ->
             Nothing
+
+
+createFromType : ModuleName -> Elm.Syntax.Type.Type -> QualifiedType
+createFromType currentModule type_ =
+    QualifiedType { qualifiedPath = currentModule, name = Node.value type_.name }
+
+
+createFromTypeAlias : ModuleName -> TypeAlias -> QualifiedType
+createFromTypeAlias currentModule typeAlias =
+    QualifiedType { qualifiedPath = currentModule, name = Node.value typeAlias.name }
 
 
 qualifiedPath : QualifiedType -> List String
@@ -37,14 +53,67 @@ name (QualifiedType a) =
     a.name
 
 
-toString : QualifiedType -> String
-toString (QualifiedType a) =
-    moduleNameToString a.qualifiedPath a.name
+isExposed : Exposing -> String -> Bool
+isExposed exposing_ functionOrValue =
+    case exposing_ of
+        Elm.Syntax.Exposing.All _ ->
+            True
+
+        Elm.Syntax.Exposing.Explicit exposings ->
+            List.any
+                (\(Node _ a) ->
+                    case a of
+                        Elm.Syntax.Exposing.InfixExpose _ ->
+                            False
+
+                        Elm.Syntax.Exposing.FunctionExpose function ->
+                            functionOrValue == function
+
+                        Elm.Syntax.Exposing.TypeOrAliasExpose typeOrAlias ->
+                            functionOrValue == typeOrAlias
+
+                        Elm.Syntax.Exposing.TypeExpose typeExpose ->
+                            functionOrValue == typeExpose.name
+                )
+                exposings
+
+
+toString : ModuleName -> List ExistingImport -> QualifiedType -> String
+toString currentModule existingImports qualifiedType =
+    helper moduleNameToString currentModule existingImports qualifiedType
+
+
+moduleName : ModuleName -> List ExistingImport -> QualifiedType -> ModuleName
+moduleName currentModule existingImports qualifiedType =
+    helper (\moduleName_ _ -> moduleName_) currentModule existingImports qualifiedType
+
+
+helper : (ModuleName -> String -> a) -> ModuleName -> List ExistingImport -> QualifiedType -> a
+helper func currentModule existingImports (QualifiedType a) =
+    if a.qualifiedPath == currentModule then
+        func [] a.name
+
+    else
+        case List.find (.moduleName >> (==) a.qualifiedPath) existingImports of
+            Just { moduleAlias, exposingList } ->
+                if isExposed exposingList a.name then
+                    func [] a.name
+
+                else
+                    case moduleAlias of
+                        Just moduleAlias_ ->
+                            func [ moduleAlias_ ] a.name
+
+                        Nothing ->
+                            func a.qualifiedPath a.name
+
+            Nothing ->
+                func a.qualifiedPath a.name
 
 
 moduleNameToString : ModuleName -> String -> String
-moduleNameToString moduleName name_ =
-    String.join "." (moduleName ++ [ name_ ])
+moduleNameToString moduleName_ name_ =
+    String.join "." (moduleName_ ++ [ name_ ])
 
 
 getTypeData : List ( ModuleName, TypeOrTypeAlias ) -> QualifiedType -> Maybe ( ModuleName, TypeOrTypeAlias )
@@ -54,14 +123,14 @@ getTypeData types qualifiedType =
             if typeModule == qualifiedPath qualifiedType then
                 case type_ of
                     TypeValue typeValue ->
-                        if typeValue.name == name qualifiedType then
+                        if typeValue.qualifiedType == qualifiedType then
                             Just ( typeModule, type_ )
 
                         else
                             Nothing
 
-                    TypeAliasValue name_ _ ->
-                        if name_ == name qualifiedType then
+                    TypeAliasValue typeAliasName _ ->
+                        if typeAliasName == qualifiedType then
                             Just ( typeModule, type_ )
 
                         else
@@ -75,7 +144,7 @@ getTypeData types qualifiedType =
 
 
 type alias Type_ =
-    { name : String
+    { qualifiedType : QualifiedType
     , generics : List String
     , constructors : List ValueConstructor_
     }
@@ -101,17 +170,7 @@ type TypeAnnotation_
 
 type TypeOrTypeAlias
     = TypeValue Type_
-    | TypeAliasValue String (List ( String, TypeAnnotation_ ))
-
-
-typeOrTypeAliasName : TypeOrTypeAlias -> String
-typeOrTypeAliasName typeOrTypeAlias =
-    case typeOrTypeAlias of
-        TypeValue type_ ->
-            type_.name
-
-        TypeAliasValue name_ _ ->
-            name_
+    | TypeAliasValue QualifiedType (List ( String, TypeAnnotation_ ))
 
 
 isPrimitiveType : QualifiedType -> Bool

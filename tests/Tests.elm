@@ -1,8 +1,8 @@
 module Tests exposing (suite)
 
+import CodeGen
 import Review.Test
 import Test exposing (..)
-import TodoItForMe
 
 
 suite : Test
@@ -15,74 +15,40 @@ suite =
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
-codec : Codec e A
+codec : Codec A
 codec =
-    Serialize.record A
-        |> Serialize.field .fieldA Serialize.int
-        |> Serialize.field .fieldB Serialize.string
-        |> Serialize.field .fieldC bCodec
-        |> Serialize.finishRecord
+    Codec.object A
+        |> Codec.field "fieldA" .fieldA Codec.int
+        |> Codec.field "fieldB" .fieldB Codec.string
+        |> Codec.field "fieldC" .fieldC bCodec
+        |> Codec.buildObject
 
 
-bCodec : Codec e B
+bCodec : Codec B
 bCodec =
-    Serialize.record B |> Serialize.field .fieldD Serialize.float |> Serialize.finishRecord"""
+    Codec.object B |> Codec.field "fieldD" .fieldD Codec.float |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
-codec : Codec e A
+codec : Codec A
 codec = Debug.todo ""
 
 """
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
-                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec e A\ncodec = Debug.todo \"\"" }
-                            |> Review.Test.whenFixed expected
-                        ]
-        , test "codec missing error type" <|
-            \_ ->
-                let
-                    expected : String
-                    expected =
-                        """module A exposing (..)
-
-import Serialize exposing (Codec)
-
-type alias A = { fieldA : Int }
-
-codec : Codec A
-codec =
-    Serialize.record A |> Serialize.field .fieldA Serialize.int |> Serialize.finishRecord"""
-                            |> String.replace "\u{000D}" ""
-                in
-                """module A exposing (..)
-
-import Serialize exposing (Codec)
-
-type alias A = { fieldA : Int }
-
-codec : Codec A
-codec = Debug.todo \"\""""
-                    |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            , under = "codec : Codec A\ncodec = Debug.todo \"\""
-                            }
+                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec A\ncodec = Debug.todo \"\"" }
                             |> Review.Test.whenFixed expected
                         ]
         , test "qualified codec" <|
@@ -92,30 +58,30 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-codec : Serialize.Codec e A
+codec : Codec.Codec A
 codec =
-    Serialize.record A |> Serialize.field .fieldA Serialize.int |> Serialize.finishRecord"""
+    Codec.object A |> Codec.field "fieldA" .fieldA Codec.int |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-codec : Serialize.Codec e A
+codec : Codec.Codec A
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Serialize.Codec e A\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec.Codec A\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -126,48 +92,51 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
+
+import Json.Decode
 
 type MyType
     = VariantA
-    | VariantB Int String Float
+    | VariantB Int
     | VariantC MyType
 
-codec : Codec e MyType
+codec : Codec MyType
 codec =
-    Serialize.customType
+    Codec.custom
+     "tag"
      (\\a b c value ->
          case value of
              VariantA ->
                  a
 
-             VariantB data0 data1 data2 ->
-                 b data0 data1 data2
+             VariantB data0 ->
+                 b data0
 
              VariantC data0 ->
                  c data0
      )
-        |> Serialize.variant0 VariantA
-        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float
-        |> Serialize.variant1 VariantC myTypeCodec
-        |> Serialize.finishCustomType"""
+        |> Codec.variant0 "VariantA" VariantA
+        |> Codec.variant1Data "VariantB" VariantB Codec.int
+        |> Codec.variant1Data "VariantC" VariantC myTypeCodec
+        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown MyType tag: ")"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type MyType
     = VariantA
-    | VariantB Int String Float
+    | VariantB Int
     | VariantC MyType
 
-codec : Codec e MyType
+codec : Codec MyType
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
-                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec e MyType\ncodec = Debug.todo \"\"" }
+                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec MyType\ncodec = Debug.todo \"\"" }
                             |> Review.Test.whenFixed expected
                         ]
         , test "custom type in another module" <|
@@ -177,51 +146,54 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import OtherModule
 
-codec : Codec e OtherModule.MyType
+import Json.Decode
+
+codec : Codec OtherModule.MyType
 codec =
-    Serialize.customType
+    Codec.custom
+     "tag"
      (\\a b c value ->
          case value of
-             VariantA ->
+             OtherModule.VariantA ->
                  a
 
-             VariantB data0 data1 data2 ->
-                 b data0 data1 data2
+             OtherModule.VariantB data0 ->
+                 b data0
 
-             VariantC data0 ->
+             OtherModule.VariantC data0 ->
                  c data0
      )
-        |> Serialize.variant0 VariantA
-        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float
-        |> Serialize.variant1 VariantC myTypeCodec
-        |> Serialize.finishCustomType"""
+        |> Codec.variant0 "VariantA" OtherModule.VariantA
+        |> Codec.variant1Data "VariantB" OtherModule.VariantB Codec.int
+        |> Codec.variant1Data "VariantC" OtherModule.VariantC myTypeCodec
+        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown MyType tag: ")"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import OtherModule
 
-codec : Codec e OtherModule.MyType
+codec : Codec OtherModule.MyType
 codec = Debug.todo \"\""""
                 , """module OtherModule exposing (..)
 
 type MyType
     = VariantA
-    | VariantB Int String Float
+    | VariantB Int
     | VariantC MyType"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
-                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.runOnModules CodeGen.rule
                     |> Review.Test.expectErrorsForModules
                         [ ( "A"
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec e OtherModule.MyType\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec OtherModule.MyType\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -234,56 +206,60 @@ type MyType
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
 
-codec : Codec e A
+codec : Codec A
 codec =
-    Serialize.record A |> Serialize.field .field OtherModule.codec |> Serialize.finishRecord"""
+    Codec.object A |> Codec.field "field" .field OtherModule.codec |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
 
-codec : Codec e A
+codec : Codec A
 codec = Debug.todo \"\""""
                 , """module OtherModule exposing (..)
 
+import Json.Decode
+
 type MyType
     = VariantA
-    | VariantB Int String Float
+    | VariantB Int
     | VariantC MyType
-    
-codec : Codec e MyType
+
+codec : Codec MyType
 codec  =
-    Serialize.customType (\\a b c value -> 
+    Codec.custom
+    "tag"
+    (\\a b c value ->
     case value of
       VariantA  ->
         a
-      VariantB data0 data1 data2 ->
-        b data0 data1 data2
+      VariantB data0 ->
+        b data0
       VariantC data0 ->
         c data0
-    ) 
-        |> Serialize.variant0 VariantA 
-        |> Serialize.variant3 VariantB Serialize.int Serialize.string Serialize.float 
-        |> Serialize.variant1 VariantC myTypeCodec 
-        |> Serialize.finishCustomType"""
+    )
+        |> Codec.variant0 "VariantA" VariantA
+        |> Codec.variant1Data "VariantB" VariantB Codec.int
+        |> Codec.variant1Data "VariantC" VariantC myTypeCodec
+        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown MyType tag: ")"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
-                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.runOnModules CodeGen.rule
                     |> Review.Test.expectErrorsForModules
                         [ ( "A"
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -296,34 +272,32 @@ codec  =
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec =
-    Serialize.record MyType
-        |> Serialize.field .fieldA (Serialize.maybe Serialize.int)
-        |> Serialize.finishRecord
+    Codec.object MyType |> Codec.field "fieldA" .fieldA (Codec.nullable Codec.int) |> Codec.buildObject
 """
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec = Debug.todo ""
 """
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -334,78 +308,38 @@ codec = Debug.todo ""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType =
     { fieldA : Dict Int String
     }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec =
-    Serialize.record MyType
-        |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string)
-        |> Serialize.finishRecord
+    Codec.object MyType |> Codec.field "fieldA" .fieldA (Codec.dict Codec.int Codec.string) |> Codec.buildObject
 
 """
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType =
     { fieldA : Dict Int String
     }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec = Debug.todo ""
 
 """
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
-                            }
-                            |> Review.Test.whenFixed expected
-                        ]
-        , test "tuple codec" <|
-            \_ ->
-                let
-                    expected : String
-                    expected =
-                        """module A exposing (..)
-
-import Serialize exposing (Codec)
-
-type alias MyType = { fieldA : (Float, List String) }
-
-codec : Codec e MyType
-codec =
-    Serialize.record MyType
-        |> Serialize.field
-            .fieldA
-            (Serialize.tuple Serialize.float (Serialize.list Serialize.string))
-        |> Serialize.finishRecord"""
-                            |> String.replace "\u{000D}" ""
-                in
-                """module A exposing (..)
-
-import Serialize exposing (Codec)
-
-type alias MyType = { fieldA : (Float, List String) }
-
-codec : Codec e MyType
-codec = Debug.todo \"\""""
-                    |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -416,38 +350,39 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec =
-    Serialize.record MyType
-        |> Serialize.field
+    Codec.object MyType
+        |> Codec.field
+            "fieldA"
             .fieldA
-            (Serialize.record (\\a b -> { field0 = a, field1 = b })
-                |> Serialize.field .field0 Serialize.int
-                |> Serialize.field .field1 Serialize.unit
-                |> Serialize.finishRecord
+            (Codec.object (\\a b -> { field0 = a, field1 = b })
+                |> Codec.field "field0" .field0 Codec.int
+                |> Codec.field "field1" .field1 Codec.unit
+                |> Codec.buildObject
             )
-        |> Serialize.finishRecord"""
+        |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -458,37 +393,37 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType = { fieldA : MyOtherType }
 
 type alias MyOtherType = { fieldB : Int }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec =
-    Serialize.record MyType |> Serialize.field .fieldA myOtherTypeCodec |> Serialize.finishRecord
-myOtherTypeCodec : Codec e MyOtherType
+    Codec.object MyType |> Codec.field "fieldA" .fieldA myOtherTypeCodec |> Codec.buildObject
+myOtherTypeCodec : Codec MyOtherType
 myOtherTypeCodec =
-    Serialize.record MyOtherType |> Serialize.field .fieldB Serialize.int |> Serialize.finishRecord"""
+    Codec.object MyOtherType |> Codec.field "fieldB" .fieldB Codec.int |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type alias MyType = { fieldA : MyOtherType }
 
 type alias MyOtherType = { fieldB : Int }
 
-codec : Codec e MyType
+codec : Codec MyType
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -499,40 +434,40 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec e A
+codec : Codec A
 codec =
-    Serialize.record A |> Serialize.field .field bCodec |> Serialize.finishRecord
-bCodec : Codec e B
+    Codec.object A |> Codec.field "field" .field bCodec |> Codec.buildObject
+bCodec : Codec B
 bCodec =
-    Serialize.record B |> Serialize.field .field Serialize.int |> Serialize.finishRecord"""
+    Codec.object B |> Codec.field "field" .field Codec.int |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec e A
+codec : Codec A
 codec = Debug.todo \"\""""
                 , """module B exposing (..)
 
 type alias B = { field : Int }"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
-                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.runOnModules CodeGen.rule
                     |> Review.Test.expectErrorsForModules
                         [ ( "A"
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -545,30 +480,30 @@ type alias B = { field : Int }"""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec e A
+codec : Codec A
 codec =
-    Serialize.record A |> Serialize.field .field bCodec |> Serialize.finishRecord
-b2Codec : Codec e B2
+    Codec.object A |> Codec.field "field" .field bCodec |> Codec.buildObject
+b2Codec : Codec B.B2
 b2Codec =
-    Serialize.record B2 |> Serialize.field .field2 Serialize.int |> Serialize.finishRecord
-bCodec : Codec e B
+    Codec.object B.B2 |> Codec.field "field2" .field2 Codec.int |> Codec.buildObject
+bCodec : Codec B
 bCodec =
-    Serialize.record B |> Serialize.field .field1 b2Codec |> Serialize.finishRecord"""
+    Codec.object B |> Codec.field "field1" .field1 b2Codec |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec e A
+codec : Codec A
 codec = Debug.todo \"\""""
                 , """module B exposing (..)
 
@@ -577,13 +512,13 @@ type alias B = { field1 : B2 }
 type alias B2 = { field2 : Int }"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
-                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.runOnModules CodeGen.rule
                     |> Review.Test.expectErrorsForModules
                         [ ( "A"
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -596,40 +531,40 @@ type alias B2 = { field2 : Int }"""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : List B }
 
-codec : Codec e A
+codec : Codec A
 codec =
-    Serialize.record A |> Serialize.field .field (Serialize.list bCodec) |> Serialize.finishRecord
-bCodec : Codec e B
+    Codec.object A |> Codec.field "field" .field (Codec.list bCodec) |> Codec.buildObject
+bCodec : Codec B
 bCodec =
-    Serialize.record B |> Serialize.field .field1 Serialize.int |> Serialize.finishRecord"""
+    Codec.object B |> Codec.field "field1" .field1 Codec.int |> Codec.buildObject"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : List B }
 
-codec : Codec e A
+codec : Codec A
 codec = Debug.todo \"\""""
                 , """module B exposing (..)
 
 type alias B = { field1 : Int }"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
-                    |> Review.Test.runOnModules TodoItForMe.rule
+                    |> Review.Test.runOnModules CodeGen.rule
                     |> Review.Test.expectErrorsForModules
                         [ ( "A"
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -642,48 +577,134 @@ type alias B = { field1 : Int }"""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
+
+import Json.Decode
 
 type Tree a
-    = Node (Tree a) (Tree a)
+    = Node (Tree a)
     | Leaf a
 
-codec : Codec a -> Codec e (Tree a)
+codec : Codec a -> Codec (Tree a)
 codec codecA =
-    Serialize.customType
+    Codec.custom
+     "tag"
      (\\a b value ->
          case value of
-             Node data0 data1 ->
-                 a data0 data1
+             Node data0 ->
+                 a data0
 
              Leaf data0 ->
                  b data0
      )
-        |> Serialize.variant2
-            Node
-            (treeCodec (Debug.todo "Can't handle this"))
-            (treeCodec (Debug.todo "Can't handle this"))
-        |> Serialize.variant1 Leaf (Debug.todo "Can't handle this")
-        |> Serialize.finishCustomType"""
+        |> Codec.variant1Data "Node" Node (treeCodec (Debug.todo "Can't handle this"))
+        |> Codec.variant1Data "Leaf" Leaf (Debug.todo "Can't handle this")
+        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown Tree tag: ")"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type Tree a
-    = Node (Tree a) (Tree a)
+    = Node (Tree a)
     | Leaf a
 
-codec : Codec a -> Codec e (Tree a)
+codec : Codec a -> Codec (Tree a)
 codec codecA = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec a -> Codec e (Tree a)\ncodec codecA = Debug.todo \"\""
+                            , under = "codec : Codec a -> Codec (Tree a)\ncodec codecA = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "Add codec for type inside tuple" <|
+            \_ ->
+                let
+                    expected =
+                        """module Schema exposing (..)
+
+import Codec exposing (Codec)
+
+type alias A =
+   { a : ( B, Int ) }
+
+type alias B = { b : Int }
+
+codec : Codec A
+codec =
+    Codec.object A |> Codec.field "a" .a (Codec.tuple bCodec Codec.int) |> Codec.buildObject
+bCodec : Codec B
+bCodec =
+    Codec.object B |> Codec.field "b" .b Codec.int |> Codec.buildObject"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module Schema exposing (..)
+
+import Codec exposing (Codec)
+
+type alias A =
+   { a : ( B, Int ) }
+
+type alias B = { b : Int }
+
+codec : Codec A
+codec = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run CodeGen.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                            }
+                            |> Review.Test.whenFixed expected
+                        ]
+        , test "Add codec for type inside nested record" <|
+            \_ ->
+                let
+                    expected =
+                        """module Schema exposing (..)
+
+import Codec exposing (Codec)
+
+type alias A =
+   { a : { b : B } }
+
+type alias B = { b : Int }
+
+codec : Codec A
+codec =
+    Codec.object A
+        |> Codec.field "a" .a (Codec.object (\\a -> { b = a }) |> Codec.field "b" .b bCodec |> Codec.buildObject)
+        |> Codec.buildObject
+bCodec : Codec B
+bCodec =
+    Codec.object B |> Codec.field "b" .b Codec.int |> Codec.buildObject"""
+                            |> String.replace "\u{000D}" ""
+                in
+                """module Schema exposing (..)
+
+import Codec exposing (Codec)
+
+type alias A =
+   { a : { b : B } }
+
+type alias B = { b : Int }
+
+codec : Codec A
+codec = Debug.todo \"\""""
+                    |> String.replace "\u{000D}" ""
+                    |> Review.Test.run CodeGen.rule
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = "Here's my attempt to complete this stub"
+                            , details = [ "" ]
+                            , under = "codec : Codec A\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -693,8 +714,6 @@ codec codecA = Debug.todo \"\""""
                     expected : String
                     expected =
                         """module A exposing (..)
-
-import Serialize exposing (Codec)
 
 type Tree a
     = Node (Tree a) (Tree a)
@@ -712,8 +731,6 @@ treeToString tree =
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
-
 type Tree a
     = Node (Tree a) (Tree a)
     | Leaf a
@@ -721,7 +738,7 @@ type Tree a
 treeToString : Tree a -> String
 treeToString tree = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
@@ -736,8 +753,6 @@ treeToString tree = Debug.todo \"\""""
                     expected : String
                     expected =
                         """module A exposing (..)
-
-import Serialize exposing (Codec)
 
 type Tree a
     = Node (Tree a) (Tree a)
@@ -755,8 +770,6 @@ treeToString value =
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
-
 type Tree a
     = Node (Tree a) (Tree a)
     | Leaf a
@@ -764,7 +777,7 @@ type Tree a
 treeToString : Tree a -> String
 treeToString = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
@@ -780,7 +793,7 @@ treeToString = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -805,7 +818,7 @@ fromString a =
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -815,7 +828,7 @@ type A a
 fromString : String -> Maybe (A a)
 fromString a = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
@@ -831,7 +844,7 @@ fromString a = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -856,7 +869,7 @@ fromString a =
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -866,7 +879,7 @@ type A a
 fromString : String -> A a
 fromString a = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
@@ -882,7 +895,7 @@ fromString a = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -907,7 +920,7 @@ fromString text =
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -917,7 +930,7 @@ type A a
 fromString : String -> Maybe (A a)
 fromString = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
@@ -933,7 +946,7 @@ fromString = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -943,16 +956,13 @@ type A a
 list : List A
 list =
     [ A (Debug.todo "Can't handle this")
-    
     , B (Debug.todo "Can't handle this") (Debug.todo "Can't handle this")
-    
-    , C
-    ]"""
+    , C ]"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
 
-import Serialize exposing (Codec)
+import Codec exposing (Codec)
 
 type A a
     = A a
@@ -962,7 +972,7 @@ type A a
 list : List (A a)
 list = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
+                    |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
@@ -971,51 +981,619 @@ list = Debug.todo \"\""""
                             }
                             |> Review.Test.whenFixed expected
                         ]
-        , test "random generator" <|
+
+        --        , test "random generator" <|
+        --            \_ ->
+        --                let
+        --                    expected : String
+        --                    expected =
+        --                        """module A exposing (..)
+        --
+        --type MyType
+        --    = Variant0
+        --    | Variant1
+        --    | Variant2 NestedType
+        --
+        --type alias NestedType = { field : (Int, Float) }
+        --
+        --randomMyType : Random.Generator MyType
+        --randomMyType =
+        --    Random.uniform
+        --        (Random.constant Variant0)
+        --        [ Random.constant Variant1, Random.map Variant2 randomNestedType ]
+        --        |> Random.andThen identity
+        --randomNestedType : Random.Generator NestedType
+        --randomNestedType =
+        --    Random.constant NestedType |> Random.andMap (Codec.tuple Codec.int Codec.float)
+        --"""
+        --                            |> String.replace "\u{000D}" ""
+        --                in
+        --                """module A exposing (..)
+        --
+        --type MyType
+        --    = Variant0
+        --    | Variant1
+        --    | Variant2 NestedType
+        --
+        --type alias NestedType = { field : (Int, Float) }
+        --
+        --randomMyType : Random.Generator MyType
+        --randomMyType = Debug.todo \"\""""
+        --                    |> String.replace "\u{000D}" ""
+        --                    |> Review.Test.run TodoItForMe.rule
+        --                    |> Review.Test.expectErrors
+        --                        [ Review.Test.error
+        --                            { message = "Here's my attempt to complete this stub"
+        --                            , details = [ "" ]
+        --                            , under = "randomMyType : Random.Generator MyType\nrandomMyType = Debug.todo \"\""
+        --                            }
+        --                            |> Review.Test.whenFixed expected
+        --                        ]
+        , test "CaseId.codec not found regression test" <|
             \_ ->
                 let
                     expected : String
                     expected =
-                        """module A exposing (..)
+                        """module Route exposing (..)
 
-type MyType
-    = Variant0
-    | Variant1
-    | Variant2 NestedType
+import CaseId exposing (CaseId)
 
-type alias NestedType = { field : (Int, Float) }
+import Json.Decode
 
-randomMyType : Random.Generator MyType
-randomMyType =
-    Random.uniform
-        (Random.constant Variant0)
-        [ Random.constant Variant1, Random.map Variant2 randomNestedType ]
-        |> Random.andThen identity
-randomNestedType : Random.Generator NestedType
-randomNestedType =
-    Random.constant NestedType |> Random.andMap (Serialize.tuple Serialize.int Serialize.float)
+type Route
+    = MyPagesRoute (Maybe CaseId)
+
+routeCodec : Codec Route
+routeCodec =
+    Codec.custom
+     "tag"
+     (\\a value ->
+         case value of
+             MyPagesRoute data0 ->
+                 a data0
+     )
+        |> Codec.variant1Data "MyPagesRoute" MyPagesRoute (Codec.nullable CaseId.codec)
+        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown Route tag: ")
 """
                             |> String.replace "\u{000D}" ""
                 in
-                """module A exposing (..)
+                [ """module Route exposing (..)
+
+import CaseId exposing (CaseId)
+
+type Route
+    = MyPagesRoute (Maybe CaseId)
+
+routeCodec : Codec Route
+routeCodec = Debug.todo ""
+"""
+                , """module CaseId exposing (CaseId, codec)
+
+type CaseId = CaseId String
+
+codec : Codec CaseId
+codec =
+    Codec.string |> Codec.map fromString toString
+"""
+                ]
+                    |> List.map (String.replace "\u{000D}" "")
+                    |> Review.Test.runOnModules CodeGen.rule
+                    |> Review.Test.expectErrorsForModules
+                        [ ( "Route"
+                          , [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "routeCodec : Codec Route\nrouteCodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+                          )
+                        ]
+        , describe "AutoCodec"
+            [ test "record AutoCodec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A = { fieldA : Int, fieldB : String, fieldC : B }
+type alias B = { fieldD : Float }
+
+codec : AutoCodec A
+codec =
+    AutoCodec.object A
+        |> AutoCodec.field "fieldA" .fieldA AutoCodec.int
+        |> AutoCodec.field "fieldB" .fieldB AutoCodec.string
+        |> AutoCodec.field "fieldC" .fieldC bCodec
+        |> AutoCodec.buildObject
+
+
+bCodec : AutoCodec B
+bCodec =
+    AutoCodec.object B |> AutoCodec.field "fieldD" .fieldD AutoCodec.float |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A = { fieldA : Int, fieldB : String, fieldC : B }
+type alias B = { fieldD : Float }
+
+codec : AutoCodec A
+codec = Debug.todo ""
+
+"""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : AutoCodec A\ncodec = Debug.todo \"\"" }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "qualified AutoCodec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A = { fieldA : Int }
+
+codec : AutoCodec.AutoCodec A
+codec =
+    AutoCodec.object A |> AutoCodec.field "fieldA" .fieldA AutoCodec.int |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A = { fieldA : Int }
+
+codec : AutoCodec.AutoCodec A
+codec = Debug.todo \"\""""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec.AutoCodec A\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "custom type AutoCodec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
 
 type MyType
-    = Variant0
-    | Variant1
-    | Variant2 NestedType
+    = VariantA
+    | VariantB Int
+    | VariantC MyType
 
-type alias NestedType = { field : (Int, Float) }
+codec : AutoCodec MyType
+codec =
+    AutoCodec.custom
+     (\\a b c value ->
+         case value of
+             VariantA ->
+                 a
 
-randomMyType : Random.Generator MyType
-randomMyType = Debug.todo \"\""""
-                    |> String.replace "\u{000D}" ""
-                    |> Review.Test.run TodoItForMe.rule
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            , under = "randomMyType : Random.Generator MyType\nrandomMyType = Debug.todo \"\""
-                            }
-                            |> Review.Test.whenFixed expected
-                        ]
+             VariantB data0 ->
+                 b data0
+
+             VariantC data0 ->
+                 c data0
+     )
+        |> AutoCodec.variant0 "VariantA" VariantA
+        |> AutoCodec.variant1 "VariantB" VariantB AutoCodec.int
+        |> AutoCodec.variant1 "VariantC" VariantC myTypeCodec
+        |> AutoCodec.buildCustom"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type MyType
+    = VariantA
+    | VariantB Int
+    | VariantC MyType
+
+codec : AutoCodec MyType
+codec = Debug.todo \"\""""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : AutoCodec MyType\ncodec = Debug.todo \"\"" }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "custom type in another module" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+import OtherModule
+
+codec : AutoCodec OtherModule.MyType
+codec =
+    AutoCodec.custom
+     (\\a b c value ->
+         case value of
+             OtherModule.VariantA ->
+                 a
+
+             OtherModule.VariantB data0 ->
+                 b data0
+
+             OtherModule.VariantC data0 ->
+                 c data0
+     )
+        |> AutoCodec.variant0 "VariantA" OtherModule.VariantA
+        |> AutoCodec.variant1 "VariantB" OtherModule.VariantB AutoCodec.int
+        |> AutoCodec.variant1 "VariantC" OtherModule.VariantC myTypeCodec
+        |> AutoCodec.buildCustom"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    [ """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+import OtherModule
+
+codec : AutoCodec OtherModule.MyType
+codec = Debug.todo \"\""""
+                    , """module OtherModule exposing (..)
+
+type MyType
+    = VariantA
+    | VariantB Int
+    | VariantC MyType"""
+                    ]
+                        |> List.map (String.replace "\u{000D}" "")
+                        |> Review.Test.runOnModules CodeGen.rule
+                        |> Review.Test.expectErrorsForModules
+                            [ ( "A"
+                              , [ Review.Test.error
+                                    { message = "Here's my attempt to complete this stub"
+                                    , details = [ "" ]
+                                    , under = "codec : AutoCodec OtherModule.MyType\ncodec = Debug.todo \"\""
+                                    }
+                                    |> Review.Test.whenFixed expected
+                                ]
+                              )
+                            ]
+            , test "reuse existing codec in another module" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+import OtherModule exposing (MyType)
+
+type alias A = { field : MyType }
+
+codec : AutoCodec A
+codec =
+    AutoCodec.object A |> AutoCodec.field "field" .field OtherModule.codec |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    [ """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+import OtherModule exposing (MyType)
+
+type alias A = { field : MyType }
+
+codec : AutoCodec A
+codec = Debug.todo \"\""""
+                    , """module OtherModule exposing (..)
+
+import Json.Decode
+
+type MyType
+    = VariantA
+    | VariantB Int
+    | VariantC MyType
+
+codec : AutoCodec MyType
+codec  =
+    AutoCodec.custom
+    (\\a b c value ->
+    case value of
+      VariantA  ->
+        a
+      VariantB data0 ->
+        b data0
+      VariantC data0 ->
+        c data0
+    )
+        |> AutoCodec.variant0 "VariantA" VariantA
+        |> AutoCodec.variant1 "VariantB" VariantB AutoCodec.int
+        |> AutoCodec.variant1 "VariantC" VariantC myTypeCodec
+        |> AutoCodec.buildCustom"""
+                    ]
+                        |> List.map (String.replace "\u{000D}" "")
+                        |> Review.Test.runOnModules CodeGen.rule
+                        |> Review.Test.expectErrorsForModules
+                            [ ( "A"
+                              , [ Review.Test.error
+                                    { message = "Here's my attempt to complete this stub"
+                                    , details = [ "" ]
+                                    , under = "codec : AutoCodec A\ncodec = Debug.todo \"\""
+                                    }
+                                    |> Review.Test.whenFixed expected
+                                ]
+                              )
+                            ]
+            , test "maybe codec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType = { fieldA : Maybe Int }
+
+codec : AutoCodec MyType
+codec =
+    AutoCodec.object MyType
+        |> AutoCodec.field "fieldA" .fieldA (AutoCodec.nullable AutoCodec.int)
+        |> AutoCodec.buildObject
+"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType = { fieldA : Maybe Int }
+
+codec : AutoCodec MyType
+codec = Debug.todo ""
+"""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec MyType\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "dict codec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType =
+    { fieldA : Dict Int String
+    }
+
+codec : AutoCodec MyType
+codec =
+    AutoCodec.object MyType
+        |> AutoCodec.field "fieldA" .fieldA (AutoCodec.dict AutoCodec.int AutoCodec.string)
+        |> AutoCodec.buildObject
+
+"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType =
+    { fieldA : Dict Int String
+    }
+
+codec : AutoCodec MyType
+codec = Debug.todo ""
+
+"""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec MyType\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "nested record codec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType = { fieldA : { field0 : Int, field1 : () } }
+
+codec : AutoCodec MyType
+codec =
+    AutoCodec.object MyType
+        |> AutoCodec.field
+            "fieldA"
+            .fieldA
+            (AutoCodec.object (\\a b -> { field0 = a, field1 = b })
+                |> AutoCodec.field "field0" .field0 AutoCodec.int
+                |> AutoCodec.field "field1" .field1 AutoCodec.unit
+                |> AutoCodec.buildObject
+            )
+        |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType = { fieldA : { field0 : Int, field1 : () } }
+
+codec : AutoCodec MyType
+codec = Debug.todo \"\""""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec MyType\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "add nested codec" <|
+                \_ ->
+                    let
+                        expected : String
+                        expected =
+                            """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType = { fieldA : MyOtherType }
+
+type alias MyOtherType = { fieldB : Int }
+
+codec : AutoCodec MyType
+codec =
+    AutoCodec.object MyType |> AutoCodec.field "fieldA" .fieldA myOtherTypeCodec |> AutoCodec.buildObject
+myOtherTypeCodec : AutoCodec MyOtherType
+myOtherTypeCodec =
+    AutoCodec.object MyOtherType |> AutoCodec.field "fieldB" .fieldB AutoCodec.int |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module A exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias MyType = { fieldA : MyOtherType }
+
+type alias MyOtherType = { fieldB : Int }
+
+codec : AutoCodec MyType
+codec = Debug.todo \"\""""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec MyType\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "Add codec for type inside tuple" <|
+                \_ ->
+                    let
+                        expected =
+                            """module Schema exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A =
+   { a : ( B, Int ) }
+
+type alias B = { b : Int }
+
+codec : AutoCodec A
+codec =
+    AutoCodec.object A |> AutoCodec.field "a" .a (AutoCodec.tuple bCodec AutoCodec.int) |> AutoCodec.buildObject
+bCodec : AutoCodec B
+bCodec =
+    AutoCodec.object B |> AutoCodec.field "b" .b AutoCodec.int |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module Schema exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A =
+   { a : ( B, Int ) }
+
+type alias B = { b : Int }
+
+codec : AutoCodec A
+codec = Debug.todo \"\""""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec A\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            , test "Add codec for type inside nested record" <|
+                \_ ->
+                    let
+                        expected =
+                            """module Schema exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A =
+   { a : { b : B } }
+
+type alias B = { b : Int }
+
+codec : AutoCodec A
+codec =
+    AutoCodec.object A
+        |> AutoCodec.field
+            "a"
+            .a
+            (AutoCodec.object (\\a -> { b = a }) |> AutoCodec.field "b" .b bCodec |> AutoCodec.buildObject)
+        |> AutoCodec.buildObject
+bCodec : AutoCodec B
+bCodec =
+    AutoCodec.object B |> AutoCodec.field "b" .b AutoCodec.int |> AutoCodec.buildObject"""
+                                |> String.replace "\u{000D}" ""
+                    in
+                    """module Schema exposing (..)
+
+import AutoCodec exposing (AutoCodec)
+
+type alias A =
+   { a : { b : B } }
+
+type alias B = { b : Int }
+
+codec : AutoCodec A
+codec = Debug.todo \"\""""
+                        |> String.replace "\u{000D}" ""
+                        |> Review.Test.run CodeGen.rule
+                        |> Review.Test.expectErrors
+                            [ Review.Test.error
+                                { message = "Here's my attempt to complete this stub"
+                                , details = [ "" ]
+                                , under = "codec : AutoCodec A\ncodec = Debug.todo \"\""
+                                }
+                                |> Review.Test.whenFixed expected
+                            ]
+            ]
         ]
