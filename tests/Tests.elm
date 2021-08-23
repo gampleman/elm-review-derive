@@ -20,18 +20,18 @@ import Codec exposing (Codec)
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A
-        |> Codec.field "fieldA" .fieldA Codec.int
-        |> Codec.field "fieldB" .fieldB Codec.string
-        |> Codec.field "fieldC" .fieldC bCodec
-        |> Codec.buildObject
+    Codec.record A
+        |> Codec.field .fieldA Codec.int
+        |> Codec.field .fieldB Codec.string
+        |> Codec.field .fieldC bCodec
+        |> Codec.finishRecord
 
 
-bCodec : Codec B
+bCodec : Codec e B
 bCodec =
-    Codec.object B |> Codec.field "fieldD" .fieldD Codec.float |> Codec.buildObject"""
+    Codec.record B |> Codec.field .fieldD Codec.float |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -41,14 +41,14 @@ import Codec exposing (Codec)
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo ""
 
 """
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
-                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec A\ncodec = Debug.todo \"\"" }
+                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec e A\ncodec = Debug.todo \"\"" }
                             |> Review.Test.whenFixed expected
                         ]
         , test "qualified codec" <|
@@ -62,9 +62,9 @@ import Codec exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-codec : Codec.Codec A
+codec : Codec.Codec e A
 codec =
-    Codec.object A |> Codec.field "fieldA" .fieldA Codec.int |> Codec.buildObject"""
+    Codec.record A |> Codec.field .fieldA Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -73,7 +73,7 @@ import Codec exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-codec : Codec.Codec A
+codec : Codec.Codec e A
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -81,7 +81,7 @@ codec = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec.Codec A\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec.Codec e A\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -101,10 +101,9 @@ type MyType
     | VariantB Int
     | VariantC MyType
 
-codec : Codec MyType
+codec : Codec e MyType
 codec =
-    Codec.custom
-     "tag"
+    Codec.customType
      (\\a b c value ->
          case value of
              VariantA ->
@@ -116,10 +115,10 @@ codec =
              VariantC data0 ->
                  c data0
      )
-        |> Codec.variant0 "VariantA" VariantA
-        |> Codec.variant1Data "VariantB" VariantB Codec.int
-        |> Codec.variant1Data "VariantC" VariantC myTypeCodec
-        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown MyType tag: ")"""
+        |> Codec.variant0 VariantA
+        |> Codec.variant1 VariantB Codec.int
+        |> Codec.variant1 VariantC myTypeCodec
+        |> Codec.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -131,12 +130,12 @@ type MyType
     | VariantB Int
     | VariantC MyType
 
-codec : Codec MyType
+codec : Codec e MyType
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
                     |> Review.Test.expectErrors
-                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec MyType\ncodec = Debug.todo \"\"" }
+                        [ Review.Test.error { message = "Here's my attempt to complete this stub", details = [ "" ], under = "codec : Codec e MyType\ncodec = Debug.todo \"\"" }
                             |> Review.Test.whenFixed expected
                         ]
         , test "custom type in another module" <|
@@ -151,10 +150,9 @@ import OtherModule
 
 import Json.Decode
 
-codec : Codec OtherModule.MyType
+codec : Codec e OtherModule.MyType
 codec =
-    Codec.custom
-     "tag"
+    Codec.customType
      (\\a b c value ->
          case value of
              OtherModule.VariantA ->
@@ -166,10 +164,10 @@ codec =
              OtherModule.VariantC data0 ->
                  c data0
      )
-        |> Codec.variant0 "VariantA" OtherModule.VariantA
-        |> Codec.variant1Data "VariantB" OtherModule.VariantB Codec.int
-        |> Codec.variant1Data "VariantC" OtherModule.VariantC myTypeCodec
-        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown MyType tag: ")"""
+        |> Codec.variant0 OtherModule.VariantA
+        |> Codec.variant1 OtherModule.VariantB Codec.int
+        |> Codec.variant1 OtherModule.VariantC myTypeCodec
+        |> Codec.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -177,7 +175,7 @@ codec =
 import Codec exposing (Codec)
 import OtherModule
 
-codec : Codec OtherModule.MyType
+codec : Codec e OtherModule.MyType
 codec = Debug.todo \"\""""
                 , """module OtherModule exposing (..)
 
@@ -193,7 +191,7 @@ type MyType
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec OtherModule.MyType\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec e OtherModule.MyType\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -211,9 +209,9 @@ import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A |> Codec.field "field" .field OtherModule.codec |> Codec.buildObject"""
+    Codec.record A |> Codec.field .field OtherModule.codec |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -223,7 +221,7 @@ import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo \"\""""
                 , """module OtherModule exposing (..)
 
@@ -234,10 +232,9 @@ type MyType
     | VariantB Int
     | VariantC MyType
 
-codec : Codec MyType
+codec : Codec e MyType
 codec  =
-    Codec.custom
-    "tag"
+    Codec.customType
     (\\a b c value ->
     case value of
       VariantA  ->
@@ -247,10 +244,10 @@ codec  =
       VariantC data0 ->
         c data0
     )
-        |> Codec.variant0 "VariantA" VariantA
-        |> Codec.variant1Data "VariantB" VariantB Codec.int
-        |> Codec.variant1Data "VariantC" VariantC myTypeCodec
-        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown MyType tag: ")"""
+        |> Codec.variant0 VariantA
+        |> Codec.variant1 VariantB Codec.int
+        |> Codec.variant1 VariantC myTypeCodec
+        |> Codec.finishCustomType"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
                     |> Review.Test.runOnModules CodeGen.rule
@@ -259,7 +256,7 @@ codec  =
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -276,9 +273,9 @@ import Codec exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec =
-    Codec.object MyType |> Codec.field "fieldA" .fieldA (Codec.nullable Codec.int) |> Codec.buildObject
+    Codec.record MyType |> Codec.field .fieldA (Codec.nullable Codec.int) |> Codec.finishRecord
 """
                             |> String.replace "\u{000D}" ""
                 in
@@ -288,7 +285,7 @@ import Codec exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec = Debug.todo ""
 """
                     |> String.replace "\u{000D}" ""
@@ -297,7 +294,7 @@ codec = Debug.todo ""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -314,9 +311,9 @@ type alias MyType =
     { fieldA : Dict Int String
     }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec =
-    Codec.object MyType |> Codec.field "fieldA" .fieldA (Codec.dict Codec.int Codec.string) |> Codec.buildObject
+    Codec.record MyType |> Codec.field .fieldA (Codec.dict Codec.int Codec.string) |> Codec.finishRecord
 
 """
                             |> String.replace "\u{000D}" ""
@@ -329,7 +326,7 @@ type alias MyType =
     { fieldA : Dict Int String
     }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec = Debug.todo ""
 
 """
@@ -339,7 +336,7 @@ codec = Debug.todo ""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -354,18 +351,17 @@ import Codec exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec =
-    Codec.object MyType
+    Codec.record MyType
         |> Codec.field
-            "fieldA"
             .fieldA
-            (Codec.object (\\a b -> { field0 = a, field1 = b })
-                |> Codec.field "field0" .field0 Codec.int
-                |> Codec.field "field1" .field1 Codec.unit
-                |> Codec.buildObject
+            (Codec.record (\\a b -> { field0 = a, field1 = b })
+                |> Codec.field .field0 Codec.int
+                |> Codec.field .field1 Codec.unit
+                |> Codec.finishRecord
             )
-        |> Codec.buildObject"""
+        |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -374,7 +370,7 @@ import Codec exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -382,7 +378,7 @@ codec = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -399,12 +395,12 @@ type alias MyType = { fieldA : MyOtherType }
 
 type alias MyOtherType = { fieldB : Int }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec =
-    Codec.object MyType |> Codec.field "fieldA" .fieldA myOtherTypeCodec |> Codec.buildObject
-myOtherTypeCodec : Codec MyOtherType
+    Codec.record MyType |> Codec.field .fieldA myOtherTypeCodec |> Codec.finishRecord
+myOtherTypeCodec : Codec e MyOtherType
 myOtherTypeCodec =
-    Codec.object MyOtherType |> Codec.field "fieldB" .fieldB Codec.int |> Codec.buildObject"""
+    Codec.record MyOtherType |> Codec.field .fieldB Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -415,7 +411,7 @@ type alias MyType = { fieldA : MyOtherType }
 
 type alias MyOtherType = { fieldB : Int }
 
-codec : Codec MyType
+codec : Codec e MyType
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -423,7 +419,7 @@ codec = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec MyType\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec e MyType\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -439,12 +435,12 @@ import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A |> Codec.field "field" .field bCodec |> Codec.buildObject
-bCodec : Codec B
+    Codec.record A |> Codec.field .field bCodec |> Codec.finishRecord
+bCodec : Codec e B
 bCodec =
-    Codec.object B |> Codec.field "field" .field Codec.int |> Codec.buildObject"""
+    Codec.record B |> Codec.field .field Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -454,7 +450,7 @@ import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo \"\""""
                 , """module B exposing (..)
 
@@ -467,7 +463,7 @@ type alias B = { field : Int }"""
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -485,15 +481,15 @@ import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A |> Codec.field "field" .field bCodec |> Codec.buildObject
-b2Codec : Codec B.B2
+    Codec.record A |> Codec.field .field bCodec |> Codec.finishRecord
+b2Codec : Codec e B.B2
 b2Codec =
-    Codec.object B.B2 |> Codec.field "field2" .field2 Codec.int |> Codec.buildObject
-bCodec : Codec B
+    Codec.record B.B2 |> Codec.field .field2 Codec.int |> Codec.finishRecord
+bCodec : Codec e B
 bCodec =
-    Codec.object B |> Codec.field "field1" .field1 b2Codec |> Codec.buildObject"""
+    Codec.record B |> Codec.field .field1 b2Codec |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -503,7 +499,7 @@ import B exposing (B)
 
 type alias A = { field : B }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo \"\""""
                 , """module B exposing (..)
 
@@ -518,7 +514,7 @@ type alias B2 = { field2 : Int }"""
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -536,12 +532,12 @@ import B exposing (B)
 
 type alias A = { field : List B }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A |> Codec.field "field" .field (Codec.list bCodec) |> Codec.buildObject
-bCodec : Codec B
+    Codec.record A |> Codec.field .field (Codec.list bCodec) |> Codec.finishRecord
+bCodec : Codec e B
 bCodec =
-    Codec.object B |> Codec.field "field1" .field1 Codec.int |> Codec.buildObject"""
+    Codec.record B |> Codec.field .field1 Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -551,7 +547,7 @@ import B exposing (B)
 
 type alias A = { field : List B }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo \"\""""
                 , """module B exposing (..)
 
@@ -564,7 +560,7 @@ type alias B = { field1 : Int }"""
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                                , under = "codec : Codec e A\ncodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
@@ -585,10 +581,9 @@ type Tree a
     = Node (Tree a)
     | Leaf a
 
-codec : Codec a -> Codec (Tree a)
+codec : Codec e a -> Codec e (Tree a)
 codec codecA =
-    Codec.custom
-     "tag"
+    Codec.customType
      (\\a b value ->
          case value of
              Node data0 ->
@@ -597,9 +592,9 @@ codec codecA =
              Leaf data0 ->
                  b data0
      )
-        |> Codec.variant1Data "Node" Node (treeCodec (Debug.todo "Can't handle this"))
-        |> Codec.variant1Data "Leaf" Leaf (Debug.todo "Can't handle this")
-        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown Tree tag: ")"""
+        |> Codec.variant1 Node (treeCodec (Debug.todo "Can't handle this"))
+        |> Codec.variant1 Leaf (Debug.todo "Can't handle this")
+        |> Codec.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -610,7 +605,7 @@ type Tree a
     = Node (Tree a)
     | Leaf a
 
-codec : Codec a -> Codec (Tree a)
+codec : Codec e a -> Codec e (Tree a)
 codec codecA = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -618,7 +613,7 @@ codec codecA = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec a -> Codec (Tree a)\ncodec codecA = Debug.todo \"\""
+                            , under = "codec : Codec e a -> Codec e (Tree a)\ncodec codecA = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -635,12 +630,12 @@ type alias A =
 
 type alias B = { b : Int }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A |> Codec.field "a" .a (Codec.tuple bCodec Codec.int) |> Codec.buildObject
-bCodec : Codec B
+    Codec.record A |> Codec.field .a (Codec.tuple bCodec Codec.int) |> Codec.finishRecord
+bCodec : Codec e B
 bCodec =
-    Codec.object B |> Codec.field "b" .b Codec.int |> Codec.buildObject"""
+    Codec.record B |> Codec.field .b Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module Schema exposing (..)
@@ -652,7 +647,7 @@ type alias A =
 
 type alias B = { b : Int }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -660,7 +655,7 @@ codec = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec e A\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -677,14 +672,14 @@ type alias A =
 
 type alias B = { b : Int }
 
-codec : Codec A
+codec : Codec e A
 codec =
-    Codec.object A
-        |> Codec.field "a" .a (Codec.object (\\a -> { b = a }) |> Codec.field "b" .b bCodec |> Codec.buildObject)
-        |> Codec.buildObject
+    Codec.record A
+        |> Codec.field .a (Codec.record (\\a -> { b = a }) |> Codec.field .b bCodec |> Codec.finishRecord)
+        |> Codec.finishRecord
 bCodec : Codec B
 bCodec =
-    Codec.object B |> Codec.field "b" .b Codec.int |> Codec.buildObject"""
+    Codec.record B |> Codec.field .b Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module Schema exposing (..)
@@ -696,7 +691,7 @@ type alias A =
 
 type alias B = { b : Int }
 
-codec : Codec A
+codec : Codec e A
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -704,7 +699,7 @@ codec = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec A\ncodec = Debug.todo \"\""
+                            , under = "codec : Codec e A\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -1043,17 +1038,16 @@ import Json.Decode
 type Route
     = MyPagesRoute (Maybe CaseId)
 
-routeCodec : Codec Route
+routeCodec : Codec e Route
 routeCodec =
-    Codec.custom
-     "tag"
+    Codec.customType
      (\\a value ->
          case value of
              MyPagesRoute data0 ->
                  a data0
      )
-        |> Codec.variant1Data "MyPagesRoute" MyPagesRoute (Codec.nullable CaseId.codec)
-        |> Codec.buildCustom (Json.Decode.fail << (++) "Unknown Route tag: ")
+        |> Codec.variant1 MyPagesRoute (Codec.nullable CaseId.codec)
+        |> Codec.finishCustomType
 """
                             |> String.replace "\u{000D}" ""
                 in
@@ -1064,14 +1058,14 @@ import CaseId exposing (CaseId)
 type Route
     = MyPagesRoute (Maybe CaseId)
 
-routeCodec : Codec Route
+routeCodec : Codec e Route
 routeCodec = Debug.todo ""
 """
                 , """module CaseId exposing (CaseId, codec)
 
 type CaseId = CaseId String
 
-codec : Codec CaseId
+codec : Codec e CaseId
 codec =
     Codec.string |> Codec.map fromString toString
 """
@@ -1083,7 +1077,7 @@ codec =
                           , [ Review.Test.error
                                 { message = "Here's my attempt to complete this stub"
                                 , details = [ "" ]
-                                , under = "routeCodec : Codec Route\nrouteCodec = Debug.todo \"\""
+                                , under = "routeCodec : Codec e Route\nrouteCodec = Debug.todo \"\""
                                 }
                                 |> Review.Test.whenFixed expected
                             ]
