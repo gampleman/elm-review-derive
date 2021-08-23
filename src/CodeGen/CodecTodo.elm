@@ -5,7 +5,6 @@ import AssocSet as Set exposing (Set)
 import CodeGen.Helpers as Helpers
 import Elm.CodeGen exposing (ModuleName)
 import Elm.Syntax.Expression as Expression exposing (Expression, Function)
-import Elm.Syntax.Infix exposing (InfixDirection(..))
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
@@ -34,7 +33,7 @@ declarationVisitorGetCodecs context function =
     case ( function.signature, function.declaration ) of
         ( Just (Node _ signature), Node _ declaration ) ->
             case Helpers.typeAnnotationReturnValue signature.typeAnnotation of
-                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType _) ]) ->
+                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
                     if Helpers.hasDebugTodo declaration then
                         Nothing
 
@@ -90,13 +89,7 @@ getTodos context declarationRange function =
                 Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
                     abc signature codecType
 
-                Node _ (TypeAnnotation.Typed (Node _ ( [], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType _) ]) ->
-                    abc signature codecType
-
-                Node _ (TypeAnnotation.Typed (Node _ ( [ "Codec" ], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
-                    abc signature codecType
-
-                Node _ (TypeAnnotation.Typed (Node _ ( [ "Codec" ], "Codec" )) [ Node _ (TypeAnnotation.Typed codecType _) ]) ->
+                Node _ (TypeAnnotation.Typed (Node _ ( [ "Serialize" ], "Codec" )) [ Node _ _, Node _ (TypeAnnotation.Typed codecType _) ]) ->
                     abc signature codecType
 
                 _ ->
@@ -124,7 +117,6 @@ generateRecordCodec projectContext existingImports currentModule maybeTypeAlias 
                 |> Helpers.pipeRight
                     (Helpers.application
                         [ Helpers.functionOrValue [ "Codec" ] "field"
-                        , Expression.Literal fieldName |> Helpers.node
                         , Helpers.functionOrValue [ "" ] fieldName
                         , codec
                         ]
@@ -133,7 +125,7 @@ generateRecordCodec projectContext existingImports currentModule maybeTypeAlias 
             )
         )
         ( Helpers.application
-            [ Helpers.functionOrValue [ "Codec" ] "object"
+            [ Helpers.functionOrValue [ "Codec" ] "record"
             , case maybeTypeAlias of
                 Just typeAliasName ->
                     Helpers.functionOrValue
@@ -165,7 +157,7 @@ generateRecordCodec projectContext existingImports currentModule maybeTypeAlias 
                 Set.empty
         )
         recordFields
-        |> Tuple.mapFirst (Helpers.pipeRight (Helpers.application [ Helpers.functionOrValue [ "Codec" ] "buildObject" ]))
+        |> Tuple.mapFirst (Helpers.pipeRight (Helpers.application [ Helpers.functionOrValue [ "Codec" ] "finishRecord" ]))
 
 
 generateCodecTodoDefinition : ProjectContext a -> ModuleName -> List ExistingImport -> CodecTodo -> TypeOrTypeAlias -> ( String, Set ModuleName )
@@ -238,7 +230,7 @@ codecFromTypeAnnotation projectContext existingImports currentModule typeAnnotat
                             Helpers.functionOrValue [ "Codec" ] "bool"
 
                         "Maybe" ->
-                            Helpers.functionOrValue [ "Codec" ] "nullable"
+                            Helpers.functionOrValue [ "Codec" ] "maybe"
 
                         "Dict" ->
                             Helpers.functionOrValue [ "Codec" ] "dict"
@@ -372,8 +364,7 @@ generateCustomTypeCodec projectContext currentModule existingImports customType 
 
         start =
             ( Helpers.application
-                [ Helpers.functionOrValue [ "Codec" ] "custom"
-                , Expression.Literal "tag" |> Helpers.node
+                [ Helpers.functionOrValue [ "Codec" ] "customType"
                 , Expression.LambdaExpression
                     { args = List.map Tuple.first args ++ [ VarPattern "value" |> Helpers.node ]
                     , expression =
@@ -403,15 +394,7 @@ generateCustomTypeCodec projectContext currentModule existingImports customType 
             ( Helpers.pipeRight
                 (Helpers.application
                     (Helpers.functionOrValue [ "Codec" ]
-                        ("variant"
-                            ++ (if List.isEmpty constructor.arguments then
-                                    "0"
-
-                                else
-                                    String.fromInt (List.length constructor.arguments) ++ "Data"
-                               )
-                        )
-                        :: Helpers.node (Expression.Literal constructor.name)
+                        ("variant" ++ String.fromInt (List.length constructor.arguments))
                         :: Helpers.functionOrValue moduleName_ constructor.name
                         :: argumentsCode
                     )
@@ -424,24 +407,9 @@ generateCustomTypeCodec projectContext currentModule existingImports customType 
         customType.constructors
         |> (\( expression, imports ) ->
                 ( Helpers.pipeRight
-                    (Helpers.application
-                        [ Helpers.functionOrValue [ "Codec" ] "buildCustom"
-                        , Expression.OperatorApplication "<<"
-                            Left
-                            (Helpers.functionOrValue [ "Json", "Decode" ] "fail")
-                            (Helpers.application
-                                [ Expression.PrefixOperator "++" |> Helpers.node
-                                , Expression.Literal
-                                    ("Unknown " ++ QualifiedType.name customType.qualifiedType ++ " tag: ")
-                                    |> Helpers.node
-                                ]
-                            )
-                            |> Helpers.node
-                            |> Helpers.parenthesis
-                        ]
-                    )
+                    (Helpers.functionOrValue [ "Codec" ] "finishCustomType")
                     expression
-                , Set.insert [ "Json", "Decode" ] imports
+                , imports
                 )
            )
 
@@ -582,7 +550,8 @@ codecTypeTodoFixes projectContext =
                                                 , typeAnnotation =
                                                     TypeAnnotation.Typed
                                                         (Helpers.node ( [], "Codec" ))
-                                                        [ QualifiedType.toString currentModule existingImports qualifiedType
+                                                        [ TypeAnnotation.GenericType "e" |> Helpers.node
+                                                        , QualifiedType.toString currentModule existingImports qualifiedType
                                                             |> TypeAnnotation.GenericType
                                                             |> Helpers.node
                                                         ]

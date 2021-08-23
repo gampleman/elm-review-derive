@@ -62,7 +62,7 @@ import Codec exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-codec : Codec.Codec e A
+codec : Serialize.Codec e A
 codec =
     Codec.record A |> Codec.field .fieldA Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
@@ -73,7 +73,7 @@ import Codec exposing (Codec)
 
 type alias A = { fieldA : Int }
 
-codec : Codec.Codec e A
+codec : Serialize.Codec e A
 codec = Debug.todo \"\""""
                     |> String.replace "\u{000D}" ""
                     |> Review.Test.run CodeGen.rule
@@ -81,7 +81,7 @@ codec = Debug.todo \"\""""
                         [ Review.Test.error
                             { message = "Here's my attempt to complete this stub"
                             , details = [ "" ]
-                            , under = "codec : Codec.Codec e A\ncodec = Debug.todo \"\""
+                            , under = "codec : Serialize.Codec e A\ncodec = Debug.todo \"\""
                             }
                             |> Review.Test.whenFixed expected
                         ]
@@ -93,8 +93,6 @@ codec = Debug.todo \"\""""
                         """module A exposing (..)
 
 import Codec exposing (Codec)
-
-import Json.Decode
 
 type MyType
     = VariantA
@@ -147,8 +145,6 @@ codec = Debug.todo \"\""""
 
 import Codec exposing (Codec)
 import OtherModule
-
-import Json.Decode
 
 codec : Codec e OtherModule.MyType
 codec =
@@ -225,8 +221,6 @@ codec : Codec e A
 codec = Debug.todo \"\""""
                 , """module OtherModule exposing (..)
 
-import Json.Decode
-
 type MyType
     = VariantA
     | VariantB Int
@@ -275,7 +269,7 @@ type alias MyType = { fieldA : Maybe Int }
 
 codec : Codec e MyType
 codec =
-    Codec.record MyType |> Codec.field .fieldA (Codec.nullable Codec.int) |> Codec.finishRecord
+    Codec.record MyType |> Codec.field .fieldA (Codec.maybe Codec.int) |> Codec.finishRecord
 """
                             |> String.replace "\u{000D}" ""
                 in
@@ -575,8 +569,6 @@ type alias B = { field1 : Int }"""
 
 import Codec exposing (Codec)
 
-import Json.Decode
-
 type Tree a
     = Node (Tree a)
     | Leaf a
@@ -677,7 +669,7 @@ codec =
     Codec.record A
         |> Codec.field .a (Codec.record (\\a -> { b = a }) |> Codec.field .b bCodec |> Codec.finishRecord)
         |> Codec.finishRecord
-bCodec : Codec B
+bCodec : Codec e B
 bCodec =
     Codec.record B |> Codec.field .b Codec.int |> Codec.finishRecord"""
                             |> String.replace "\u{000D}" ""
@@ -1033,8 +1025,6 @@ list = Debug.todo \"\""""
 
 import CaseId exposing (CaseId)
 
-import Json.Decode
-
 type Route
     = MyPagesRoute (Maybe CaseId)
 
@@ -1046,7 +1036,7 @@ routeCodec =
              MyPagesRoute data0 ->
                  a data0
      )
-        |> Codec.variant1 MyPagesRoute (Codec.nullable CaseId.codec)
+        |> Codec.variant1 MyPagesRoute (Codec.maybe CaseId.codec)
         |> Codec.finishCustomType
 """
                             |> String.replace "\u{000D}" ""
