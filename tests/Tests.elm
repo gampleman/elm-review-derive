@@ -15,7 +15,7 @@ suite =
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
@@ -36,7 +36,7 @@ bCodec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A = { fieldA : Int, fieldB : String, fieldC : B }
 type alias B = { fieldD : Float }
@@ -58,7 +58,7 @@ codec = Debug.todo ""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A = { fieldA : Int }
 
@@ -69,7 +69,7 @@ codec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A = { fieldA : Int }
 
@@ -92,7 +92,7 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type MyType
     = VariantA
@@ -121,7 +121,7 @@ codec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type MyType
     = VariantA
@@ -143,7 +143,7 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import OtherModule
 
 codec : Codec e OtherModule.MyType
@@ -168,7 +168,7 @@ codec =
                 in
                 [ """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import OtherModule
 
 codec : Codec e OtherModule.MyType
@@ -200,7 +200,7 @@ type MyType
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
@@ -212,7 +212,7 @@ codec =
                 in
                 [ """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import OtherModule exposing (MyType)
 
 type alias A = { field : MyType }
@@ -263,7 +263,7 @@ codec  =
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
@@ -275,7 +275,7 @@ codec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : Maybe Int }
 
@@ -299,7 +299,7 @@ codec = Debug.todo ""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType =
     { fieldA : Dict Int String
@@ -316,7 +316,7 @@ codec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType =
     { fieldA : Dict Int String
@@ -343,7 +343,7 @@ codec = Debug.todo ""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
@@ -362,7 +362,7 @@ codec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
@@ -385,7 +385,7 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : MyOtherType }
 
@@ -401,7 +401,7 @@ myOtherTypeCodec =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias MyType = { fieldA : MyOtherType }
 
@@ -426,7 +426,7 @@ codec = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
@@ -441,7 +441,7 @@ bCodec =
                 in
                 [ """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
@@ -472,7 +472,7 @@ type alias B = { field : Int }"""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
@@ -490,7 +490,7 @@ bCodec =
                 in
                 [ """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : B }
@@ -523,7 +523,7 @@ type alias B2 = { field2 : Int }"""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : List B }
@@ -538,7 +538,7 @@ bCodec =
                 in
                 [ """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 import B exposing (B)
 
 type alias A = { field : List B }
@@ -569,7 +569,7 @@ type alias B = { field1 : Int }"""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type Tree a
     = Node (Tree a)
@@ -593,7 +593,7 @@ codec codecA =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type Tree a
     = Node (Tree a)
@@ -617,7 +617,7 @@ codec codecA = Debug.todo \"\""""
                     expected =
                         """module Schema exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A =
    { a : ( B, Int ) }
@@ -634,7 +634,7 @@ bCodec =
                 in
                 """module Schema exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A =
    { a : ( B, Int ) }
@@ -659,7 +659,7 @@ codec = Debug.todo \"\""""
                     expected =
                         """module Schema exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A =
    { a : { b : B } }
@@ -680,7 +680,7 @@ bCodec =
                 in
                 """module Schema exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type alias A =
    { a : { b : B } }
@@ -784,7 +784,7 @@ treeToString = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -809,7 +809,7 @@ fromString a =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -835,7 +835,7 @@ fromString a = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -860,7 +860,7 @@ fromString a =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -886,7 +886,7 @@ fromString a = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -911,7 +911,7 @@ fromString text =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -937,7 +937,7 @@ fromString = Debug.todo \"\""""
                     expected =
                         """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
@@ -953,7 +953,7 @@ list =
                 in
                 """module A exposing (..)
 
-import Codec exposing (Codec)
+import Serialize exposing (Codec)
 
 type A a
     = A a
