@@ -22,16 +22,16 @@ type alias B = { fieldD : Float }
 
 codec : Codec e A
 codec =
-    Codec.record A
-        |> Codec.field .fieldA Codec.int
-        |> Codec.field .fieldB Codec.string
-        |> Codec.field .fieldC bCodec
-        |> Codec.finishRecord
+    Serialize.record A
+        |> Serialize.field .fieldA Serialize.int
+        |> Serialize.field .fieldB Serialize.string
+        |> Serialize.field .fieldC bCodec
+        |> Serialize.finishRecord
 
 
 bCodec : Codec e B
 bCodec =
-    Codec.record B |> Codec.field .fieldD Codec.float |> Codec.finishRecord"""
+    Serialize.record B |> Serialize.field .fieldD Serialize.float |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -64,7 +64,7 @@ type alias A = { fieldA : Int }
 
 codec : Serialize.Codec e A
 codec =
-    Codec.record A |> Codec.field .fieldA Codec.int |> Codec.finishRecord"""
+    Serialize.record A |> Serialize.field .fieldA Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -101,7 +101,7 @@ type MyType
 
 codec : Codec e MyType
 codec =
-    Codec.customType
+    Serialize.customType
      (\\a b c value ->
          case value of
              VariantA ->
@@ -113,10 +113,10 @@ codec =
              VariantC data0 ->
                  c data0
      )
-        |> Codec.variant0 VariantA
-        |> Codec.variant1 VariantB Codec.int
-        |> Codec.variant1 VariantC myTypeCodec
-        |> Codec.finishCustomType"""
+        |> Serialize.variant0 VariantA
+        |> Serialize.variant1 VariantB Serialize.int
+        |> Serialize.variant1 VariantC myTypeCodec
+        |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -148,7 +148,7 @@ import OtherModule
 
 codec : Codec e OtherModule.MyType
 codec =
-    Codec.customType
+    Serialize.customType
      (\\a b c value ->
          case value of
              OtherModule.VariantA ->
@@ -160,10 +160,10 @@ codec =
              OtherModule.VariantC data0 ->
                  c data0
      )
-        |> Codec.variant0 OtherModule.VariantA
-        |> Codec.variant1 OtherModule.VariantB Codec.int
-        |> Codec.variant1 OtherModule.VariantC myTypeCodec
-        |> Codec.finishCustomType"""
+        |> Serialize.variant0 OtherModule.VariantA
+        |> Serialize.variant1 OtherModule.VariantB Serialize.int
+        |> Serialize.variant1 OtherModule.VariantC myTypeCodec
+        |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -207,7 +207,7 @@ type alias A = { field : MyType }
 
 codec : Codec e A
 codec =
-    Codec.record A |> Codec.field .field OtherModule.codec |> Codec.finishRecord"""
+    Serialize.record A |> Serialize.field .field OtherModule.codec |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -228,7 +228,7 @@ type MyType
 
 codec : Codec e MyType
 codec  =
-    Codec.customType
+    Serialize.customType
     (\\a b c value ->
     case value of
       VariantA  ->
@@ -238,10 +238,10 @@ codec  =
       VariantC data0 ->
         c data0
     )
-        |> Codec.variant0 VariantA
-        |> Codec.variant1 VariantB Codec.int
-        |> Codec.variant1 VariantC myTypeCodec
-        |> Codec.finishCustomType"""
+        |> Serialize.variant0 VariantA
+        |> Serialize.variant1 VariantB Serialize.int
+        |> Serialize.variant1 VariantC myTypeCodec
+        |> Serialize.finishCustomType"""
                 ]
                     |> List.map (String.replace "\u{000D}" "")
                     |> Review.Test.runOnModules CodeGen.rule
@@ -269,7 +269,7 @@ type alias MyType = { fieldA : Maybe Int }
 
 codec : Codec e MyType
 codec =
-    Codec.record MyType |> Codec.field .fieldA (Codec.maybe Codec.int) |> Codec.finishRecord
+    Serialize.record MyType |> Serialize.field .fieldA (Serialize.maybe Serialize.int) |> Serialize.finishRecord
 """
                             |> String.replace "\u{000D}" ""
                 in
@@ -307,7 +307,9 @@ type alias MyType =
 
 codec : Codec e MyType
 codec =
-    Codec.record MyType |> Codec.field .fieldA (Codec.dict Codec.int Codec.string) |> Codec.finishRecord
+    Serialize.record MyType
+        |> Serialize.field .fieldA (Serialize.dict Serialize.int Serialize.string)
+        |> Serialize.finishRecord
 
 """
                             |> String.replace "\u{000D}" ""
@@ -347,15 +349,15 @@ type alias MyType = { fieldA : { field0 : Int, field1 : () } }
 
 codec : Codec e MyType
 codec =
-    Codec.record MyType
-        |> Codec.field
+    Serialize.record MyType
+        |> Serialize.field
             .fieldA
-            (Codec.record (\\a b -> { field0 = a, field1 = b })
-                |> Codec.field .field0 Codec.int
-                |> Codec.field .field1 Codec.unit
-                |> Codec.finishRecord
+            (Serialize.record (\\a b -> { field0 = a, field1 = b })
+                |> Serialize.field .field0 Serialize.int
+                |> Serialize.field .field1 Serialize.unit
+                |> Serialize.finishRecord
             )
-        |> Codec.finishRecord"""
+        |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -391,10 +393,10 @@ type alias MyOtherType = { fieldB : Int }
 
 codec : Codec e MyType
 codec =
-    Codec.record MyType |> Codec.field .fieldA myOtherTypeCodec |> Codec.finishRecord
+    Serialize.record MyType |> Serialize.field .fieldA myOtherTypeCodec |> Serialize.finishRecord
 myOtherTypeCodec : Codec e MyOtherType
 myOtherTypeCodec =
-    Codec.record MyOtherType |> Codec.field .fieldB Codec.int |> Codec.finishRecord"""
+    Serialize.record MyOtherType |> Serialize.field .fieldB Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -431,10 +433,10 @@ type alias A = { field : B }
 
 codec : Codec e A
 codec =
-    Codec.record A |> Codec.field .field bCodec |> Codec.finishRecord
+    Serialize.record A |> Serialize.field .field bCodec |> Serialize.finishRecord
 bCodec : Codec e B
 bCodec =
-    Codec.record B |> Codec.field .field Codec.int |> Codec.finishRecord"""
+    Serialize.record B |> Serialize.field .field Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -477,13 +479,13 @@ type alias A = { field : B }
 
 codec : Codec e A
 codec =
-    Codec.record A |> Codec.field .field bCodec |> Codec.finishRecord
+    Serialize.record A |> Serialize.field .field bCodec |> Serialize.finishRecord
 b2Codec : Codec e B.B2
 b2Codec =
-    Codec.record B.B2 |> Codec.field .field2 Codec.int |> Codec.finishRecord
+    Serialize.record B.B2 |> Serialize.field .field2 Serialize.int |> Serialize.finishRecord
 bCodec : Codec e B
 bCodec =
-    Codec.record B |> Codec.field .field1 b2Codec |> Codec.finishRecord"""
+    Serialize.record B |> Serialize.field .field1 b2Codec |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -528,10 +530,10 @@ type alias A = { field : List B }
 
 codec : Codec e A
 codec =
-    Codec.record A |> Codec.field .field (Codec.list bCodec) |> Codec.finishRecord
+    Serialize.record A |> Serialize.field .field (Serialize.list bCodec) |> Serialize.finishRecord
 bCodec : Codec e B
 bCodec =
-    Codec.record B |> Codec.field .field1 Codec.int |> Codec.finishRecord"""
+    Serialize.record B |> Serialize.field .field1 Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 [ """module A exposing (..)
@@ -575,7 +577,7 @@ type Tree a
 
 codec : Codec e a -> Codec e (Tree a)
 codec codecA =
-    Codec.customType
+    Serialize.customType
      (\\a b value ->
          case value of
              Node data0 ->
@@ -584,9 +586,9 @@ codec codecA =
              Leaf data0 ->
                  b data0
      )
-        |> Codec.variant1 Node (treeCodec (Debug.todo "Can't handle this"))
-        |> Codec.variant1 Leaf (Debug.todo "Can't handle this")
-        |> Codec.finishCustomType"""
+        |> Serialize.variant1 Node (treeCodec (Debug.todo "Can't handle this"))
+        |> Serialize.variant1 Leaf (Debug.todo "Can't handle this")
+        |> Serialize.finishCustomType"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module A exposing (..)
@@ -624,10 +626,10 @@ type alias B = { b : Int }
 
 codec : Codec e A
 codec =
-    Codec.record A |> Codec.field .a (Codec.tuple bCodec Codec.int) |> Codec.finishRecord
+    Serialize.record A |> Serialize.field .a (Serialize.tuple bCodec Serialize.int) |> Serialize.finishRecord
 bCodec : Codec e B
 bCodec =
-    Codec.record B |> Codec.field .b Codec.int |> Codec.finishRecord"""
+    Serialize.record B |> Serialize.field .b Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module Schema exposing (..)
@@ -666,12 +668,14 @@ type alias B = { b : Int }
 
 codec : Codec e A
 codec =
-    Codec.record A
-        |> Codec.field .a (Codec.record (\\a -> { b = a }) |> Codec.field .b bCodec |> Codec.finishRecord)
-        |> Codec.finishRecord
+    Serialize.record A
+        |> Serialize.field
+            .a
+            (Serialize.record (\\a -> { b = a }) |> Serialize.field .b bCodec |> Serialize.finishRecord)
+        |> Serialize.finishRecord
 bCodec : Codec e B
 bCodec =
-    Codec.record B |> Codec.field .b Codec.int |> Codec.finishRecord"""
+    Serialize.record B |> Serialize.field .b Serialize.int |> Serialize.finishRecord"""
                             |> String.replace "\u{000D}" ""
                 in
                 """module Schema exposing (..)
@@ -991,7 +995,7 @@ list = Debug.todo \"\""""
         --        |> Random.andThen identity
         --randomNestedType : Random.Generator NestedType
         --randomNestedType =
-        --    Random.constant NestedType |> Random.andMap (Codec.tuple Codec.int Codec.float)
+        --    Random.constant NestedType |> Random.andMap (Serialize.tuple Serialize.int Serialize.float)
         --"""
         --                            |> String.replace "\u{000D}" ""
         --                in
@@ -1030,14 +1034,14 @@ type Route
 
 routeCodec : Codec e Route
 routeCodec =
-    Codec.customType
+    Serialize.customType
      (\\a value ->
          case value of
              MyPagesRoute data0 ->
                  a data0
      )
-        |> Codec.variant1 MyPagesRoute (Codec.maybe CaseId.codec)
-        |> Codec.finishCustomType
+        |> Serialize.variant1 MyPagesRoute (Serialize.maybe CaseId.codec)
+        |> Serialize.finishCustomType
 """
                             |> String.replace "\u{000D}" ""
                 in
@@ -1057,7 +1061,7 @@ type CaseId = CaseId String
 
 codec : Codec e CaseId
 codec =
-    Codec.string |> Codec.map fromString toString
+    Serialize.string |> Serialize.map fromString toString
 """
                 ]
                     |> List.map (String.replace "\u{000D}" "")

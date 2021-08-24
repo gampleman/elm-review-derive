@@ -116,7 +116,7 @@ generateRecordCodec projectContext existingImports currentModule maybeTypeAlias 
             ( code
                 |> Helpers.pipeRight
                     (Helpers.application
-                        [ Helpers.functionOrValue [ "Codec" ] "field"
+                        [ Helpers.functionOrValue [ "Serialize" ] "field"
                         , Helpers.functionOrValue [ "" ] fieldName
                         , codec
                         ]
@@ -125,7 +125,7 @@ generateRecordCodec projectContext existingImports currentModule maybeTypeAlias 
             )
         )
         ( Helpers.application
-            [ Helpers.functionOrValue [ "Codec" ] "record"
+            [ Helpers.functionOrValue [ "Serialize" ] "record"
             , case maybeTypeAlias of
                 Just typeAliasName ->
                     Helpers.functionOrValue
@@ -157,7 +157,7 @@ generateRecordCodec projectContext existingImports currentModule maybeTypeAlias 
                 Set.empty
         )
         recordFields
-        |> Tuple.mapFirst (Helpers.pipeRight (Helpers.application [ Helpers.functionOrValue [ "Codec" ] "finishRecord" ]))
+        |> Tuple.mapFirst (Helpers.pipeRight (Helpers.application [ Helpers.functionOrValue [ "Serialize" ] "finishRecord" ]))
 
 
 generateCodecTodoDefinition : ProjectContext a -> ModuleName -> List ExistingImport -> CodecTodo -> TypeOrTypeAlias -> ( String, Set ModuleName )
@@ -218,34 +218,34 @@ codecFromTypeAnnotation projectContext existingImports currentModule typeAnnotat
                 getCodecName text =
                     case text of
                         "Int" ->
-                            Helpers.functionOrValue [ "Codec" ] "int"
+                            Helpers.functionOrValue [ "Serialize" ] "int"
 
                         "Float" ->
-                            Helpers.functionOrValue [ "Codec" ] "float"
+                            Helpers.functionOrValue [ "Serialize" ] "float"
 
                         "String" ->
-                            Helpers.functionOrValue [ "Codec" ] "string"
+                            Helpers.functionOrValue [ "Serialize" ] "string"
 
                         "Bool" ->
-                            Helpers.functionOrValue [ "Codec" ] "bool"
+                            Helpers.functionOrValue [ "Serialize" ] "bool"
 
                         "Maybe" ->
-                            Helpers.functionOrValue [ "Codec" ] "maybe"
+                            Helpers.functionOrValue [ "Serialize" ] "maybe"
 
                         "Dict" ->
-                            Helpers.functionOrValue [ "Codec" ] "dict"
+                            Helpers.functionOrValue [ "Serialize" ] "dict"
 
                         "Set" ->
-                            Helpers.functionOrValue [ "Codec" ] "set"
+                            Helpers.functionOrValue [ "Serialize" ] "set"
 
                         "Result" ->
-                            Helpers.functionOrValue [ "Codec" ] "result"
+                            Helpers.functionOrValue [ "Serialize" ] "result"
 
                         "List" ->
-                            Helpers.functionOrValue [ "Codec" ] "list"
+                            Helpers.functionOrValue [ "Serialize" ] "list"
 
                         "Array" ->
-                            Helpers.functionOrValue [ "Codec" ] "array"
+                            Helpers.functionOrValue [ "Serialize" ] "array"
 
                         _ ->
                             Helpers.functionOrValue [] (Helpers.uncapitalize text ++ "Codec")
@@ -274,7 +274,7 @@ codecFromTypeAnnotation projectContext existingImports currentModule typeAnnotat
                 Tuple.mapFirst Helpers.parenthesis applied
 
         Unit_ ->
-            ( Helpers.functionOrValue [ "Codec" ] "unit", Set.empty )
+            ( Helpers.functionOrValue [ "Serialize" ] "unit", Set.empty )
 
         Tupled_ [ first ] ->
             codecFromTypeAnnotation projectContext existingImports currentModule first
@@ -288,7 +288,7 @@ codecFromTypeAnnotation projectContext existingImports currentModule typeAnnotat
                     codecFromTypeAnnotation projectContext existingImports currentModule second
             in
             ( Helpers.application
-                [ Helpers.functionOrValue [ "Codec" ] "tuple"
+                [ Helpers.functionOrValue [ "Serialize" ] "tuple"
                 , codec0
                 , codec1
                 ]
@@ -308,7 +308,7 @@ codecFromTypeAnnotation projectContext existingImports currentModule typeAnnotat
                     codecFromTypeAnnotation projectContext existingImports currentModule third
             in
             ( Helpers.application
-                [ Helpers.functionOrValue [ "Codec" ] "triple"
+                [ Helpers.functionOrValue [ "Serialize" ] "triple"
                 , codec0
                 , codec1
                 , codec2
@@ -318,7 +318,7 @@ codecFromTypeAnnotation projectContext existingImports currentModule typeAnnotat
             )
 
         Tupled_ _ ->
-            ( Helpers.functionOrValue [ "Codec" ] "unit", Set.empty )
+            ( Helpers.functionOrValue [ "Serialize" ] "unit", Set.empty )
 
         FunctionTypeAnnotation_ _ _ ->
             ( Helpers.errorMessage "Functions can't be serialized", Set.empty )
@@ -364,7 +364,7 @@ generateCustomTypeCodec projectContext currentModule existingImports customType 
 
         start =
             ( Helpers.application
-                [ Helpers.functionOrValue [ "Codec" ] "customType"
+                [ Helpers.functionOrValue [ "Serialize" ] "customType"
                 , Expression.LambdaExpression
                     { args = List.map Tuple.first args ++ [ VarPattern "value" |> Helpers.node ]
                     , expression =
@@ -393,7 +393,7 @@ generateCustomTypeCodec projectContext currentModule existingImports customType 
             in
             ( Helpers.pipeRight
                 (Helpers.application
-                    (Helpers.functionOrValue [ "Codec" ]
+                    (Helpers.functionOrValue [ "Serialize" ]
                         ("variant" ++ String.fromInt (List.length constructor.arguments))
                         :: Helpers.functionOrValue moduleName_ constructor.name
                         :: argumentsCode
@@ -407,7 +407,7 @@ generateCustomTypeCodec projectContext currentModule existingImports customType 
         customType.constructors
         |> (\( expression, imports ) ->
                 ( Helpers.pipeRight
-                    (Helpers.functionOrValue [ "Codec" ] "finishCustomType")
+                    (Helpers.functionOrValue [ "Serialize" ] "finishCustomType")
                     expression
                 , imports
                 )
