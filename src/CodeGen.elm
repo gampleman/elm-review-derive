@@ -5,6 +5,7 @@ import AssocSet exposing (Set)
 import CodeGen.CodecTodo as CodecTodo exposing (CodecTodo)
 import CodeGen.FromStringTodo as FromStringTodo exposing (FromStringTodo)
 import CodeGen.ListVariantsTodo as ListVariantsTodo exposing (ListVariantsTodo)
+import CodeGen.MigrateTodo as MigrateTodo exposing (MigrateTodo)
 import CodeGen.RandomGeneratorTodo as RandomGeneratorTodo
 import CodeGen.ToStringTodo as ToStringTodo exposing (ToStringTodo)
 import Elm.Project
@@ -62,11 +63,19 @@ importVisitor (Node _ import_) context =
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
     , codecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
+    , migrateFunctions :
+        List
+            { moduleName : ModuleName
+            , functionName : String
+            , oldType : QualifiedType
+            , newType : QualifiedType
+            }
     , codecTodos : List ( ModuleName, CodecTodo )
     , toStringTodos : List ( ModuleName, ToStringTodo )
     , fromStringTodos : List ( ModuleName, FromStringTodo )
     , listVariantsTodos : List ( ModuleName, ListVariantsTodo )
     , randomGeneratorTodos : List ( ModuleName, CodecTodo )
+    , migrateTodos : List ( ModuleName, MigrateTodo )
     , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
     , moduleKeys : Dict ModuleName ModuleKey
     }
@@ -76,11 +85,14 @@ type alias ModuleContext =
     { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
     , types : List TypeOrTypeAlias
     , codecs : List { functionName : String, typeVar : QualifiedType }
+    , migrateFunctions : List { functionName : String, oldType : QualifiedType, newType : QualifiedType }
+    , autoCodecs : List { functionName : String, typeVar : QualifiedType }
     , codecTodos : List CodecTodo
     , toStringTodos : List ToStringTodo
     , fromStringTodos : List FromStringTodo
     , listVariantsTodos : List ListVariantsTodo
     , randomGeneratorTodos : List CodecTodo
+    , migrateTodos : List MigrateTodo
     , importStartRow : Maybe Int
     , imports : List ExistingImport
     , currentModule : ModuleName
@@ -91,11 +103,13 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , codecs = []
+    , migrateFunctions = []
     , codecTodos = []
     , toStringTodos = []
     , fromStringTodos = []
     , listVariantsTodos = []
     , randomGeneratorTodos = []
+    , migrateTodos = []
     , imports = Dict.empty
     , moduleKeys = Dict.empty
     }
@@ -106,37 +120,20 @@ fromProjectToModule lookupTable metadata projectContext =
     let
         moduleName =
             Rule.moduleNameFromMetadata metadata
-
-        filterTodos : List ( ModuleName, a ) -> List a
-        filterTodos =
-            List.filterMap
-                (\( moduleName_, todo ) ->
-                    if moduleName_ == moduleName then
-                        Just todo
-
-                    else
-                        Nothing
-                )
     in
     { lookupTable = lookupTable
-    , types = projectContext.types |> List.filter (Tuple.first >> (==) moduleName) |> List.map Tuple.second
-    , codecs =
-        List.filterMap
-            (\a ->
-                if a.moduleName == moduleName then
-                    Just { functionName = a.functionName, typeVar = a.typeVar }
-
-                else
-                    Nothing
-            )
-            projectContext.codecs
-    , codecTodos = filterTodos projectContext.codecTodos
-    , toStringTodos = filterTodos projectContext.toStringTodos
-    , fromStringTodos = filterTodos projectContext.fromStringTodos
-    , listVariantsTodos = filterTodos projectContext.listVariantsTodos
-    , randomGeneratorTodos = filterTodos projectContext.randomGeneratorTodos
-    , importStartRow = Dict.get moduleName projectContext.imports |> Maybe.map .newImportStartRow
-    , imports = Dict.get moduleName projectContext.imports |> Maybe.map .existingImports |> Maybe.withDefault []
+    , types = []
+    , codecs = []
+    , autoCodecs = []
+    , migrateFunctions = []
+    , codecTodos = []
+    , toStringTodos = []
+    , fromStringTodos = []
+    , listVariantsTodos = []
+    , randomGeneratorTodos = []
+    , migrateTodos = []
+    , importStartRow = Nothing
+    , imports = []
     , currentModule = moduleName
     }
 
@@ -157,11 +154,22 @@ fromModuleToProject moduleKey metadata moduleContext =
         List.map
             (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
             moduleContext.codecs
+    , migrateFunctions =
+        List.map
+            (\a ->
+                { moduleName = moduleName
+                , functionName = a.functionName
+                , oldType = a.oldType
+                , newType = a.newType
+                }
+            )
+            moduleContext.migrateFunctions
     , codecTodos = mapTodo moduleContext.codecTodos
     , toStringTodos = mapTodo moduleContext.toStringTodos
     , fromStringTodos = mapTodo moduleContext.fromStringTodos
     , listVariantsTodos = mapTodo moduleContext.listVariantsTodos
     , randomGeneratorTodos = mapTodo moduleContext.randomGeneratorTodos
+    , migrateTodos = mapTodo moduleContext.migrateTodos
     , imports =
         Dict.singleton
             moduleName
@@ -176,11 +184,13 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , codecs = newContext.codecs ++ previousContext.codecs
+    , migrateFunctions = newContext.migrateFunctions ++ previousContext.migrateFunctions
     , codecTodos = newContext.codecTodos ++ previousContext.codecTodos
     , toStringTodos = newContext.toStringTodos ++ previousContext.toStringTodos
     , fromStringTodos = newContext.fromStringTodos ++ previousContext.fromStringTodos
     , listVariantsTodos = newContext.listVariantsTodos ++ previousContext.listVariantsTodos
     , randomGeneratorTodos = newContext.randomGeneratorTodos ++ previousContext.randomGeneratorTodos
+    , migrateTodos = newContext.migrateTodos ++ previousContext.migrateTodos
     , imports = Dict.union newContext.imports previousContext.imports
     , moduleKeys = Dict.union newContext.moduleKeys previousContext.moduleKeys
     }
@@ -268,14 +278,43 @@ declarationVisitor declarations context =
                             Nothing
                 )
                 declarations
+
+        codecTodos =
+            getTodos (CodecTodo.getTodos context)
+
+        toStringTodos =
+            getTodos (ToStringTodo.getTodos context)
+
+        fromStringTodos =
+            getTodos (FromStringTodo.getTodos context)
+
+        listVariantsTodos =
+            getTodos (ListVariantsTodo.getListAllTodo context)
+
+        randomGeneratorTodos =
+            getTodos (RandomGeneratorTodo.getTodos context)
+
+        migrateTodos =
+            if
+                List.isEmpty codecTodos
+                    && List.isEmpty toStringTodos
+                    && List.isEmpty fromStringTodos
+                    && List.isEmpty listVariantsTodos
+                    && List.isEmpty randomGeneratorTodos
+            then
+                getTodos (MigrateTodo.getTodos context)
+
+            else
+                []
     in
     ( []
     , { context
-        | codecTodos = getTodos (CodecTodo.getTodos context) ++ context.codecTodos
-        , toStringTodos = getTodos (ToStringTodo.getTodos context) ++ context.toStringTodos
-        , fromStringTodos = getTodos (FromStringTodo.getTodos context) ++ context.fromStringTodos
-        , listVariantsTodos = getTodos (ListVariantsTodo.getListAllTodo context) ++ context.listVariantsTodos
-        , randomGeneratorTodos = getTodos (RandomGeneratorTodo.getTodos context) ++ context.randomGeneratorTodos
+        | codecTodos = codecTodos ++ context.codecTodos
+        , toStringTodos = toStringTodos ++ context.toStringTodos
+        , fromStringTodos = fromStringTodos ++ context.fromStringTodos
+        , listVariantsTodos = listVariantsTodos ++ context.listVariantsTodos
+        , randomGeneratorTodos = randomGeneratorTodos ++ context.randomGeneratorTodos
+        , migrateTodos = migrateTodos ++ context.migrateTodos
         , types =
             List.filterMap (declarationVisitorGetTypes context) declarations
                 ++ context.types
@@ -291,6 +330,18 @@ declarationVisitor declarations context =
                 )
                 declarations
                 ++ context.codecs
+        , migrateFunctions =
+            List.filterMap
+                (\declaration ->
+                    case declaration of
+                        Node _ (Declaration.FunctionDeclaration function) ->
+                            MigrateTodo.declarationVisitorGetMigrateFunctions context function
+
+                        _ ->
+                            Nothing
+                )
+                declarations
+                ++ context.migrateFunctions
         , importStartRow =
             List.map (Node.range >> .start >> .row) declarations |> List.minimum
       }
@@ -328,6 +379,10 @@ finalProjectEvaluation projectContext =
         randomGeneratorTypeTodoFixes : List ( ModuleName, Review.Fix.Fix )
         randomGeneratorTypeTodoFixes =
             RandomGeneratorTodo.randomGeneratorTypeTodoFixes projectContext
+
+        migrateTodoFixes : List { moduleName : ModuleName, fix : Review.Fix.Fix, newImports : Set ModuleName }
+        migrateTodoFixes =
+            MigrateTodo.migrateTypeTodoFixes projectContext
     in
     List.filterMap
         (\( moduleName, todo ) -> CodecTodo.todoErrors projectContext moduleName codecTypeTodoFixes todo)
@@ -346,3 +401,8 @@ finalProjectEvaluation projectContext =
                 RandomGeneratorTodo.todoErrors projectContext moduleName randomGeneratorTypeTodoFixes todo
             )
             projectContext.randomGeneratorTodos
+        ++ List.filterMap
+            (\( moduleName, todo ) ->
+                MigrateTodo.todoErrors projectContext moduleName migrateTodoFixes todo
+            )
+            projectContext.migrateTodos

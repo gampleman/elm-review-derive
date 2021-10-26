@@ -1,4 +1,4 @@
-module CodeGen.Helpers exposing (application, errorMessage, find, functionOrValue, getTypesHelper, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration)
+module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, functionOrValue, getTypesHelper, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration)
 
 import AssocSet as Set exposing (Set)
 import Elm.Pretty
@@ -80,6 +80,11 @@ find predicate list =
 uncapitalize : String -> String
 uncapitalize text =
     String.toLower (String.left 1 text) ++ String.dropLeft 1 text
+
+
+capitalize : String -> String
+capitalize text =
+    String.toUpper (String.left 1 text) ++ String.dropLeft 1 text
 
 
 hasDebugTodo : { a | expression : Node Expression } -> Bool
