@@ -57,8 +57,16 @@ getTodos context declarationRange function =
     case function.signature of
         Just (Node _ signature) ->
             case Node.value signature.typeAnnotation of
-                FunctionTypeAnnotation (Node _ (Typed oldType [])) (Node _ (Typed newType _)) ->
-                    createTodo context declarationRange declaration signature oldType newType
+                FunctionTypeAnnotation (Node _ (Typed oldType [])) (Node _ (Typed newType typeAnnotation)) ->
+                    case ( Node.value newType, typeAnnotation ) of
+                        ( ( _, "ModelMigration" ), [ Node _ (Typed modelType _), _ ] ) ->
+                            createTodo context declarationRange declaration signature oldType modelType
+
+                        ( ( _, "MsgMigration" ), [ Node _ (Typed msgType _), _ ] ) ->
+                            createTodo context declarationRange declaration signature oldType msgType
+
+                        _ ->
+                            createTodo context declarationRange declaration signature oldType newType
 
                 _ ->
                     Nothing
@@ -76,7 +84,7 @@ createTodo :
     -> Node ( ModuleName, String )
     -> Maybe MigrateTodo
 createTodo context declarationRange declaration signature oldQualifiedType newQualifiedType =
-    if Helpers.hasDebugTodo declaration then
+    if Helpers.hasDebugTodo declaration || Node.value declaration.expression == FunctionOrValue [] "Unimplemented" then
         case
             ( QualifiedType.create context.lookupTable context.currentModule oldQualifiedType
             , QualifiedType.create context.lookupTable context.currentModule newQualifiedType
@@ -675,6 +683,9 @@ todoErrors :
     -> Maybe (Rule.Error scope)
 todoErrors projectContext moduleName typeTodoFixes todo =
     let
+        _ =
+            Debug.log "todo" ""
+
         maybeOldType : Maybe ( ModuleName, TypeOrTypeAlias )
         maybeOldType =
             QualifiedType.getTypeData projectContext.types todo.oldType
@@ -715,4 +726,8 @@ todoErrors projectContext moduleName typeTodoFixes todo =
                 |> Just
 
         _ ->
+            let
+                _ =
+                    Debug.log "type" ( maybeOldType, maybeNewType )
+            in
             Nothing
