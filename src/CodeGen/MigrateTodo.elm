@@ -10,7 +10,7 @@ import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
-import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation(..))
+import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
 import List.Extra as List
 import QualifiedType exposing (ExistingImport, QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_)
 import Review.Fix
@@ -248,10 +248,10 @@ recordFieldToExpression fieldName migratable =
                 |> Helpers.node
     in
     case migratable of
-        Migratable migrationFunctionName migrationTypeVars ->
+        Migratable { functionName, parameters } ->
             Helpers.application
-                (Helpers.functionOrValue [] migrationFunctionName
-                    :: List.map (parameterToExpression Nothing) migrationTypeVars
+                (Helpers.functionOrValue [] functionName
+                    :: List.map (parameterToExpression Nothing) parameters
                     ++ [ recordAccess ]
                 )
 
@@ -285,10 +285,10 @@ migrateRecord oldValue fields =
 parameterToExpression : Maybe Int -> Migratable -> Node Expression
 parameterToExpression maybeIndex migratable =
     case migratable of
-        Migratable migrationFunctionName migrationTypeVars ->
+        Migratable { functionName, parameters } ->
             Helpers.application
-                (Helpers.functionOrValue [] migrationFunctionName
-                    :: List.map (parameterToExpression Nothing) migrationTypeVars
+                (Helpers.functionOrValue [] functionName
+                    :: List.map (parameterToExpression Nothing) parameters
                     ++ (case maybeIndex of
                             Just index ->
                                 [ Helpers.varFromInt index |> Helpers.functionOrValue [] ]
@@ -298,7 +298,7 @@ parameterToExpression maybeIndex migratable =
                        )
                 )
                 |> (\a ->
-                        if List.isEmpty migrationTypeVars && maybeIndex == Nothing then
+                        if List.isEmpty parameters && maybeIndex == Nothing then
                             a
 
                         else
@@ -331,7 +331,12 @@ parameterToExpression maybeIndex migratable =
 type Migratable
     = NotMigratable
     | IsPrimitive
-    | Migratable String (List Migratable)
+    | Migratable
+        { functionName : String
+        , parameters : List Migratable
+        , newType : TypeAnnotation_
+        , oldType : TypeAnnotation_
+        }
     | MigrateRecord (List ( String, Migratable ))
 
 
@@ -350,14 +355,17 @@ isMigratable oldType newType =
 
                     else
                         Migratable
-                            ("migrate" ++ Helpers.capitalize newName)
-                            (List.map2
-                                (\oldTypeVar newTypeVar ->
-                                    isMigratable oldTypeVar newTypeVar
-                                )
-                                oldTypeVars
-                                newTypeVars
-                            )
+                            { functionName = "migrate" ++ Helpers.capitalize newName
+                            , parameters =
+                                List.map2
+                                    (\oldTypeVar newTypeVar ->
+                                        isMigratable oldTypeVar newTypeVar
+                                    )
+                                    oldTypeVars
+                                    newTypeVars
+                            , newType = newType
+                            , oldType = oldType
+                            }
 
                 else
                     NotMigratable
@@ -366,12 +374,20 @@ isMigratable oldType newType =
                 NotMigratable
 
         ( Tupled_ [ oldFirst, oldSecond ], Tupled_ [ newFirst, newSecond ] ) ->
-            Migratable "migrateTuple" [ isMigratable oldFirst newFirst, isMigratable oldSecond newSecond ]
+            Migratable
+                { functionName = "migrateTuple"
+                , parameters = [ isMigratable oldFirst newFirst, isMigratable oldSecond newSecond ]
+                , newType = newType
+                , oldType = oldType
+                }
 
         ( Tupled_ [ oldFirst, oldSecond, oldThird ], Tupled_ [ newFirst, newSecond, newThird ] ) ->
             Migratable
-                "migrateTriple"
-                [ isMigratable oldFirst newFirst, isMigratable oldSecond newSecond, isMigratable oldThird newThird ]
+                { functionName = "migrateTriple"
+                , parameters = [ isMigratable oldFirst newFirst, isMigratable oldSecond newSecond, isMigratable oldThird newThird ]
+                , newType = newType
+                , oldType = oldType
+                }
 
         ( Record_ oldTypeAlias, Record_ newTypeAlias ) ->
             let
@@ -462,217 +478,209 @@ declarationVisitorGetMigrateFunctions context function =
 --        )
 --        Dict.empty
 --        projectContext.migrateTodos
+--getMissingMigrations :
+--    ProjectContext a
+--    -> { oldType : QualifiedType, newType : QualifiedType }
+--    -> Set { oldType : QualifiedType, newType : QualifiedType }
+--getMissingMigrations context migrationPair =
+--    case
+--        ( QualifiedType.getTypeData context.types migrationPair.oldType
+--        , QualifiedType.getTypeData context.types migrationPair.newType
+--        )
+--    of
+--        ( Just ( _, TypeValue oldTypeData ), Just ( _, TypeValue newTypeData ) ) ->
+--            Set.empty
+--
+--        ( Just ( _, TypeAliasValue _ oldTypeData ), Just ( _, TypeAliasValue _ newTypeData ) ) ->
+--            let
+--                oldFields : Dict String TypeAnnotation_
+--                oldFields =
+--                    Dict.fromList oldTypeData
+--
+--                newFields : Dict String TypeAnnotation_
+--                newFields =
+--                    Dict.fromList newTypeData
+--            in
+--            Dict.merge
+--                (\_ _ dict -> dict)
+--                (\_ oldValue newValue dict ->
+--                    case ( oldValue, newValue ) of
+--                        ( Typed_ oldQualifiedType_ oldTyped, Typed_ newQualifiedType_ newTyped ) ->
+--                            case isMigratable oldQualifiedType_ of
+--                                NotMigratable ->
+--                                    0
+--
+--                                IsPrimitive ->
+--                                    0
+--
+--                                Migratable String (List Migratable) ->
+--                                    0
+--
+--                                MigrateRecord (List ( String, Migratable )) ->
+--                                    getMissingMigrations
+--                                        context
+--                                        { oldType = oldQualifiedType_, newValue = newQualifiedType_ }
+--                )
+--                (\_ _ dict -> dict)
+--                oldFields
+--                newFields
+--                Set.empty
+--
+--        _ ->
+--            Set.empty
+--
 
 
-getMissingMigrations :
-    ProjectContext a
-    -> { oldType : QualifiedType, newType : QualifiedType }
-    -> Set { oldType : QualifiedType, newType : QualifiedType }
-getMissingMigrations context migrationPair =
-    case
-        ( QualifiedType.getTypeData context.types migrationPair.oldType
-        , QualifiedType.getTypeData context.types migrationPair.newType
+getMigrationTypeDependencies : ProjectContext a -> Dict ModuleName (Set { newType : QualifiedType, oldType : QualifiedType })
+getMigrationTypeDependencies projectContext =
+    List.foldl
+        (\( moduleName, todo ) dict ->
+            Dict.update
+                moduleName
+                (\set ->
+                    let
+                        migration =
+                            isMigratable
+                                (QualifiedType.createFromType todo.oldType)
+                                (QualifiedType.createFromType todo.newType)
+                    in
+                    case set of
+                        Just set ->
+                            Set.union migration set
+
+                        Nothing ->
+                            migration
+                )
+                dict
         )
-    of
-        ( Just ( _, TypeValue oldTypeData ), Just ( _, TypeValue newTypeData ) ) ->
-            Set.empty
-
-        ( Just ( _, TypeAliasValue _ oldTypeData ), Just ( _, TypeAliasValue _ newTypeData ) ) ->
-            let
-                oldFields : Dict String TypeAnnotation_
-                oldFields =
-                    Dict.fromList oldTypeData
-
-                newFields : Dict String TypeAnnotation_
-                newFields =
-                    Dict.fromList newTypeData
-            in
-            Set.empty
-
-        _ ->
-            Set.empty
+        Dict.empty
+        projectContext.migrateTodos
 
 
 
---Dict.merge
---    (\_ _ dict -> dict)
---    (\_ oldValue newValue dict ->
---        case ( oldValue, newValue ) of
---            ( Typed_ oldQualifiedType_ oldTyped, Typed_ newQualifiedType_ newTyped ) ->
---                case isMigratable oldQualifiedType_
---                getMissingMigrations
---                    context
---                    { oldType = oldQualifiedType_, newValue = newQualifiedType_ }
---    )
---    (\_ _ dict -> dict)
---    oldFields
---    newFields
---    Set.empty
+--
+--
+--getTypesHelper :
+--    List ( ModuleName, TypeOrTypeAlias )
+--    -> { from : QualifiedType, to : QualifiedType }
+--    -> Set { from : QualifiedType, to : QualifiedType }
+--    -> Set { from : QualifiedType, to : QualifiedType }
+--getTypesHelper types typePair collectedTypes =
+--    case QualifiedType.getTypeData types typeDeclaration of
+--        Just ( typeModuleName, TypeAliasValue _ fields ) ->
+--            List.foldl
+--                (\( _, typeAnnotation ) collectedTypes_ ->
+--                    getTypesFromTypeAnnotation types typeModuleName collectedTypes_ typeAnnotation
+--                )
+--                collectedTypes
+--                fields
+--
+--        Just ( typeModuleName, TypeValue customType ) ->
+--            List.foldl
+--                (\constructor collectedTypes_ ->
+--                    List.foldl
+--                        (\typeAnnotation collectedTypes__ ->
+--                            getTypesFromTypeAnnotation types typeModuleName collectedTypes__ typeAnnotation
+--                        )
+--                        collectedTypes_
+--                        constructor.arguments
+--                )
+--                collectedTypes
+--                customType.constructors
+--
+--        Nothing ->
+--            collectedTypes
 
 
 migrateTypeTodoFixes :
     ProjectContext a
     -> List { moduleName : ModuleName, fix : Review.Fix.Fix, newImports : Set ModuleName }
 migrateTypeTodoFixes projectContext =
-    []
+    getMigrationTypeDependencies projectContext
+        |> Dict.toList
+        |> List.concatMap
+            (\( currentModule, qualifiedTypes ) ->
+                let
+                    todosInModule : List MigrateTodo
+                    todosInModule =
+                        List.filterMap
+                            (\( moduleName_, todo ) ->
+                                if moduleName_ == currentModule then
+                                    Just todo
 
+                                else
+                                    Nothing
+                            )
+                            projectContext.codecTodos
+                in
+                Set.toList qualifiedTypes
+                    |> List.indexedMap
+                        (\index qualifiedType ->
+                            let
+                                maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                maybeType =
+                                    QualifiedType.getTypeData projectContext.types qualifiedType
+                            in
+                            case ( maybeType, Dict.get currentModule projectContext.imports ) of
+                                ( Just ( _, type_ ), Just { existingImports } ) ->
+                                    let
+                                        name =
+                                            Helpers.uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
 
+                                        position =
+                                            { column = 0, row = 99999 + index }
 
---projectContext.migrateTodos
---    |> List.map
---        (\( currentModule, todo ) ->
---            let
---                maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
---                maybeType =
---                    QualifiedType.getTypeData projectContext.types qualifiedType
---            in
---            case ( maybeType, Dict.get currentModule projectContext.imports ) of
---                ( Just ( _, type_ ), Just { existingImports } ) ->
---                    let
---                        name =
---                            Helpers.uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
---
---                        position =
---                            { column = 0, row = 99999 + index }
---
---                        todo : MigrateTodo
---                        todo =
---                            { functionName = name
---                            , oldType = qualifiedType
---                            , newType = qualifiedType
---                            , range =
---                                { start = position
---                                , end = position
---                                }
---                            , signature =
---                                { name = Helpers.node name
---                                , typeAnnotation =
---                                    FunctionTypeAnnotation
---                                        (Typed
---                                            (Helpers.node ( [], "AutoCodec" ))
---                                            [ QualifiedType.toString currentModule existingImports qualifiedType
---                                                |> GenericType
---                                                |> Helpers.node
---                                            ]
---                                            |> Helpers.node
---                                        )
---                                        (Typed
---                                            (Helpers.node ( [], "AutoCodec" ))
---                                            [ QualifiedType.toString currentModule existingImports qualifiedType
---                                                |> GenericType
---                                                |> Helpers.node
---                                            ]
---                                            |> Helpers.node
---                                        )
---                                        |> Helpers.node
---                                }
---                            }
---
---                        ( fix, newImports ) =
---                            generateMigrationDefinition
---                                projectContext
---                                existingImports
---                                currentModule
---                                todo
---                                type_
---                    in
---                    { moduleName = currentModule
---                    , fix = Review.Fix.insertAt position fix
---                    , newImports = Set.insert (QualifiedType.qualifiedPath qualifiedType) newImports
---                    }
---                        |> Just
---
---                _ ->
---                    Nothing
---        )
---getMigrateTypes projectContext
---    |> Dict.toList
---    |> List.concatMap
---        (\( currentModule, qualifiedTypes ) ->
---            let
---                todosInModule : List MigrateTodo
---                todosInModule =
---                    List.filterMap
---                        (\( moduleName_, todo ) ->
---                            if moduleName_ == currentModule then
---                                Just todo
---
---                            else
---                                Nothing
---                        )
---                        projectContext.autoCodecTodos
---            in
---            Set.toList qualifiedTypes
---                |> List.filter (\a -> List.any (.newType >> (/=) a) todosInModule)
---                |> List.filter (\a -> List.all (.newType >> (/=) a) projectContext.migrateFunctions)
---                |> List.indexedMap
---                    (\index qualifiedType ->
---                        let
---                            maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
---                            maybeType =
---                                QualifiedType.getTypeData projectContext.types qualifiedType
---                        in
---                        case ( maybeType, Dict.get currentModule projectContext.imports ) of
---                            ( Just ( _, type_ ), Just { existingImports } ) ->
---                                let
---                                    name =
---                                        Helpers.uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
---
---                                    position =
---                                        { column = 0, row = 99999 + index }
---
---                                    todo : MigrateTodo
---                                    todo =
---                                        { functionName = name
---                                        , oldType = qualifiedType
---                                        , newType = qualifiedType
---                                        , range =
---                                            { start = position
---                                            , end = position
---                                            }
---                                        , signature =
---                                            { name = Helpers.node name
---                                            , typeAnnotation =
---                                                FunctionTypeAnnotation
---                                                    (Typed
---                                                        (Helpers.node ( [], "AutoCodec" ))
---                                                        [ QualifiedType.toString currentModule existingImports qualifiedType
---                                                            |> GenericType
---                                                            |> Helpers.node
---                                                        ]
---                                                        |> Helpers.node
---                                                    )
---                                                    (Typed
---                                                        (Helpers.node ( [], "AutoCodec" ))
---                                                        [ QualifiedType.toString currentModule existingImports qualifiedType
---                                                            |> GenericType
---                                                            |> Helpers.node
---                                                        ]
---                                                        |> Helpers.node
---                                                    )
---                                                    |> Helpers.node
---                                            }
---                                        }
---
---                                    ( fix, newImports ) =
---                                        generateMigrationDefinition
---                                            projectContext
---                                            existingImports
---                                            currentModule
---                                            todo
---                                            type_
---                                in
---                                { moduleName = currentModule
---                                , fix = Review.Fix.insertAt position fix
---                                , newImports = Set.insert (QualifiedType.qualifiedPath qualifiedType) newImports
---                                }
---                                    |> Just
---
---                            _ ->
---                                Nothing
---                    )
---                |> List.filterMap identity
---        )
+                                        todo =
+                                            { functionName = String
+                                            , oldType = QualifiedType
+                                            , newType = QualifiedType
+                                            , range =
+                                                { start = position
+                                                , end = position
+                                                }
+                                            , signature =
+                                                { name = Helpers.node name
+                                                , typeAnnotation =
+                                                    TypeAnnotation.Typed
+                                                        (Helpers.node ( [], "Codec" ))
+                                                        [ TypeAnnotation.GenericType "e" |> Helpers.node
+                                                        , QualifiedType.toString currentModule existingImports qualifiedType
+                                                            |> TypeAnnotation.GenericType
+                                                            |> Helpers.node
+                                                        ]
+                                                        |> Helpers.node
+                                                }
+                                            }
+
+                                        --{ functionName = name
+                                        --, typeVar = qualifiedType
+                                        --, range =
+                                        --    { start = position
+                                        --    , end = position
+                                        --    }
+                                        --, signature =
+                                        --
+                                        --, parameters = []
+                                        --}
+                                        ( fix, newImports ) =
+                                            generateMigrationDefinition
+                                                projectContext
+                                                existingImports
+                                                currentModule
+                                                todo
+                                                type_
+                                    in
+                                    { moduleName = currentModule
+                                    , fix = Review.Fix.insertAt position fix
+                                    , newImports = Set.insert (QualifiedType.qualifiedPath qualifiedType) newImports
+                                    }
+                                        |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    |> List.filterMap identity
+            )
 
 
 todoErrors :
@@ -683,9 +691,6 @@ todoErrors :
     -> Maybe (Rule.Error scope)
 todoErrors projectContext moduleName typeTodoFixes todo =
     let
-        _ =
-            Debug.log "todo" ""
-
         maybeOldType : Maybe ( ModuleName, TypeOrTypeAlias )
         maybeOldType =
             QualifiedType.getTypeData projectContext.types todo.oldType
@@ -694,7 +699,12 @@ todoErrors projectContext moduleName typeTodoFixes todo =
         maybeNewType =
             QualifiedType.getTypeData projectContext.types todo.newType
     in
-    case ( ( maybeOldType, maybeNewType ), Dict.get moduleName projectContext.moduleKeys, Dict.get moduleName projectContext.imports ) of
+    case
+        ( ( maybeOldType, maybeNewType )
+        , Dict.get moduleName projectContext.moduleKeys
+        , Dict.get moduleName projectContext.imports
+        )
+    of
         ( ( Just ( _, oldType ), Just ( _, newType ) ), Just moduleKey, Just imports ) ->
             let
                 ( fix, _ ) =
