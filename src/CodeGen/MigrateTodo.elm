@@ -545,8 +545,8 @@ getMigrationTypeDependencies projectContext =
                                 (QualifiedType.createFromType todo.newType)
                     in
                     case set of
-                        Just set ->
-                            Set.union migration set
+                        Just set_ ->
+                            Set.union migration set_
 
                         Nothing ->
                             migration
@@ -615,25 +615,36 @@ migrateTypeTodoFixes projectContext =
                 in
                 Set.toList qualifiedTypes
                     |> List.indexedMap
-                        (\index qualifiedType ->
+                        (\index { newType, oldType } ->
                             let
-                                maybeType : Maybe ( ModuleName, TypeOrTypeAlias )
-                                maybeType =
-                                    QualifiedType.getTypeData projectContext.types qualifiedType
+                                maybeOldType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                maybeOldType =
+                                    QualifiedType.getTypeData projectContext.types oldType
+
+                                maybeNewType : Maybe ( ModuleName, TypeOrTypeAlias )
+                                maybeNewType =
+                                    QualifiedType.getTypeData projectContext.types newType
                             in
-                            case ( maybeType, Dict.get currentModule projectContext.imports ) of
-                                ( Just ( _, type_ ), Just { existingImports } ) ->
+                            case ( maybeOldType, maybeNewType, Dict.get currentModule projectContext.imports ) of
+                                ( Just ( _, oldTypeOrAlias ), Just ( _, newTypeOrAlias ), Just { existingImports } ) ->
                                     let
                                         name =
-                                            Helpers.uncapitalize (QualifiedType.name qualifiedType) ++ "Codec"
+                                            Helpers.uncapitalize (QualifiedType.name newType) ++ "Codec"
 
                                         position =
                                             { column = 0, row = 99999 + index }
 
+                                        todo :
+                                            { functionName : String
+                                            , oldType : QualifiedType
+                                            , newType : QualifiedType
+                                            , range : Range
+                                            , signature : { name : Node String, typeAnnotation : Node TypeAnnotation }
+                                            }
                                         todo =
-                                            { functionName = String
-                                            , oldType = QualifiedType
-                                            , newType = QualifiedType
+                                            { functionName = "migrate" ++ QualifiedType.name newType
+                                            , oldType = oldType
+                                            , newType = newType
                                             , range =
                                                 { start = position
                                                 , end = position
@@ -641,38 +652,43 @@ migrateTypeTodoFixes projectContext =
                                             , signature =
                                                 { name = Helpers.node name
                                                 , typeAnnotation =
-                                                    TypeAnnotation.Typed
-                                                        (Helpers.node ( [], "Codec" ))
-                                                        [ TypeAnnotation.GenericType "e" |> Helpers.node
-                                                        , QualifiedType.toString currentModule existingImports qualifiedType
-                                                            |> TypeAnnotation.GenericType
+                                                    TypeAnnotation.FunctionTypeAnnotation
+                                                        (TypeAnnotation.Typed
+                                                            (( QualifiedType.qualifiedPath oldType
+                                                             , QualifiedType.name oldType
+                                                             )
+                                                                |> Helpers.node
+                                                            )
+                                                            []
                                                             |> Helpers.node
-                                                        ]
+                                                        )
+                                                        (TypeAnnotation.Typed
+                                                            (( QualifiedType.qualifiedPath newType
+                                                             , QualifiedType.name newType
+                                                             )
+                                                                |> Helpers.node
+                                                            )
+                                                            []
+                                                            |> Helpers.node
+                                                        )
                                                         |> Helpers.node
                                                 }
                                             }
 
-                                        --{ functionName = name
-                                        --, typeVar = qualifiedType
-                                        --, range =
-                                        --    { start = position
-                                        --    , end = position
-                                        --    }
-                                        --, signature =
-                                        --
-                                        --, parameters = []
-                                        --}
                                         ( fix, newImports ) =
                                             generateMigrationDefinition
                                                 projectContext
                                                 existingImports
                                                 currentModule
                                                 todo
-                                                type_
+                                                oldTypeOrAlias
+                                                newTypeOrAlias
                                     in
                                     { moduleName = currentModule
                                     , fix = Review.Fix.insertAt position fix
-                                    , newImports = Set.insert (QualifiedType.qualifiedPath qualifiedType) newImports
+                                    , newImports =
+                                        Set.insert (QualifiedType.qualifiedPath newType) newImports
+                                            |> Set.insert (QualifiedType.qualifiedPath oldType)
                                     }
                                         |> Just
 
