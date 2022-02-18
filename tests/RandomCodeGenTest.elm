@@ -1,7 +1,7 @@
 module RandomCodeGenTest exposing (..)
 
 import Test exposing (Test, describe)
-import TestHelper exposing (codeGenTest)
+import TestHelper exposing (codeGenTest, codeGenTestWithDependencies)
 
 
 suite : Test
@@ -95,11 +95,10 @@ generator =
         |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
         |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
 """
-        , codeGenTest "Generates a generator for a declared record with > 5 fields nicer with random-extra"
+        , codeGenTestWithDependencies "Generates a generator for a declared record with > 5 fields nicer with random-extra"
+            [ TestHelper.randomExtra ]
             [ """module A exposing (..)
 import Random
-import Random.Extra
-import Random.Int
 
 type alias Foo =
   { a : Int, b : Int, c : Int, d : Int, e : Int, f : Int }
@@ -172,10 +171,10 @@ generator =
             [ Random.map B (Random.uniform "TODO: Define string options" []) ]
         |> Random.andThen identity
 """
-        , codeGenTest "Picks up random-extra for nicer code"
+        , codeGenTestWithDependencies "Picks up random-extra for nicer code"
+            [ TestHelper.randomExtra ]
             [ """module A exposing (..)
 import Random
-import Random.Extra
 
 type Foo
   = A Int
@@ -188,6 +187,7 @@ generator =
             """module A exposing (..)
 import Random
 import Random.Extra
+import Random.Int
 
 type Foo
   = A Int
@@ -195,7 +195,7 @@ type Foo
 
 generator : Random.Generator Foo
 generator =
-    Random.Extra.choices (Random.map A (Random.int Random.minInt Random.maxInt))
+    Random.Extra.choices (Random.map A Random.Int.anyInt)
         [Random.map B (Random.uniform "TODO: Define string options" [])]
 """
         , codeGenTest "Picks up a generator from another file"
