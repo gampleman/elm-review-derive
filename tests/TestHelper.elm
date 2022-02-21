@@ -46,13 +46,15 @@ codeGenTestWithDependencies description dependencies modules expected =
     Test.test description <|
         \_ ->
             let
+                inputModules =
+                    List.map (String.replace "\u{000D}" "") modules
                 result =
-                    findTodo modules
+                    findTodo inputModules
 
                 project =
                     List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
             in
-            Review.Test.runOnModulesWithProjectData project CodeGen.rule modules
+            Review.Test.runOnModulesWithProjectData project CodeGen.rule inputModules
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error
@@ -60,7 +62,7 @@ codeGenTestWithDependencies description dependencies modules expected =
                             , details = [ "" ]
                             , under = result.under
                             }
-                            |> Review.Test.whenFixed expected
+                            |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
                         ]
                       )
                     ]
