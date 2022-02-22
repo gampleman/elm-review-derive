@@ -48,6 +48,7 @@ migrateA old =
         B.C ->
             C
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -98,6 +99,7 @@ migrateA old =
         B.B ->
             B
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -151,6 +153,7 @@ migrateA old =
         B.C ->
             Debug.todo "Can't handle this"
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -204,6 +207,7 @@ migrateA old =
         B.C a ->
             Debug.todo "Can't handle this"
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -249,6 +253,7 @@ migrateA : B.MyType -> MyType
 migrateA old =
     old
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -294,6 +299,7 @@ migrateA : B.MyType -> MyType
 migrateA old =
     { a = old.a, b = old.b, c = Debug.todo "Can't handle this" }
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -339,6 +345,7 @@ migrateA : B.MyType -> MyType
 migrateA old =
     Debug.todo "Can't handle this"
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -384,6 +391,7 @@ migrateA : B.MyType -> MyType
 migrateA old =
     { a = old.a, b = Debug.todo "Can't handle this" }
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -508,6 +516,7 @@ migrateFormCondition old =
         OldSchema.Conditional a ->
             Conditional (migrateCondition a)
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -559,6 +568,7 @@ migrateMyType old =
         OldSchema.A a ->
             A (migrateMaybe migrateMyType a)
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -610,6 +620,7 @@ migrateMyType old =
         OldSchema.A a ->
             A (migrateList migrateMyType a)
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -667,6 +678,7 @@ migrateMyType old =
         OldSchema.A a ->
             A (migrateResult migrateError migrateMyType a)
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -718,6 +730,7 @@ migrateMyType old =
         OldSchema.A a ->
             A { fieldA = migrateMyType a.fieldA }
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -823,6 +836,7 @@ migrateMyType : OldSchema.MyType -> MyType
 migrateMyType old =
     { field1 = { fieldA = migrateFoo old.field1.fieldA } }
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -878,6 +892,7 @@ migrateMyType : OldSchema.MyType -> MyType
 migrateMyType old =
     { field1 = migrateTuple identity migrateFoo old.field1 }
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules
@@ -933,6 +948,7 @@ migrateMyType : OldSchema.MyType -> MyType
 migrateMyType old =
     { field1 = migrateTriple identity migrateFoo (Debug.todo "Can't handle this") old.field1 }
 """
+                            |> String.replace "\u{000D}" ""
                 in
                 Review.Test.runOnModules CodeGen.rule [ moduleA, moduleB ]
                     |> Review.Test.expectErrorsForModules

@@ -24,10 +24,13 @@ codeGenTest description modules expected =
     Test.test description <|
         \_ ->
             let
+                inputModules =
+                    List.map (String.replace "\u{000D}" "") modules
+
                 result =
-                    findTodo modules
+                    findTodo inputModules
             in
-            Review.Test.runOnModules CodeGen.rule modules
+            Review.Test.runOnModules CodeGen.rule inputModules
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error
@@ -35,7 +38,7 @@ codeGenTest description modules expected =
                             , details = [ "" ]
                             , under = result.under
                             }
-                            |> Review.Test.whenFixed expected
+                            |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
                         ]
                       )
                     ]
@@ -48,6 +51,7 @@ codeGenTestWithDependencies description dependencies modules expected =
             let
                 inputModules =
                     List.map (String.replace "\u{000D}" "") modules
+
                 result =
                     findTodo inputModules
 
