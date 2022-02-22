@@ -63,6 +63,7 @@ importVisitor (Node _ import_) context =
 type alias ProjectContext =
     { types : List ( ModuleName, TypeOrTypeAlias )
     , codecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
+    , generators : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
     , migrateFunctions :
         List
             { moduleName : ModuleName
@@ -85,6 +86,7 @@ type alias ModuleContext =
     { lookupTable : ModuleNameLookupTable.ModuleNameLookupTable
     , types : List TypeOrTypeAlias
     , codecs : List { functionName : String, typeVar : QualifiedType }
+    , generators : List { functionName : String, typeVar : QualifiedType }
     , migrateFunctions : List { functionName : String, oldType : QualifiedType, newType : QualifiedType }
     , autoCodecs : List { functionName : String, typeVar : QualifiedType }
     , codecTodos : List CodecTodo
@@ -103,6 +105,7 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , codecs = []
+    , generators = []
     , migrateFunctions = []
     , codecTodos = []
     , toStringTodos = []
@@ -124,6 +127,7 @@ fromProjectToModule lookupTable metadata projectContext =
     { lookupTable = lookupTable
     , types = []
     , codecs = []
+    , generators = []
     , autoCodecs = []
     , migrateFunctions = []
     , codecTodos = []
@@ -154,6 +158,10 @@ fromModuleToProject moduleKey metadata moduleContext =
         List.map
             (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
             moduleContext.codecs
+    , generators =
+        List.map
+            (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
+            moduleContext.generators
     , migrateFunctions =
         List.map
             (\a ->
@@ -184,6 +192,7 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , codecs = newContext.codecs ++ previousContext.codecs
+    , generators = newContext.generators ++ previousContext.generators
     , migrateFunctions = newContext.migrateFunctions ++ previousContext.migrateFunctions
     , codecTodos = newContext.codecTodos ++ previousContext.codecTodos
     , toStringTodos = newContext.toStringTodos ++ previousContext.toStringTodos
@@ -330,6 +339,18 @@ declarationVisitor declarations context =
                 )
                 declarations
                 ++ context.codecs
+        , generators =
+            List.filterMap
+                (\declaration ->
+                    case declaration of
+                        Node _ (Declaration.FunctionDeclaration function) ->
+                            RandomGeneratorTodo.declarationVisitorGetGenerators context function
+
+                        _ ->
+                            Nothing
+                )
+                declarations
+                ++ context.generators
         , migrateFunctions =
             List.filterMap
                 (\declaration ->

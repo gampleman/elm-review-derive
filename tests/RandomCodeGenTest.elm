@@ -11,7 +11,7 @@ suite =
             [ """module A exposing (..)
 import Random
 
-type Foo = 
+type Foo =
     Foo
     
 generator : Random.Generator Foo
@@ -21,12 +21,12 @@ generator =
             """module A exposing (..)
 import Random
 
-type Foo = 
+type Foo =
     Foo
     
 generator : Random.Generator Foo
-generator = 
-     Random.constant Foo
+generator =
+    Random.constant Foo
 """
         , codeGenTest "Generates a generator for an inline record"
             [ """module A exposing (..)
@@ -64,9 +64,7 @@ type alias Foo =
 
 generator : Random.Generator Foo
 generator =
-    Random.map2 (\\a b -> { a = a, b = b})
-        (Random.int Random.minInt Random.maxInt) 
-        (Random.uniform "TODO: Define string options" [])
+    Random.map2 Foo (Random.int Random.minInt Random.maxInt) (Random.uniform "TODO: Define string options" [])
 """
         , codeGenTest "Generates a generator for a declared record with > 5 fields"
             [ """module A exposing (..)
@@ -88,12 +86,12 @@ type alias Foo =
 generator : Random.Generator Foo
 generator =
     Random.constant Foo
-        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
-        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
-        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
-        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
-        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
-        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt) 
+        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt)
+        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt)
+        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt)
+        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt)
+        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt)
+        |> Random.map2 (|>) (Random.int Random.minInt Random.maxInt)
 """
         , codeGenTestWithDependencies "Generates a generator for a declared record with > 5 fields nicer with random-extra"
             [ TestHelper.randomExtra ]
@@ -144,7 +142,7 @@ type Foo =
 
 generator : Random.Generator Foo
 generator =
-    Random.uniform A [B]
+    Random.uniform A [ B ]
 """
         , codeGenTest "Generates a generator for a custom type"
             [ """module A exposing (..)
@@ -167,8 +165,9 @@ type Foo
 
 generator : Random.Generator Foo
 generator =
-    Random.uniform (Random.map A (Random.int Random.minInt Random.maxInt))
-            [ Random.map B (Random.uniform "TODO: Define string options" []) ]
+    Random.uniform
+        (Random.map A (Random.int Random.minInt Random.maxInt))
+        [ Random.map B (Random.uniform "TODO: Define string options" []) ]
         |> Random.andThen identity
 """
         , codeGenTestWithDependencies "Picks up random-extra for nicer code"
@@ -206,7 +205,7 @@ type A
   = A Int
  
 
-generator : Random.Generator Foo
+generator : Random.Generator A
 generator =
     Random.map A (Random.int Random.minInt Random.maxInt)
 """, """module B exposing (..)
@@ -228,6 +227,39 @@ type B =
     B A
 
 generator : Random.Generator B
+generator =
+    Random.map B A.generator
+"""
+        , codeGenTest "Picks up a generator from another file with different import notation"
+            [ """module A exposing (A, generator)
+import Random as R exposing (Generator)
+
+type A
+  = A Int
+ 
+
+generator : Generator A
+generator =
+    R.map A (R.int R.minInt R.maxInt)
+""", """module B exposing (..)
+import Random exposing (Generator)
+import A exposing (A)
+
+type B =
+    B A
+
+generator : Generator B
+generator =
+    Debug.todo ""
+""" ]
+            """module B exposing (..)
+import Random exposing (Generator)
+import A exposing (A)
+
+type B =
+    B A
+
+generator : Generator B
 generator =
     Random.map B A.generator
 """
@@ -289,6 +321,5 @@ generator =
 
 randomB : Random.Generator B
 randomB =
-    Random.map B (Random.int Random.minInt Random.maxInt)
-"""
+    Random.map B (Random.int Random.minInt Random.maxInt)"""
         ]

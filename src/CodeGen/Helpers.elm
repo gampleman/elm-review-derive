@@ -1,4 +1,4 @@
-module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, functionOrValue, getTypesHelper, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration)
+module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, functionOrValue, getTypesHelper, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, parenthesisIfNecessary, pipeRight, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, debugLog)
 
 import AssocSet as Set exposing (Set)
 import Elm.Pretty
@@ -55,6 +55,20 @@ parenthesis =
     Expression.ParenthesizedExpression >> node
 
 
+parenthesisIfNecessary : Node Expression -> Node Expression
+parenthesisIfNecessary expr =
+    case expr of
+        Node _ (Expression.Application args) ->
+            if List.length args > 1 then
+                parenthesis expr
+
+            else
+                expr
+
+        _ ->
+            expr
+
+
 {-| Find the first element that satisfies a predicate and return
 Just that element. If none match, return Nothing.
 find (\\num -> num > 5) [ 2, 4, 6, 8 ]
@@ -102,6 +116,11 @@ varFromInt =
     (+) (Char.toCode 'a')
         >> Char.fromCode
         >> String.fromChar
+
+
+debugLog : (String -> Node Expression -> Node Expression) -> Node Expression -> Node Expression
+debugLog logger expr =
+    logger (Elm.Pretty.prettyExpression (Elm.Syntax.Node.value expr) |> Pretty.pretty 120) expr
 
 
 typeAnnotationReturnValue : Node TypeAnnotation -> Node TypeAnnotation

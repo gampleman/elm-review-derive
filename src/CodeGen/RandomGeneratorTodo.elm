@@ -1,9 +1,9 @@
-module CodeGen.RandomGeneratorTodo exposing (ProjectContext, RandomGeneratorTodo, getTodos, randomGeneratorTypeTodoFixes, todoErrors)
+module CodeGen.RandomGeneratorTodo exposing (ProjectContext, RandomGeneratorTodo, declarationVisitorGetGenerators, getTodos, randomGeneratorTypeTodoFixes, todoErrors)
 
 import AssocList as Dict exposing (Dict)
 import AssocSet as Set exposing (Set)
-import CodeGen.CodecTodo exposing (CodecTodo)
 import CodeGen.Helpers as Helpers
+import Elm.CodeGen
 import Elm.Syntax.Expression as Expression exposing (Expression, Function)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
@@ -29,11 +29,45 @@ type alias RandomGeneratorTodo =
 type alias ProjectContext a =
     { a
         | types : List ( ModuleName, TypeOrTypeAlias )
-        , codecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
-        , randomGeneratorTodos : List ( ModuleName, CodecTodo )
+        , generators : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
+        , randomGeneratorTodos : List ( ModuleName, RandomGeneratorTodo )
         , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
         , moduleKeys : Dict ModuleName ModuleKey
     }
+
+
+declarationVisitorGetGenerators :
+    { a | lookupTable : ModuleNameLookupTable.ModuleNameLookupTable, currentModule : ModuleName }
+    -> Function
+    -> Maybe { functionName : String, typeVar : QualifiedType }
+declarationVisitorGetGenerators context function =
+    case ( function.signature, function.declaration ) of
+        ( Just (Node _ signature), Node _ declaration ) ->
+            case Helpers.typeAnnotationReturnValue signature.typeAnnotation of
+                Node _ (TypeAnnotation.Typed ((Node _ ( _, "Generator" )) as genType) [ Node _ (TypeAnnotation.Typed generatorType _) ]) ->
+                    if ModuleNameLookupTable.moduleNameFor context.lookupTable genType == Just [ "Random" ] then
+                        if Helpers.hasDebugTodo declaration then
+                            Nothing
+
+                        else
+                            case QualifiedType.create context.lookupTable context.currentModule generatorType of
+                                Just qualifiedType ->
+                                    { functionName = Node.value signature.name
+                                    , typeVar = qualifiedType
+                                    }
+                                        |> Just
+
+                                Nothing ->
+                                    Nothing
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 getTodos :
@@ -87,21 +121,13 @@ generateRecordRandomGenerator :
     -> Maybe QualifiedType
     -> List ( String, TypeAnnotation_ )
     -> Node Expression
-generateRecordRandomGenerator _ existingImports currentModule typeAliasName recordFields =
-    List.foldl
-        (\_ code ->
-            code
-                |> Helpers.pipeRight
-                    (Helpers.application
-                        [ Helpers.functionOrValue [ "Random" ] "andMap"
+generateRecordRandomGenerator projectContext existingImports currentModule typeAliasName recordFields =
+    let
+        numFields =
+            List.length recordFields
 
-                        --, codecFromTypeAnnotation projectContext typeAnnotation
-                        ]
-                    )
-        )
-        (Helpers.application
-            [ Helpers.functionOrValue [ "Random" ] "constant"
-            , case typeAliasName of
+        recordConstructor =
+            case typeAliasName of
                 Just typeAliasName_ ->
                     Helpers.functionOrValue
                         (QualifiedType.moduleName currentModule existingImports typeAliasName_)
@@ -123,85 +149,153 @@ generateRecordRandomGenerator _ existingImports currentModule typeAliasName reco
                         }
                         |> Helpers.node
                         |> Helpers.parenthesis
+    in
+    if numFields <= 5 then
+        Helpers.application
+            (Helpers.functionOrValue [ "Random" ]
+                (if numFields > 1 then
+                    "map" ++ String.fromInt (List.length recordFields)
+
+                 else
+                    "map"
+                )
+                :: recordConstructor
+                :: List.map (Tuple.second >> randomGeneratorFromTypeAnnotation projectContext existingImports currentModule >> Helpers.parenthesisIfNecessary) recordFields
+            )
+
+    else
+        List.foldl
+            (\( _, typeAnnotation ) code ->
+                code
+                    |> Helpers.pipeRight
+                        (Helpers.application
+                            [ Helpers.functionOrValue [ "Random" ] "map2"
+                            , Helpers.node (Expression.PrefixOperator "|>")
+                            , Helpers.parenthesisIfNecessary (randomGeneratorFromTypeAnnotation projectContext existingImports currentModule typeAnnotation)
+                            ]
+                        )
+            )
+            (Helpers.application
+                [ Helpers.functionOrValue [ "Random" ] "constant"
+                , recordConstructor
+                ]
+            )
+            recordFields
+
+
+generateConstructorGenerator :
+    ProjectContext a
+    -> List ExistingImport
+    -> ModuleName
+    -> ValueConstructor_
+    -> Node Expression
+generateConstructorGenerator projectContext existingImports currentModule constructor =
+    let
+        argCount =
+            List.length constructor.arguments
+    in
+    if argCount == 0 then
+        Helpers.application
+            [ Helpers.functionOrValue [ "Random" ] "constant"
+            , Helpers.functionOrValue [] constructor.name
             ]
-        )
-        recordFields
+
+    else if argCount <= 5 then
+        Helpers.application
+            (Helpers.functionOrValue [ "Random" ]
+                (if argCount == 1 then
+                    "map"
+
+                 else
+                    "map" ++ String.fromInt argCount
+                )
+                :: Helpers.functionOrValue [] constructor.name
+                :: List.map (randomGeneratorFromTypeAnnotation projectContext existingImports currentModule >> Helpers.parenthesisIfNecessary) constructor.arguments
+            )
+
+    else
+        let
+            startCode =
+                Helpers.application
+                    [ Helpers.functionOrValue [ "Random" ] "constant"
+                    , Helpers.functionOrValue [] constructor.name
+                    ]
+        in
+        List.foldl
+            (\argument code ->
+                code
+                    |> Helpers.pipeRight
+                        (Helpers.application
+                            [ Helpers.functionOrValue [ "Random" ] "andMap"
+                            , randomGeneratorFromTypeAnnotation projectContext existingImports currentModule argument
+                            ]
+                        )
+            )
+            startCode
+            constructor.arguments
 
 
-generateCustomTypeRandomGenerator : ProjectContext a -> Type_ -> Node Expression
-generateCustomTypeRandomGenerator projectContext customType =
+generateCustomTypeRandomGenerator :
+    ProjectContext a
+    -> List ExistingImport
+    -> ModuleName
+    -> Type_
+    -> Node Expression
+generateCustomTypeRandomGenerator projectContext existingImports currentModule customType =
     case customType.constructors of
+        -- special case for a single constructor
+        [ singleCtor ] ->
+            generateConstructorGenerator projectContext existingImports currentModule singleCtor
+
         head :: rest ->
-            let
-                uniformChoice : ValueConstructor_ -> Node Expression
-                uniformChoice constructor =
-                    case constructor.arguments of
-                        [] ->
-                            Helpers.application
-                                [ Helpers.functionOrValue [ "Random" ] "constant"
-                                , Helpers.functionOrValue [] constructor.name
-                                ]
-
-                        argument :: [] ->
-                            Helpers.application
-                                [ Helpers.functionOrValue [ "Random" ] "map"
-                                , Helpers.functionOrValue [] constructor.name
-                                , randomGeneratorFromTypeAnnotation projectContext argument
-                                ]
-
-                        arguments ->
-                            let
-                                startCode =
-                                    Helpers.application
-                                        [ Helpers.functionOrValue [ "Random" ] "constant"
-                                        , Helpers.functionOrValue [] constructor.name
-                                        ]
-                            in
-                            List.foldl
-                                (\argument code ->
-                                    code
-                                        |> Helpers.pipeRight
-                                            (Helpers.application
-                                                [ Helpers.functionOrValue [ "Random" ] "andMap"
-                                                , randomGeneratorFromTypeAnnotation projectContext argument
-                                                ]
-                                            )
-                                )
-                                startCode
-                                arguments
-
-                uniformList : Node Expression
-                uniformList =
-                    List.map uniformChoice rest
+            if List.all (.arguments >> List.isEmpty) customType.constructors then
+                Helpers.application
+                    [ Helpers.functionOrValue [ "Random" ] "uniform"
+                    , Helpers.functionOrValue [] head.name |> Helpers.parenthesis
+                    , List.map (.name >> Helpers.functionOrValue []) rest
                         |> Expression.ListExpr
                         |> Helpers.node
-            in
-            Helpers.application
-                [ Helpers.functionOrValue [ "Random" ] "uniform", uniformChoice head |> Helpers.parenthesis, uniformList ]
-                |> Helpers.pipeRight
-                    (Helpers.application
-                        [ Helpers.functionOrValue [ "Random" ] "andThen"
-                        , Helpers.functionOrValue [] "identity"
-                        ]
-                    )
+                    ]
+
+            else
+                let
+                    uniformList : Node Expression
+                    uniformList =
+                        List.map (generateConstructorGenerator projectContext existingImports currentModule) rest
+                            |> Expression.ListExpr
+                            |> Helpers.node
+                in
+                Helpers.application
+                    [ Helpers.functionOrValue [ "Random" ] "uniform", generateConstructorGenerator projectContext existingImports currentModule head |> Helpers.parenthesis, uniformList ]
+                    |> Helpers.pipeRight
+                        (Helpers.application
+                            [ Helpers.functionOrValue [ "Random" ] "andThen"
+                            , Helpers.functionOrValue [] "identity"
+                            ]
+                        )
 
         [] ->
             Helpers.node Expression.UnitExpr
 
 
-randomGeneratorFromTypeAnnotation : ProjectContext a -> TypeAnnotation_ -> Node Expression
-randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
+randomGeneratorFromTypeAnnotation :
+    ProjectContext a
+    -> List ExistingImport
+    -> ModuleName
+    -> TypeAnnotation_
+    -> Node Expression
+randomGeneratorFromTypeAnnotation projectContext existingImports currentModule typeAnnotation =
     case typeAnnotation of
         Typed_ qualifiedType typeVariables ->
             let
-                getCodecName : String -> Node Expression
-                getCodecName text =
-                    case text of
+                getGeneratorName : QualifiedType -> Node Expression
+                getGeneratorName type_ =
+                    case QualifiedType.name type_ of
                         "Int" ->
                             Helpers.application
                                 [ Helpers.functionOrValue [ "Random" ] "int"
-                                , Expression.Integer 0 |> Helpers.node
-                                , Expression.Integer 10 |> Helpers.node
+                                , Helpers.functionOrValue [ "Random" ] "minInt"
+                                , Helpers.functionOrValue [ "Random" ] "maxInt"
                                 ]
 
                         "Float" ->
@@ -209,6 +303,13 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
                                 [ Helpers.functionOrValue [ "Random" ] "float"
                                 , Expression.Floatable 0 |> Helpers.node
                                 , Expression.Floatable 10 |> Helpers.node
+                                ]
+
+                        "String" ->
+                            Helpers.application
+                                [ Helpers.functionOrValue [ "Random" ] "uniform"
+                                , Expression.Literal "TODO: Define string options" |> Helpers.node
+                                , Expression.ListExpr [] |> Helpers.node
                                 ]
 
                         "List" ->
@@ -233,38 +334,59 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
                                         ]
                                     )
 
-                        _ ->
-                            Helpers.functionOrValue [] ("random" ++ text)
+                        text ->
+                            if
+                                Helpers.find
+                                    (\( module_, types ) ->
+                                        module_
+                                            == currentModule
+                                            && (case types of
+                                                    QualifiedType.TypeValue a ->
+                                                        a.qualifiedType == type_
 
-                applied : Node Expression
-                applied =
-                    (case Helpers.find (.typeVar >> (==) qualifiedType) projectContext.codecs of
-                        Just codec ->
-                            Helpers.functionOrValue codec.moduleName codec.functionName
+                                                    _ ->
+                                                        False
+                                               )
+                                    )
+                                    projectContext.types
+                                    == Nothing
+                            then
+                                Helpers.errorMessage ("Insert a `Random.Generator " ++ text ++ "` here")
 
-                        Nothing ->
-                            getCodecName (QualifiedType.name qualifiedType)
-                    )
-                        :: List.map (randomGeneratorFromTypeAnnotation projectContext) typeVariables
-                        |> Helpers.application
+                            else
+                                Helpers.functionOrValue [] ("random" ++ text)
             in
             if List.isEmpty typeVariables then
-                applied
+                case Helpers.find (.typeVar >> (==) qualifiedType) projectContext.generators of
+                    Just generator ->
+                        Helpers.functionOrValue generator.moduleName generator.functionName
+
+                    Nothing ->
+                        getGeneratorName qualifiedType
 
             else
-                Helpers.parenthesis applied
+                (case Helpers.find (.typeVar >> (==) qualifiedType) projectContext.generators of
+                    Just generator ->
+                        Helpers.functionOrValue generator.moduleName generator.functionName
+
+                    Nothing ->
+                        getGeneratorName qualifiedType
+                )
+                    :: List.map (randomGeneratorFromTypeAnnotation projectContext existingImports currentModule) typeVariables
+                    |> Helpers.application
+                    |> Helpers.parenthesis
 
         Unit_ ->
             Helpers.application [ Helpers.functionOrValue [ "Random" ] "constant", Helpers.node Expression.UnitExpr ]
 
         Tupled_ [ first ] ->
-            randomGeneratorFromTypeAnnotation projectContext first
+            randomGeneratorFromTypeAnnotation projectContext existingImports currentModule first
 
         Tupled_ [ first, second ] ->
             Helpers.application
                 [ Helpers.functionOrValue [ "Random" ] "pair"
-                , randomGeneratorFromTypeAnnotation projectContext first
-                , randomGeneratorFromTypeAnnotation projectContext second
+                , randomGeneratorFromTypeAnnotation projectContext existingImports currentModule first
+                , randomGeneratorFromTypeAnnotation projectContext existingImports currentModule second
                 ]
                 |> Helpers.parenthesis
 
@@ -279,9 +401,9 @@ randomGeneratorFromTypeAnnotation projectContext typeAnnotation =
                             |> Helpers.node
                     }
                     |> Helpers.node
-                , randomGeneratorFromTypeAnnotation projectContext first
-                , randomGeneratorFromTypeAnnotation projectContext second
-                , randomGeneratorFromTypeAnnotation projectContext third
+                , randomGeneratorFromTypeAnnotation projectContext existingImports currentModule first
+                , randomGeneratorFromTypeAnnotation projectContext existingImports currentModule second
+                , randomGeneratorFromTypeAnnotation projectContext existingImports currentModule third
                 ]
                 |> Helpers.parenthesis
 
@@ -322,7 +444,7 @@ generateRandomGeneratorDefinition :
     ProjectContext a
     -> List ExistingImport
     -> ModuleName
-    -> CodecTodo
+    -> RandomGeneratorTodo
     -> TypeOrTypeAlias
     -> String
 generateRandomGeneratorDefinition projectContext existingImports currentModule randomGeneratorTodo_ typeOrTypeAlias =
@@ -335,7 +457,7 @@ generateRandomGeneratorDefinition projectContext existingImports currentModule r
             , expression =
                 case typeOrTypeAlias of
                     TypeValue typeValue ->
-                        generateCustomTypeRandomGenerator projectContext typeValue
+                        generateCustomTypeRandomGenerator projectContext existingImports currentModule typeValue
 
                     TypeAliasValue typeAliasName fields ->
                         generateRecordRandomGenerator projectContext existingImports currentModule (Just typeAliasName) fields
@@ -392,7 +514,7 @@ randomGeneratorTypeTodoFixes projectContext =
         |> List.concatMap
             (\( moduleName, qualifiedTypes ) ->
                 let
-                    todosInModule : List CodecTodo
+                    todosInModule : List RandomGeneratorTodo
                     todosInModule =
                         List.filterMap
                             (\( moduleName_, todo ) ->
@@ -406,7 +528,7 @@ randomGeneratorTypeTodoFixes projectContext =
                 in
                 Set.toList qualifiedTypes
                     |> List.filter (\a -> List.any (.typeVar >> (/=) a) todosInModule)
-                    |> List.filter (\a -> List.all (.typeVar >> (/=) a) projectContext.codecs)
+                    |> List.filter (\a -> List.all (.typeVar >> (/=) a) projectContext.generators)
                     |> List.indexedMap
                         (\index qualifiedType ->
                             let
@@ -415,46 +537,53 @@ randomGeneratorTypeTodoFixes projectContext =
                                     QualifiedType.getTypeData projectContext.types qualifiedType
                             in
                             case ( maybeType, Dict.get moduleName projectContext.imports ) of
-                                ( Just ( _, type_ ), Just imports ) ->
-                                    let
-                                        name =
-                                            "random" ++ QualifiedType.name qualifiedType
+                                ( Just ( moduleName_, type_ ), Just imports ) ->
+                                    -- We only generate a subgenerator when it's in the same module
+                                    -- This is a conservative move, but since we don't have an easy way to figure out
+                                    -- if the type is opaque, generating a subgenerator could easily break compilability.
+                                    if moduleName == moduleName_ then
+                                        let
+                                            name =
+                                                "random" ++ QualifiedType.name qualifiedType
 
-                                        position =
-                                            { column = 0, row = 99999 + index }
+                                            position =
+                                                { column = 0, row = 99999 + index }
 
-                                        todo =
-                                            { functionName = name
-                                            , typeVar = qualifiedType
-                                            , range =
-                                                { start = position
-                                                , end = position
-                                                }
-                                            , signature =
-                                                { name = Helpers.node name
-                                                , typeAnnotation =
-                                                    TypeAnnotation.Typed
-                                                        (Helpers.node ( [ "Random" ], "Generator" ))
-                                                        [ QualifiedType.name qualifiedType
-                                                            |> TypeAnnotation.GenericType
+                                            todo =
+                                                { functionName = name
+                                                , typeVar = qualifiedType
+                                                , range =
+                                                    { start = position
+                                                    , end = position
+                                                    }
+                                                , signature =
+                                                    { name = Helpers.node name
+                                                    , typeAnnotation =
+                                                        TypeAnnotation.Typed
+                                                            (Helpers.node ( [ "Random" ], "Generator" ))
+                                                            [ QualifiedType.name qualifiedType
+                                                                |> TypeAnnotation.GenericType
+                                                                |> Helpers.node
+                                                            ]
                                                             |> Helpers.node
-                                                        ]
-                                                        |> Helpers.node
+                                                    }
+                                                , parameters = []
                                                 }
-                                            , parameters = []
-                                            }
 
-                                        fix : String
-                                        fix =
-                                            generateRandomGeneratorDefinition
-                                                projectContext
-                                                imports.existingImports
-                                                moduleName
-                                                todo
-                                                type_
-                                    in
-                                    ( moduleName, Review.Fix.insertAt position fix )
-                                        |> Just
+                                            fix : String
+                                            fix =
+                                                generateRandomGeneratorDefinition
+                                                    projectContext
+                                                    imports.existingImports
+                                                    moduleName
+                                                    todo
+                                                    type_
+                                        in
+                                        ( moduleName, Review.Fix.insertAt position fix )
+                                            |> Just
+
+                                    else
+                                        Nothing
 
                                 _ ->
                                     Nothing
