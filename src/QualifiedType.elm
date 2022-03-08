@@ -1,4 +1,4 @@
-module QualifiedType exposing (ExistingImport, QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, createFromType, createFromTypeAlias, getTypeData, isPrimitiveType, moduleName, name, qualifiedPath, toString)
+module QualifiedType exposing (ExistingImport, QualifiedType(..), TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_, create, createFromType, createFromTypeAlias, getTypeData, isPrimitiveType, moduleName, name, qualifiedPath, toString)
 
 import Elm.Syntax.Exposing exposing (Exposing)
 import Elm.Syntax.ModuleName exposing (ModuleName)

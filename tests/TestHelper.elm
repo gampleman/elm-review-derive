@@ -1,4 +1,4 @@
-module TestHelper exposing (codeGenTest, codeGenTestWithDependencies, randomExtra)
+module TestHelper exposing (codeGenTest, fakeDependency, codeGenTestFailsWith)
 
 import CodeGen
 import Elm.CodeGen
@@ -19,33 +19,8 @@ import Review.Test.Dependencies
 import Test exposing (Test)
 
 
-codeGenTest : String -> List String -> String -> Test
-codeGenTest description modules expected =
-    Test.test description <|
-        \_ ->
-            let
-                inputModules =
-                    List.map (String.replace "\u{000D}" "") modules
-
-                result =
-                    findTodo inputModules
-            in
-            Review.Test.runOnModules CodeGen.rule inputModules
-                |> Review.Test.expectErrorsForModules
-                    [ ( result.module_
-                      , [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
-                            , under = result.under
-                            }
-                            |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
-                        ]
-                      )
-                    ]
-
-
-codeGenTestWithDependencies : String -> List Dependency -> List String -> String -> Test
-codeGenTestWithDependencies description dependencies modules expected =
+codeGenTestFailsWith : String -> List Dependency -> List String -> String -> Test
+codeGenTestFailsWith description dependencies modules expectedFailureDetails =
     Test.test description <|
         \_ ->
             let
@@ -62,8 +37,35 @@ codeGenTestWithDependencies description dependencies modules expected =
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error
-                            { message = "Here's my attempt to complete this stub"
-                            , details = [ "" ]
+                            { message = "Remove the use of `Debug.todo` before shipping to production"
+                            , details = [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production.", expectedFailureDetails ]
+                            , under = result.under
+                            }
+                        ]
+                      )
+                    ]
+
+
+codeGenTest : String -> List Dependency -> List String -> String -> Test
+codeGenTest description dependencies modules expected =
+    Test.test description <|
+        \_ ->
+            let
+                inputModules =
+                    List.map (String.replace "\u{000D}" "") modules
+
+                result =
+                    findTodo inputModules
+
+                project =
+                    List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
+            in
+            Review.Test.runOnModulesWithProjectData project CodeGen.rule inputModules
+                |> Review.Test.expectErrorsForModules
+                    [ ( result.module_
+                      , [ Review.Test.error
+                            { message = "Remove the use of `Debug.todo` before shipping to production"
+                            , details = [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production." ]
                             , under = result.under
                             }
                             |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
@@ -72,38 +74,22 @@ codeGenTestWithDependencies description dependencies modules expected =
                     ]
 
 
-randomExtra : Dependency
-randomExtra =
-    Review.Project.Dependency.create "elm-community/random-extra"
-        (case Json.Decode.decodeString Elm.Project.decoder """{
+fakeDependency : String -> Dependency
+fakeDependency name =
+    Review.Project.Dependency.create name
+        (case Json.Decode.decodeString Elm.Project.decoder ("""{
     "type": "package",
-    "name": "elm-community/random-extra",
+    "name": """ ++ "\"" ++ name ++ "\"" ++ """,
     "summary": "Extra functions for the core Random library",
     "license": "BSD-3-Clause",
     "version": "3.2.0",
-    "exposed-modules": [
-        "Random.Array",
-        "Random.Char",
-        "Random.Date",
-        "Random.Dict",
-        "Random.Extra",
-        "Random.Float",
-        "Random.Int",
-        "Random.List",
-        "Random.Order",
-        "Random.Set",
-        "Random.String"
-    ],
+    "exposed-modules": [],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
-        "elm/core": "1.0.0 <= v < 2.0.0",
-        "elm/random": "1.0.0 <= v < 2.0.0",
-        "elm/time": "1.0.0 <= v < 2.0.0"
+        "elm/core": "1.0.0 <= v < 2.0.0"
     },
-    "test-dependencies": {
-        "elm-explorations/test": "1.2.1 <= v < 2.0.0"
-    }
-}""" of
+    "test-dependencies": {}
+}""") of
             Ok val ->
                 val
 
