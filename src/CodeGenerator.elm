@@ -84,13 +84,12 @@ Also note that you will always get module names normalized, i.e. you will always
 define : String -> String -> TypePattern -> (String -> String) -> List Definition -> CodeGenerator
 define id dependency searchPattern makeName definitions =
     List.foldl
-        (\(Definition resolvers backupResolvers) thing ->
-            { thing | resolvers = resolvers ++ thing.resolvers, backupResolvers = backupResolvers ++ thing.backupResolvers }
+        (\(Definition resolver) thing ->
+            { thing | resolvers = resolver :: thing.resolvers }
         )
         { id = id
         , searchPattern = searchPattern
         , resolvers = []
-        , backupResolvers = []
         , condition = Dependencies [ dependency ]
         , makeName = makeName
         }
@@ -102,32 +101,28 @@ define id dependency searchPattern makeName definitions =
 Fundamentally you can think of all the definitions put together as forming a rather sophisticated function `ResolvedType -> Expression`, however this library will handle a large number of gotcha's for you, so it's more convenient to define the function piece-meal.
 -}
 type Definition
-    = Definition (List Resolver) (List Resolver)
+    = Definition Resolver
 
 
 {-| Apply this definition conditionally if the user has this specific dependency installed (can be chained). Intended for things like json-pipeline or random-extra.
 -}
 ifUserHasDependency : String -> Definition -> Definition
-ifUserHasDependency dependency (Definition resolvers backupResolvers) =
-    Definition (List.map (addDep dependency) resolvers) (List.map (addDep dependency) backupResolvers)
+ifUserHasDependency dependency (Definition resolver) =
+    Definition
+        { resolver
+            | condition =
+                case resolver.condition of
+                    Always ->
+                        Dependencies [ dependency ]
 
-
-addDep : String -> Resolver -> Resolver
-addDep dependency res =
-    { res
-        | condition =
-            case res.condition of
-                Always ->
-                    Dependencies [ dependency ]
-
-                Dependencies existing ->
-                    Dependencies (dependency :: existing)
-    }
+                    Dependencies existing ->
+                        Dependencies (dependency :: existing)
+        }
 
 
 simpleDef : ResolverImpl -> Definition
 simpleDef impl =
-    Definition [ { implementation = impl, condition = Always } ] []
+    Definition { implementation = impl, condition = Always }
 
 
 

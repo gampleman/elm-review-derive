@@ -34,7 +34,6 @@ type CodeGenerator
         { id : String
         , searchPattern : TypePattern
         , resolvers : List Resolver
-        , backupResolvers : List Resolver
         , condition : Condition
         , makeName : String -> String
         }
@@ -108,7 +107,7 @@ buildFullGeneric dependencies generics =
                         ( Dict.remove gen.id amendments
                         , { id = gen.id
                           , searchPattern = TypePattern.matches gen.searchPattern
-                          , resolvers = processResolvers dependencies (Dict.get gen.id amendments |> Maybe.withDefault []) ++ processResolvers dependencies gen.resolvers ++ processResolvers dependencies gen.backupResolvers
+                          , resolvers = processResolvers dependencies (Dict.get gen.id amendments |> Maybe.withDefault []) ++ processResolvers dependencies gen.resolvers
                           , makeName = gen.makeName
                           , makeAnnotation = TypePattern.generate gen.searchPattern
                           }
