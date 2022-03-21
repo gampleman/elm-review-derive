@@ -1,10 +1,9 @@
 module CodeGen.Builtin.Codec exposing (..)
 
-import CodeGen.GenericTodo exposing (Generic)
+import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
 import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
-import Generator
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -24,22 +23,22 @@ toValueCase v =
         |> Maybe.withDefault v
 
 
-generic : Generic
+generic : CodeGenerator
 generic =
-    Generator.define "MartinSStewart/elm-serialize/Codec"
+    CodeGenerator.define "MartinSStewart/elm-serialize/Codec"
         "MartinSStewart/elm-serialize"
         (Typed [ "Serialize" ] "Codec" [ GenericType "e", Target ])
         (\name -> toValueCase name ++ "Codec")
-        [ Generator.int (val "int")
-        , Generator.float (val "float")
-        , Generator.string (val "string")
-        , Generator.list (fn1 "list")
-        , Generator.maybe (fn1 "maybe")
-        , Generator.dict (\key value -> CG.apply [ val "dict", key, value ])
-        , Generator.unit (val "unit")
-        , Generator.tuple (\arg1 arg2 -> CG.apply [ val "tuple", arg1, arg2 ])
-        , Generator.triple (\arg1 arg2 arg3 -> CG.apply [ val "tuple", arg1, arg2, arg3 ])
-        , Generator.customType
+        [ CodeGenerator.int (val "int")
+        , CodeGenerator.float (val "float")
+        , CodeGenerator.string (val "string")
+        , CodeGenerator.list (fn1 "list")
+        , CodeGenerator.maybe (fn1 "maybe")
+        , CodeGenerator.dict (\key value -> CG.apply [ val "dict", key, value ])
+        , CodeGenerator.unit (val "unit")
+        , CodeGenerator.tuple (\arg1 arg2 -> CG.apply [ val "tuple", arg1, arg2 ])
+        , CodeGenerator.triple (\arg1 arg2 arg3 -> CG.apply [ val "tuple", arg1, arg2, arg3 ])
+        , CodeGenerator.customType
             (\ctors exprs ->
                 CG.pipe
                     (CG.apply
@@ -58,7 +57,7 @@ generic =
                     )
                     (List.map Tuple.second exprs ++ [ val "finishCustomType" ])
             )
-        , Generator.combiner
+        , CodeGenerator.combiner
             (\t fn exprs ->
                 case t of
                     ResolvedType.Opaque ref args ->

@@ -1,10 +1,9 @@
 module CodeGen.Builtin.JsonEncoder exposing (generic)
 
-import CodeGen.GenericTodo exposing (Generic)
+import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
 import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
-import Generator
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -14,16 +13,16 @@ lambdaApply name expr =
     CG.lambda [ CG.varPattern name ] (CG.apply [ expr, CG.val name ])
 
 
-generic : Generic
+generic : CodeGenerator
 generic =
-    Generator.define "elm/json/Json.Encode.Value"
+    CodeGenerator.define "elm/json/Json.Encode.Value"
         "elm/json"
         (Function Target (Typed [ "Json", "Encode" ] "Value" []))
         (\name -> "encode" ++ name)
-        [ Generator.int (CG.fqFun [ "Json", "Encode" ] "int")
-        , Generator.string (CG.fqFun [ "Json", "Encode" ] "string")
-        , Generator.float (CG.fqFun [ "Json", "Encode" ] "float")
-        , Generator.customType
+        [ CodeGenerator.int (CG.fqFun [ "Json", "Encode" ] "int")
+        , CodeGenerator.string (CG.fqFun [ "Json", "Encode" ] "string")
+        , CodeGenerator.float (CG.fqFun [ "Json", "Encode" ] "float")
+        , CodeGenerator.customType
             (\ctors variants ->
                 CG.lambda [ CG.varPattern "arg" ]
                     (List.map2
@@ -42,7 +41,7 @@ generic =
                         |> CG.caseExpr (CG.val "arg")
                     )
             )
-        , Generator.combiner
+        , CodeGenerator.combiner
             (\t fn exprs ->
                 case t of
                     ResolvedType.AnonymousRecord fields ->

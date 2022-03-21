@@ -1,4 +1,4 @@
-module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, getTypesHelper, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, parenthesisIfNecessary, pipeRight, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
+module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, parenthesisIfNecessary, pipeRight, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Elm.CodeGen as CG
@@ -13,8 +13,8 @@ import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
+import Internal.ExistingImport exposing (ExistingImport)
 import Pretty
-import QualifiedType exposing (ExistingImport, QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..))
 import Review.Fix
 
 
@@ -173,93 +173,6 @@ importsFix currentModule existingImports importStartRow imports =
             |> (\a -> a ++ "\n")
             |> Review.Fix.insertAt { row = importStartRow, column = 1 }
             |> Just
-
-
-getTypesFromTypeAnnotation :
-    List ( ModuleName, TypeOrTypeAlias )
-    -> ModuleName
-    -> Set QualifiedType
-    -> TypeAnnotation_
-    -> Set QualifiedType
-getTypesFromTypeAnnotation types typeModuleName collectedTypes typeAnnotation =
-    case typeAnnotation of
-        Typed_ qualifiedType typeParameters ->
-            let
-                collectedTypes_ : Set QualifiedType
-                collectedTypes_ =
-                    if QualifiedType.isPrimitiveType qualifiedType then
-                        collectedTypes
-
-                    else if Set.member qualifiedType collectedTypes then
-                        collectedTypes
-
-                    else
-                        getTypesHelper
-                            types
-                            qualifiedType
-                            (Set.insert qualifiedType collectedTypes)
-                            |> Set.union collectedTypes
-            in
-            List.foldl
-                (\typeParameter collectedTypes__ ->
-                    getTypesFromTypeAnnotation types typeModuleName collectedTypes__ typeParameter
-                        |> Set.union collectedTypes__
-                )
-                collectedTypes_
-                typeParameters
-
-        Tupled_ tupleValues ->
-            List.foldl
-                (\tupleValue collectedTypes_ ->
-                    getTypesFromTypeAnnotation types typeModuleName collectedTypes_ tupleValue
-                        |> Set.union collectedTypes_
-                )
-                collectedTypes
-                tupleValues
-
-        Record_ fields ->
-            List.foldl
-                (\( _, field ) collectedTypes_ ->
-                    getTypesFromTypeAnnotation types typeModuleName collectedTypes_ field
-                        |> Set.union collectedTypes_
-                )
-                collectedTypes
-                fields
-
-        _ ->
-            collectedTypes
-
-
-getTypesHelper :
-    List ( ModuleName, TypeOrTypeAlias )
-    -> QualifiedType
-    -> Set QualifiedType
-    -> Set QualifiedType
-getTypesHelper types typeDeclaration collectedTypes =
-    case QualifiedType.getTypeData types typeDeclaration of
-        Just ( typeModuleName, TypeAliasValue _ fields ) ->
-            List.foldl
-                (\( _, typeAnnotation ) collectedTypes_ ->
-                    getTypesFromTypeAnnotation types typeModuleName collectedTypes_ typeAnnotation
-                )
-                collectedTypes
-                fields
-
-        Just ( typeModuleName, TypeValue customType ) ->
-            List.foldl
-                (\constructor collectedTypes_ ->
-                    List.foldl
-                        (\typeAnnotation collectedTypes__ ->
-                            getTypesFromTypeAnnotation types typeModuleName collectedTypes__ typeAnnotation
-                        )
-                        collectedTypes_
-                        constructor.arguments
-                )
-                collectedTypes
-                customType.constructors
-
-        Nothing ->
-            collectedTypes
 
 
 

@@ -1,19 +1,18 @@
 module CodeGen.Builtin.FromString exposing (..)
 
-import CodeGen.GenericTodo exposing (Generic)
+import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Generator
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
 
-generic : Generic
+generic : CodeGenerator
 generic =
-    Generator.define "elm/core/FromString"
+    CodeGenerator.define "elm/core/FromString"
         "elm/core"
         (Function (Typed [ "String" ] "String" []) (Typed [ "Maybe" ] "Maybe" [ Target ]))
         (\name -> "fromString" ++ name)
-        [ Generator.custom
+        [ CodeGenerator.custom
             (\t ->
                 case t of
                     ResolvedType.CustomType _ _ ctors ->

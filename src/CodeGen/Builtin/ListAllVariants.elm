@@ -1,19 +1,18 @@
 module CodeGen.Builtin.ListAllVariants exposing (generic)
 
-import CodeGen.GenericTodo exposing (Generic)
+import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Generator
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
 
-generic : Generic
+generic : CodeGenerator
 generic =
-    Generator.define "elm/core/ListAllGenerics"
+    CodeGenerator.define "elm/core/ListAllGenerics"
         "elm/core"
         (Typed [ "List" ] "List" [ Target ])
         (\name -> "all" ++ name)
-        [ Generator.custom
+        [ CodeGenerator.custom
             (\t ->
                 case t of
                     ResolvedType.CustomType _ _ ctors ->

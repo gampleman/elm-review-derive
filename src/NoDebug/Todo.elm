@@ -1,4 +1,4 @@
-module CodeGen exposing (rule)
+module NoDebug.Todo exposing (rule)
 
 import AssocList exposing (Dict)
 import AssocSet exposing (Set)
@@ -8,14 +8,7 @@ import CodeGen.Builtin.JsonEncoder
 import CodeGen.Builtin.ListAllVariants
 import CodeGen.Builtin.Random
 import CodeGen.Builtin.ToString
-import CodeGen.CodecTodo as CodecTodo exposing (CodecTodo)
-import CodeGen.FromStringTodo as FromStringTodo exposing (FromStringTodo)
-import CodeGen.GenericTodo as GenericTodo
 import CodeGen.Helpers
-import CodeGen.ListVariantsTodo as ListVariantsTodo exposing (ListVariantsTodo)
-import CodeGen.MigrateTodo as MigrateTodo exposing (MigrateTodo)
-import CodeGen.RandomGeneratorTodo as RandomGeneratorTodo
-import CodeGen.ToStringTodo as ToStringTodo exposing (ToStringTodo)
 import Dict
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
@@ -26,7 +19,8 @@ import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Type
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
-import QualifiedType exposing (ExistingImport, QualifiedType, TypeAnnotation_, TypeOrTypeAlias(..), Type_)
+import GenericTodo as GenericTodo
+import Internal.ExistingImport exposing (ExistingImport)
 import ResolvedType exposing (ResolvedType)
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
@@ -119,7 +113,7 @@ importVisitor (Node _ import_) context =
     )
 
 
-initializeGenerics : List GenericTodo.Generic -> Dict.Dict String Dependency -> ProjectContext -> ( List (Error { useErrorForModule : () }), ProjectContext )
+initializeGenerics : List GenericTodo.CodeGenerator -> Dict.Dict String Dependency -> ProjectContext -> ( List (Error { useErrorForModule : () }), ProjectContext )
 initializeGenerics generics deps context =
     ( []
     , { context | generics = GenericTodo.buildFullGeneric (Dict.keys deps) generics }
@@ -323,69 +317,6 @@ elmJsonVisitor _ projectContext =
     ( [], projectContext )
 
 
-convertTypeAnnotation : ModuleContext -> TypeAnnotation -> TypeAnnotation_
-convertTypeAnnotation moduleContext typeAnnotation =
-    case typeAnnotation of
-        TypeAnnotation.GenericType string ->
-            QualifiedType.GenericType_ string
-
-        TypeAnnotation.Typed a nodes ->
-            case QualifiedType.create moduleContext.lookupTable moduleContext.currentModule a of
-                Just qualified ->
-                    QualifiedType.Typed_
-                        qualified
-                        (List.map (Node.value >> convertTypeAnnotation moduleContext) nodes)
-
-                Nothing ->
-                    QualifiedType.Unit_
-
-        TypeAnnotation.Unit ->
-            QualifiedType.Unit_
-
-        TypeAnnotation.Tupled nodes ->
-            QualifiedType.Tupled_ (List.map (Node.value >> convertTypeAnnotation moduleContext) nodes)
-
-        TypeAnnotation.Record recordDefinition ->
-            QualifiedType.Record_ (convertRecordDefinition moduleContext recordDefinition)
-
-        TypeAnnotation.GenericRecord a (Node _ recordDefinition) ->
-            QualifiedType.GenericRecord_
-                (Node.value a)
-                (convertRecordDefinition moduleContext recordDefinition)
-
-        TypeAnnotation.FunctionTypeAnnotation (Node _ a) (Node _ b) ->
-            QualifiedType.FunctionTypeAnnotation_
-                (convertTypeAnnotation moduleContext a)
-                (convertTypeAnnotation moduleContext b)
-
-
-convertRecordDefinition : ModuleContext -> List (Node ( Node a, Node TypeAnnotation )) -> List ( a, TypeAnnotation_ )
-convertRecordDefinition moduleContext recordDefinition =
-    List.map
-        (\(Node _ ( Node _ fieldName, Node _ fieldValue )) ->
-            ( fieldName, convertTypeAnnotation moduleContext fieldValue )
-        )
-        recordDefinition
-
-
-convertType : ModuleContext -> Elm.Syntax.Type.Type -> Type_
-convertType moduleContext type_ =
-    { qualifiedType = QualifiedType.createFromType moduleContext.currentModule type_
-    , generics = List.map Node.value type_.generics
-    , constructors =
-        List.map
-            (\(Node _ constructor) ->
-                { name = Node.value constructor.name
-                , arguments =
-                    List.map
-                        (Node.value >> convertTypeAnnotation moduleContext)
-                        constructor.arguments
-                }
-            )
-            type_.constructors
-    }
-
-
 declarationVisitor : List (Node Declaration) -> ModuleContext -> ( List a, ModuleContext )
 declarationVisitor declarations context =
     let
@@ -507,27 +438,6 @@ declarationVisitor declarations context =
         , genericTodos = getTodos (GenericTodo.getTodos context availableTypes) ++ context.genericTodos
       }
     )
-
-
-declarationVisitorGetTypes : ModuleContext -> Node Declaration -> Maybe TypeOrTypeAlias
-declarationVisitorGetTypes context node_ =
-    case Node.value node_ of
-        Declaration.CustomTypeDeclaration customType ->
-            convertType context customType |> TypeValue |> Just
-
-        Declaration.AliasDeclaration typeAlias ->
-            case Node.value typeAlias.typeAnnotation of
-                TypeAnnotation.Record record ->
-                    TypeAliasValue
-                        (QualifiedType.createFromTypeAlias context.currentModule typeAlias)
-                        (convertRecordDefinition context record)
-                        |> Just
-
-                _ ->
-                    Nothing
-
-        _ ->
-            Nothing
 
 
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })

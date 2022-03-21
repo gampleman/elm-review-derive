@@ -5,7 +5,10 @@
     "license": "MIT",
     "version": "1.0.0",
     "exposed-modules": [
-        "CodeGen"
+        "NoDebug.Todo",
+        "CodeGenerator",
+        "TypePattern",
+        "ResolvedType"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {

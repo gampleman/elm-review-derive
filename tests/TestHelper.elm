@@ -1,6 +1,5 @@
-module TestHelper exposing (codeGenTest, fakeDependency, codeGenTestFailsWith)
+module TestHelper exposing (codeGenTest, codeGenTestFailsWith, fakeDependency)
 
-import CodeGen
 import Elm.CodeGen
 import Elm.Parser
 import Elm.Pretty
@@ -11,6 +10,7 @@ import Elm.Syntax.Declaration exposing (Declaration(..))
 import Elm.Syntax.Expression
 import Elm.Syntax.Node exposing (Node(..))
 import Json.Decode
+import NoDebug.Todo
 import Pretty
 import Review.Project
 import Review.Project.Dependency exposing (Dependency)
@@ -33,7 +33,7 @@ codeGenTestFailsWith description dependencies modules expectedFailureDetails =
                 project =
                     List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
             in
-            Review.Test.runOnModulesWithProjectData project CodeGen.rule inputModules
+            Review.Test.runOnModulesWithProjectData project NoDebug.Todo.rule inputModules
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error
@@ -60,7 +60,7 @@ codeGenTest description dependencies modules expected =
                 project =
                     List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
             in
-            Review.Test.runOnModulesWithProjectData project CodeGen.rule inputModules
+            Review.Test.runOnModulesWithProjectData project NoDebug.Todo.rule inputModules
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error

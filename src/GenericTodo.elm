@@ -1,4 +1,4 @@
-module CodeGen.GenericTodo exposing (Condition(..), Generic(..), GenericTodo, ResolvedGeneric, Resolver, ResolverImpl(..), buildFullGeneric, declarationVisitorGetGenericTypes, getTodos, todoErrors)
+module GenericTodo exposing (CodeGenerator(..), Condition(..), GenericTodo, ResolvedGeneric, Resolver, ResolverImpl(..), buildFullGeneric, declarationVisitorGetGenericTypes, getTodos, todoErrors)
 
 import AssocList exposing (Dict)
 import AssocSet as Set exposing (Set)
@@ -14,9 +14,9 @@ import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.Type exposing (Type, ValueConstructor)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
+import Internal.ExistingImport exposing (ExistingImport)
 import List.Extra
 import Pretty
-import QualifiedType exposing (ExistingImport, QualifiedType, TypeAnnotation_(..), TypeOrTypeAlias(..), Type_, ValueConstructor_)
 import ResolvedType exposing (Reference, ResolvedType)
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable
@@ -29,7 +29,7 @@ import TypePattern exposing (TypePattern)
 -- Public types
 
 
-type Generic
+type CodeGenerator
     = Generic
         { id : String
         , searchPattern : TypePattern
@@ -95,7 +95,7 @@ type alias ResolvedGeneric =
     }
 
 
-buildFullGeneric : List String -> List Generic -> List ResolvedGeneric
+buildFullGeneric : List String -> List CodeGenerator -> List ResolvedGeneric
 buildFullGeneric dependencies generics =
     List.foldr
         (\generic ( amendments, resolved ) ->

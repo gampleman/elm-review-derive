@@ -1,10 +1,9 @@
 module CodeGen.Builtin.Random exposing (generic)
 
-import CodeGen.GenericTodo exposing (Generic)
+import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
 import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
-import Generator
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -28,21 +27,21 @@ randomExtra =
     }
 
 
-generic : Generic
+generic : CodeGenerator
 generic =
-    Generator.define "elm/random/Random.Generator"
+    CodeGenerator.define "elm/random/Random.Generator"
         "elm/random"
         (Typed [ "Random" ] "Generator" [ Target ])
         (\name -> "random" ++ name)
-        [ Generator.int (random.int random.minInt random.maxInt)
-        , Generator.int randomExtra.anyInt |> Generator.ifUserHasDependency "elm-community/random-extra"
-        , Generator.string (random.uniform (CG.string "TODO: Define string options") (CG.list []))
-        , Generator.pipeline random.constant (\arg -> CG.apply [ CG.fqFun [ "Random" ] "map2", CG.parens (CG.binOp CG.piper), arg ])
-        , Generator.pipeline random.constant randomExtra.andMap |> Generator.ifUserHasDependency "elm-community/random-extra"
-        , Generator.mapN 5 (\name ctor args -> CG.apply ([ CG.fqFun [ "Random" ] name, ctor ] ++ args))
-        , Generator.map random.map
-        , Generator.succeed random.constant
-        , Generator.customType
+        [ CodeGenerator.int (random.int random.minInt random.maxInt)
+        , CodeGenerator.int randomExtra.anyInt |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
+        , CodeGenerator.string (random.uniform (CG.string "TODO: Define string options") (CG.list []))
+        , CodeGenerator.pipeline random.constant (\arg -> CG.apply [ CG.fqFun [ "Random" ] "map2", CG.parens (CG.binOp CG.piper), arg ])
+        , CodeGenerator.pipeline random.constant randomExtra.andMap |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
+        , CodeGenerator.mapN 5 (\name ctor args -> CG.apply ([ CG.fqFun [ "Random" ] name, ctor ] ++ args))
+        , CodeGenerator.map random.map
+        , CodeGenerator.succeed random.constant
+        , CodeGenerator.customType
             (\ctors variants ->
                 case variants of
                     [] ->
@@ -54,7 +53,7 @@ generic =
                     ( _, h ) :: t ->
                         CG.pipe (random.uniform h (CG.list (List.map Tuple.second t))) [ random.andThen (CG.val "identity") ]
             )
-        , Generator.customType
+        , CodeGenerator.customType
             (\_ variants ->
                 case variants of
                     [] ->
@@ -63,10 +62,10 @@ generic =
                     ( _, h ) :: t ->
                         randomExtra.choices h (CG.list (List.map Tuple.second t))
             )
-            |> Generator.ifUserHasDependency "elm-community/random-extra"
+            |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
 
         -- Random has a weird way to do custom types, which makes the compositional stuff unnatural looking for enums
-        , Generator.custom
+        , CodeGenerator.custom
             (\t ->
                 case t of
                     ResolvedType.CustomType _ [] [ ( ref, [] ) ] ->

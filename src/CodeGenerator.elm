@@ -1,5 +1,5 @@
-module Generator exposing
-    ( define
+module CodeGenerator exposing
+    ( CodeGenerator, define
     , Definition, ifUserHasDependency
     , int, float, string, char, list
     , succeed, map, mapN
@@ -14,7 +14,7 @@ By type oriented we mean generators that are driven by a type definition provide
 
 By principled we mean that the generated code will for the foremost follow compositional patterns to be able to express (almost) any type.
 
-@docs define
+@docs CodeGenerator, define
 
 
 ### Defining code generators
@@ -43,12 +43,18 @@ By principled we mean that the generated code will for the foremost follow compo
 
 -}
 
-import CodeGen.GenericTodo exposing (Condition(..), Generic(..), Resolver, ResolverImpl(..))
 import Elm.CodeGen as CG
 import Elm.Syntax.Expression exposing (Expression)
 import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation)
+import GenericTodo exposing (CodeGenerator(..), Condition(..), Resolver, ResolverImpl(..))
 import ResolvedType exposing (ResolvedType)
 import TypePattern exposing (TypePattern)
+
+
+{-| Represents a code generator configuration.
+-}
+type alias CodeGenerator =
+    GenericTodo.CodeGenerator
 
 
 {-| Create a code generator. This requires the following pieces:
@@ -75,7 +81,7 @@ For example, if we were to build a generator for `Random.Generator someType` val
 Also note that you will always get module names normalized, i.e. you will always see `( [ "Random" ], "Generator" )` even if the user has `import Random as Foo exposing (Generator)`, so no need to worry about that.
 
 -}
-define : String -> String -> TypePattern -> (String -> String) -> List Definition -> Generic
+define : String -> String -> TypePattern -> (String -> String) -> List Definition -> CodeGenerator
 define id dependency searchPattern makeName definitions =
     List.foldl
         (\(Definition resolvers backupResolvers) thing ->
