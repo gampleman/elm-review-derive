@@ -354,4 +354,146 @@ randomB : Random.Generator B
 randomB =
     Random.map B (Random.int Random.minInt Random.maxInt)
 """
+        , codeGenTest "Applied generic"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Foo a
+    = Foo a
+
+generator : Random.Generator (Foo Int)
+generator =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo a
+    = Foo a
+
+generator : Random.Generator (Foo Int)
+generator =
+    Random.map Foo (Random.int Random.minInt Random.maxInt)
+"""
+        , codeGenTest "full generic 1 arg"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Foo a
+    = Foo a
+
+generator : Random.Generator a -> Random.Generator (Foo a)
+generator a =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo a
+    = Foo a
+
+generator : Random.Generator a -> Random.Generator (Foo a)
+generator a =
+    Random.map Foo a
+"""
+        , codeGenTest "full generic 1 arg with aliasing"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Foo a
+    = Foo a
+
+generator : Random.Generator b -> Random.Generator (Foo b)
+generator x =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo a
+    = Foo a
+
+generator : Random.Generator b -> Random.Generator (Foo b)
+generator x =
+    Random.map Foo x
+"""
+        , codeGenTest "full generic 2 arg"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Foo a b
+    = Foo a b
+
+generator : Random.Generator a -> Random.Generator b -> Random.Generator (Foo a b)
+generator a b =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo a b
+    = Foo a b
+
+generator : Random.Generator a -> Random.Generator b -> Random.Generator (Foo a b)
+generator a b =
+    Random.map2 Foo a b
+"""
+        , codeGenTest "full generic 2 arg aliasing"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Foo a b
+    = Foo b a
+
+generator : Random.Generator x -> Random.Generator y -> Random.Generator (Foo y x)
+generator d s =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo a b
+    = Foo b a
+
+generator : Random.Generator x -> Random.Generator y -> Random.Generator (Foo y x)
+generator d s =
+    Random.map2 Foo d s
+"""
+        , codeGenTest "partial generic"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type alias Bar x =
+    { x : x }
+
+type Foo a
+    = Foo (Bar a) (Bar Int)
+
+generator : Random.Generator x -> Random.Generator (Foo x)
+generator y =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type alias Bar x =
+    { x : x }
+
+type Foo a
+    = Foo (Bar a) (Bar Int)
+
+generator : Random.Generator x -> Random.Generator (Foo x)
+generator y =
+    Random.map2 Foo (randomBar y) (randomBar (Random.int Random.minInt Random.maxInt))
+
+randomBar : Random.Generator x -> Random.Generator (Bar x)
+randomBar x =
+    Random.map Bar x
+"""
         ]

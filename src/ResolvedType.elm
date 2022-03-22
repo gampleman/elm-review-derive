@@ -97,7 +97,7 @@ Let's look at some simple examples and see how they would be represented:
 
     List Int --> Opaque { modulePath = ["Basics"], name = "List" } [Opaque { modulePath = ["Basics"], name = "Int" } []]
 
-    List a --> Opaque { modulePath = ["Basics"], name = "List" } [ GenericType "a" ]
+    List a --> Opaque { modulePath = ["Basics"], name = "List" } [ GenericType "a" Nothing ]
 
     Int -> String  --> Function [ Opaque { modulePath = ["Basics"], name = "Int" } [] ] Opaque { modulePath = ["String"], name = "String" } []
 
@@ -109,24 +109,24 @@ Let's look at some simple examples and see how they would be represented:
 
 Now for some more complex examples:
 
-type Foo a =
-Bar a
+    type Foo a =
+        Bar a
 
-Foo a --> CustomType { modulePath = [], name = "Foo" } [ GenericType "a" ][ ( { modulePath = [], name = "Bar" }, [ GenericType "a" ] ) ]
+    Foo a --> CustomType { modulePath = [], name = "Foo" } [ "a" ] [ ( { modulePath = [], name = "Bar" }, [ GenericType "a" Nothing ] ) ]
 
-Foo Int --> CustomType { modulePath = [], name = "Foo" } [ Opaque { modulePath = ["Basics"], name = "Int" } [] ][ ( { modulePath = [], name = "Bar" }, [ Opaque { modulePath = ["Basics"], name = "Int" } [] ] ) ]
+    Foo Int --> CustomType { modulePath = [], name = "Foo" } [ "a" ] [ ( { modulePath = [], name = "Bar" }, [ GenericType "a" (Just (Opaque { modulePath = ["Basics"], name = "Int" } [] ))] ) ]
 
 Note how in `Foo Int` the `Int` value is replaced in the definition.
 
     type alias Qux a =
         { foo : a }
 
-    Qux a --> TypeAliasRecord { modulePath = [], name = "Qux" } [ GenericType "a" ] [( "foo", GenericType "a" )]
-    Qux Int --> TypeAliasRecord { modulePath = [], name = "Qux" } [ Opaque { modulePath = ["Basics"], name = "Int" } [] ] [( "foo", Opaque { modulePath = ["Basics"], name = "Int" } [] )]
+    Qux a --> TypeAlias { modulePath = [], name = "Qux" } [ "a" ] [( "foo", GenericType "a" Nothing )]
+    Qux Int --> TypeAliasRecord { modulePath = [], name = "Qux" } [ "a" ] [( "foo", GenericType "a" (Just (Opaque { modulePath = ["Basics"], name = "Int" } [] )))]
 
 -}
 type ResolvedType
-    = GenericType String
+    = GenericType String (Maybe ResolvedType)
     | Opaque Reference (List ResolvedType)
       --TODO: | Recursive Reference (List ResolvedType)
     | Function (List ResolvedType) ResolvedType
@@ -140,7 +140,7 @@ fromTypeSignature : ModuleNameLookupTable -> List ResolvedType -> ModuleName -> 
 fromTypeSignature lookupTable availableTypes currentModule typeAnnotation =
     case typeAnnotation of
         TA.GenericType var ->
-            GenericType var
+            GenericType var Nothing
 
         TA.Unit ->
             Tuple []
@@ -229,8 +229,8 @@ resolveLocalReferences currentModule types =
 
         traverse t =
             case t of
-                GenericType _ ->
-                    t
+                GenericType n child ->
+                    GenericType n (Maybe.map traverse child)
 
                 Opaque ref args ->
                     let
@@ -329,13 +329,21 @@ computeApplication applicant arguments =
 replaceBindings : Dict.Dict String ResolvedType -> ResolvedType -> ResolvedType
 replaceBindings bindings t =
     case t of
-        GenericType name ->
+        GenericType name Nothing ->
             case Dict.get name bindings of
-                Just r ->
-                    r
+                Just (GenericType newName Nothing) ->
+                    GenericType newName Nothing
 
-                Nothing ->
-                    t
+                res ->
+                    GenericType name res
+
+        GenericType name (Just child) ->
+            case Dict.get name bindings of
+                Just (GenericType newName Nothing) ->
+                    GenericType newName Nothing
+
+                _ ->
+                    GenericType name (Just (replaceBindings bindings child))
 
         Opaque ref args ->
             Opaque ref (List.map (replaceBindings bindings) args)
@@ -345,17 +353,14 @@ replaceBindings bindings t =
 
         TypeAlias ref varNames child ->
             TypeAlias ref
-                (List.filterMap
+                (List.map
                     (\varName ->
                         case Dict.get varName bindings of
-                            Just (GenericType newName) ->
-                                Just newName
-
-                            Nothing ->
-                                Just varName
+                            Just (GenericType newName Nothing) ->
+                                newName
 
                             _ ->
-                                Nothing
+                                varName
                     )
                     varNames
                 )
@@ -366,17 +371,14 @@ replaceBindings bindings t =
 
         CustomType ref varNames ctors ->
             CustomType ref
-                (List.filterMap
+                (List.map
                     (\varName ->
                         case Dict.get varName bindings of
-                            Just (GenericType newName) ->
-                                Just newName
-
-                            Nothing ->
-                                Just varName
+                            Just (GenericType newName Nothing) ->
+                                newName
 
                             _ ->
-                                Nothing
+                                varName
                     )
                     varNames
                 )
@@ -392,7 +394,7 @@ replaceBindings bindings t =
 replaceOpaqueArgs : List ResolvedType -> List ResolvedType -> List ResolvedType
 replaceOpaqueArgs args vals =
     case args of
-        (GenericType _) :: rest ->
+        (GenericType _ Nothing) :: rest ->
             case vals of
                 h :: t ->
                     h :: replaceOpaqueArgs rest t
