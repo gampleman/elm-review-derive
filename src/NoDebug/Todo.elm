@@ -337,6 +337,7 @@ declarationVisitor declarations context =
         types =
             ResolvedType.resolveLocalReferences context.currentModule unresolvedTypes
 
+        -- |> ResolvedType.resolveLocalReferences context.currentModule
         availableTypes =
             types ++ externalAvailableTypes
 

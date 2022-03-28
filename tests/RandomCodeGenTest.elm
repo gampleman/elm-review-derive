@@ -496,4 +496,82 @@ randomBar : Random.Generator x -> Random.Generator (Bar x)
 randomBar x =
     Random.map Bar x
 """
+        , codeGenTest "recursive"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Tree a
+    = Node (Tree a) a (Tree a)
+    | Empty
+
+generator : Random.Generator a -> Random.Generator (Tree a)
+generator childGenerator =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Tree a
+    = Node (Tree a) a (Tree a)
+    | Empty
+
+generator : Random.Generator a -> Random.Generator (Tree a)
+generator childGenerator =
+    Random.uniform
+        (Random.map3
+            Node
+            (Random.lazy (\\() -> generator childGenerator))
+            childGenerator
+            (Random.lazy (\\() -> generator childGenerator))
+        )
+        [ Random.constant Empty ]
+        |> Random.andThen identity
+"""
+        , codeGenTest "complex mutually recursive"
+            [ elmRandom ]
+            [ """module A exposing (..)
+import Random
+
+type Foo
+    = Foo Bar 
+
+type Bar
+    = Bar (List Baz)
+
+type Baz
+    = Baz (Maybe Bar)
+
+generator : Random.Generator Foo
+generator =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo
+    = Foo Bar 
+
+type Bar
+    = Bar (List Baz)
+
+type Baz
+    = Baz (Maybe Bar)
+
+generator : Random.Generator Foo
+generator =
+    Random.map Foo randomBar
+
+randomBar : Random.Generator Bar
+randomBar =
+    Random.map Bar (Random.list 3 randomBaz)
+
+randomBaz : Random.Generator Baz
+randomBaz =
+    Random.map
+        Baz
+        (Random.uniform (Random.map Just (Random.lazy (\\() -> randomBar))) [ Random.constant Nothing ]
+            |> Random.andThen identity
+        )
+"""
         ]

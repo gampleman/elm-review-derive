@@ -1,6 +1,6 @@
 module ResolvedType exposing
     ( ResolvedType(..)
-    , Reference, fromDeclaration, fromTypeSignature, refToExpr, resolveLocalReferences
+    , Reference, fromDeclaration, fromTypeSignature, matchType, refToExpr, resolveLocalReferences
     )
 
 {-|
@@ -205,66 +205,193 @@ fromDeclaration lookupTable availableTypes currentModule declaration =
             Nothing
 
 
+map : (ResolvedType -> ResolvedType) -> ResolvedType -> ResolvedType
+map fn t =
+    fn
+        (case t of
+            GenericType n child ->
+                GenericType n (Maybe.map (map fn) child)
+
+            Opaque ref args ->
+                let
+                    newArgs =
+                        List.map (map fn) args
+                in
+                Opaque ref newArgs
+
+            Function args res ->
+                Function (List.map (map fn) args) (map fn res)
+
+            TypeAlias ref gens arg ->
+                TypeAlias ref gens (map fn arg)
+
+            AnonymousRecord rec ->
+                AnonymousRecord <|
+                    List.map (Tuple.mapSecond (map fn)) rec
+
+            CustomType ref args ctors ->
+                CustomType ref args (List.map (Tuple.mapSecond (List.map (map fn))) ctors)
+
+            Tuple items ->
+                Tuple (List.map (map fn) items)
+        )
+
+
 resolveLocalReferences : ModuleName -> List ResolvedType -> List ResolvedType
 resolveLocalReferences currentModule types =
     let
-        nameDict =
+        getRefKey t =
+            case t of
+                Opaque ref _ ->
+                    Just ref.name
+
+                TypeAlias ref _ _ ->
+                    Just ref.name
+
+                CustomType ref _ _ ->
+                    Just ref.name
+
+                _ ->
+                    Nothing
+
+        initialNameDict =
             List.filterMap
                 (\t ->
-                    case t of
-                        Opaque ref _ ->
-                            Just ( ref.name, t )
-
-                        TypeAlias ref _ _ ->
-                            Just ( ref.name, t )
-
-                        CustomType ref _ _ ->
-                            Just ( ref.name, t )
-
-                        _ ->
-                            Nothing
+                    getRefKey t |> Maybe.map (\a -> Tuple.pair a t)
                 )
                 types
                 |> Dict.fromList
 
-        traverse t =
-            case t of
-                GenericType n child ->
-                    GenericType n (Maybe.map traverse child)
+        resolveLocalReference t ( names, rest ) =
+            let
+                result =
+                    traverse names t t
+            in
+            case getRefKey result of
+                Just n ->
+                    ( Dict.insert n result names, result :: rest )
 
-                Opaque ref args ->
-                    let
-                        newArgs =
-                            List.map traverse args
-                    in
-                    if ref.modulePath == currentModule then
-                        case Dict.get ref.name nameDict of
-                            Just res ->
-                                computeApplication res newArgs
+                Nothing ->
+                    ( names, result :: rest )
 
-                            Nothing ->
-                                Opaque ref newArgs
+        cutOfMutualRecursionOverflow parent t =
+            case parent of
+                CustomType parentRef _ _ ->
+                    map
+                        (\res ->
+                            case res of
+                                CustomType ref args _ ->
+                                    if ref == parentRef then
+                                        Opaque ref (List.map (\a -> GenericType a Nothing) args)
 
-                    else
-                        Opaque ref newArgs
+                                    else
+                                        res
 
-                Function args res ->
-                    Function (List.map traverse args) (traverse res)
+                                _ ->
+                                    res
+                        )
+                        t
 
-                TypeAlias ref gens arg ->
-                    TypeAlias ref gens (traverse arg)
+                _ ->
+                    t
 
-                AnonymousRecord rec ->
-                    AnonymousRecord <|
-                        List.map (Tuple.mapSecond traverse) rec
+        traverse nameDict parent =
+            map
+                (\t ->
+                    case t of
+                        Opaque ref args ->
+                            if ref.modulePath == currentModule && not (matchType parent t) then
+                                case Dict.get ref.name nameDict of
+                                    Just res ->
+                                        computeApplication res args
+                                            |> cutOfMutualRecursionOverflow parent
 
-                CustomType ref args ctors ->
-                    CustomType ref args (List.map (Tuple.mapSecond (List.map traverse)) ctors)
+                                    Nothing ->
+                                        Opaque ref args
 
-                Tuple items ->
-                    Tuple (List.map traverse items)
+                            else
+                                Opaque ref args
+
+                        _ ->
+                            t
+                )
     in
-    List.map traverse types
+    List.foldr resolveLocalReference ( initialNameDict, [] ) types |> Tuple.second
+
+
+logType label t =
+    let
+        _ =
+            Debug.log (label ++ ": " ++ toDebugString t) ""
+    in
+    t
+
+
+logTypes label ts =
+    let
+        _ =
+            Debug.log (((label :: List.map toDebugString ts) |> joinWithPadding "- ") ++ "\n") ""
+    in
+    ts
+
+
+matchType : ResolvedType -> ResolvedType -> Bool
+matchType full possiblyRef =
+    case ( full, possiblyRef ) of
+        ( CustomType ref1 gens1 _, Opaque ref2 gens2 ) ->
+            ref1 == ref2 && List.length gens1 == List.length gens2
+
+        _ ->
+            full == possiblyRef
+
+
+joinWithPadding : String -> List String -> String
+joinWithPadding delim =
+    List.map (String.lines >> String.join "\n    ")
+        >> String.join ("\n    " ++ delim)
+
+
+toDebugString : ResolvedType -> String
+toDebugString t =
+    case t of
+        GenericType string Nothing ->
+            string
+
+        GenericType string (Just child) ->
+            string ++ " = " ++ toDebugString child
+
+        Opaque ref children ->
+            String.join " " (formatRef ref :: List.map toDebugString children)
+
+        CustomType ref generics ctors ->
+            "type "
+                ++ formatRef ref
+                ++ " "
+                ++ String.join " " generics
+                ++ "= \n    "
+                ++ joinWithPadding "|"
+                    (List.map
+                        (\( ctorRef, args ) ->
+                            formatRef ctorRef ++ " " ++ String.join " " (List.map (toDebugString >> (\arg -> "<" ++ arg ++ ">")) args)
+                        )
+                        ctors
+                    )
+
+        _ ->
+            Debug.toString t
+
+
+
+-- | Function (List ResolvedType) ResolvedType
+-- | TypeAlias Reference (List String) ResolvedType
+-- | AnonymousRecord (List ( String, ResolvedType ))
+-- |
+-- | Tuple (List ResolvedType)
+
+
+formatRef : Reference -> String
+formatRef ref =
+    String.join "." (ref.modulePath ++ [ ref.name ])
 
 
 lookupDefinition : Reference -> List ResolvedType -> ResolvedType

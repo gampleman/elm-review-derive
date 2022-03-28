@@ -17,6 +17,8 @@ random =
     , map2 = \fn arg1 arg2 -> CG.apply [ CG.fqFun [ "Random" ] "map2", fn, arg1, arg2 ]
     , constant = \arg -> CG.apply [ CG.fqFun [ "Random" ] "constant", arg ]
     , andThen = \arg -> CG.apply [ CG.fqFun [ "Random" ] "andThen", arg ]
+    , list = \child -> CG.apply [ CG.fqFun [ "Random" ] "list", CG.int 3, child ]
+    , lazy = \fn -> CG.apply [ CG.fqFun [ "Random" ] "lazy", fn ]
     }
 
 
@@ -36,6 +38,11 @@ generic =
         [ CodeGenerator.int (random.int random.minInt random.maxInt)
         , CodeGenerator.int randomExtra.anyInt |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
         , CodeGenerator.string (random.uniform (CG.string "TODO: Define string options") (CG.list []))
+        , CodeGenerator.list random.list
+        , CodeGenerator.maybe
+            (\justVariant ->
+                CG.pipe (random.uniform (random.map (CG.fun "Just") justVariant) (CG.list [ random.constant (CG.val "Nothing") ])) [ random.andThen (CG.val "identity") ]
+            )
         , CodeGenerator.pipeline random.constant (\arg -> CG.apply [ CG.fqFun [ "Random" ] "map2", CG.parens (CG.binOp CG.piper), arg ])
         , CodeGenerator.pipeline random.constant randomExtra.andMap |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
         , CodeGenerator.mapN 5 (\name ctor args -> CG.apply ([ CG.fqFun [ "Random" ] name, ctor ] ++ args))
@@ -80,5 +87,9 @@ generic =
 
                     _ ->
                         Nothing
+            )
+        , CodeGenerator.lambdaBreaker
+            (\expr ->
+                random.lazy (CG.lambda [ CG.unitPattern ] expr)
             )
         ]

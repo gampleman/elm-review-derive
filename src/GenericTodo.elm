@@ -36,6 +36,7 @@ type CodeGenerator
         , resolvers : List Resolver
         , condition : Condition
         , makeName : String -> String
+        , lambdaBreaker : Maybe { condition : Condition, implementation : Expression -> Expression }
         }
     | Amendment String (List Resolver)
 
@@ -91,6 +92,7 @@ type alias ResolvedGeneric =
     , resolvers : List ResolverImpl
     , makeName : String -> String
     , makeAnnotation : TypeAnnotation -> TypeAnnotation
+    , lambdaBreaker : Expression -> Expression
     }
 
 
@@ -110,6 +112,17 @@ buildFullGeneric dependencies generics =
                           , resolvers = processResolvers dependencies (Dict.get gen.id amendments |> Maybe.withDefault []) ++ processResolvers dependencies gen.resolvers
                           , makeName = gen.makeName
                           , makeAnnotation = TypePattern.generate gen.searchPattern
+                          , lambdaBreaker =
+                                Maybe.andThen
+                                    (\breaker ->
+                                        if evalCondition dependencies breaker.condition then
+                                            Just breaker.implementation
+
+                                        else
+                                            Nothing
+                                    )
+                                    gen.lambdaBreaker
+                                    |> Maybe.withDefault identity
                           }
                             :: resolved
                         )
@@ -363,7 +376,21 @@ todoErrors projectContext currentModule todo =
 
 createFixes : ProjectContext a -> ResolvedGeneric -> { newImportStartRow : Int, existingImports : List ExistingImport } -> ModuleName -> GenericTodo -> Result String (List Review.Fix.Fix)
 createFixes projectContext generic imports currentModule todo =
-    generate True { generic = generic, existingImports = imports.existingImports, currentModule = currentModule, providers = List.filter (\provider -> provider.genericId == generic.id) projectContext.genericProviders, genericArguments = todo.genericArguments } todo.childType
+    generate True
+        { generic = generic, existingImports = imports.existingImports, currentModule = currentModule, providers = List.filter (\provider -> provider.genericId == generic.id) projectContext.genericProviders, genericArguments = todo.genericArguments }
+        (case todo.childType of
+            ResolvedType.CustomType ref _ _ ->
+                [ { name = todo.functionName
+                  , ref = ref
+                  , genericArguments = todo.genericArguments
+                  , isLambdaProtected = False
+                  }
+                ]
+
+            _ ->
+                []
+        )
+        todo.childType
         |> Result.map
             (\( expr, declarations_, _ ) ->
                 let
@@ -425,9 +452,31 @@ type alias GenerationContext =
     }
 
 
-generate : Bool -> GenerationContext -> ResolvedType -> Result String ( Expression, List Function, List ( String, Expression ) )
-generate isTopLevel context type_ =
-    case Helpers.find (\provider -> matchType provider.childType type_) context.providers of
+type alias RecursionStack =
+    List
+        { name : String
+        , ref : Reference
+        , genericArguments : Dict.Dict String String
+        , isLambdaProtected : Bool
+        }
+
+
+type alias CodeGenerationResult =
+    Result
+        -- Error msg
+        String
+        ( -- The expression being currently generated
+          Expression
+          -- Auxiliary definitions
+        , List Function
+          -- Bindings resulting from generics
+        , List ( String, Expression )
+        )
+
+
+generate : Bool -> GenerationContext -> RecursionStack -> ResolvedType -> CodeGenerationResult
+generate isTopLevel context stack type_ =
+    case Helpers.find (\provider -> ResolvedType.matchType provider.childType type_) context.providers of
         Just provider ->
             Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
 
@@ -445,7 +494,7 @@ generate isTopLevel context type_ =
                             )
 
                 ResolvedType.GenericType name (Just child) ->
-                    case generate True context child of
+                    case generate True context stack child of
                         Ok ( expr, defs, bindings ) ->
                             Ok ( CG.val name, defs, ( name, expr ) :: bindings )
 
@@ -453,35 +502,44 @@ generate isTopLevel context type_ =
                             Err e
 
                 ResolvedType.Opaque ref args ->
-                    applyResolvers
-                        (\resolver ->
-                            case resolver of
-                                PrimitiveResolver reference fn ->
-                                    if reference == ref then
-                                        List.map (generate False context) args
-                                            |> combineResults
-                                            |> Result.map (\( x, y, z ) -> ( fn args x, y, z ))
-                                            |> transmogrify
+                    case Helpers.find (\recurse -> recurse.ref == ref) stack of
+                        Just recurse ->
+                            if recurse.isLambdaProtected then
+                                Ok ( CG.apply (CG.fun recurse.name :: List.map CG.val (Dict.values recurse.genericArguments)), [], [] )
 
-                                    else
-                                        Nothing
+                            else
+                                Ok ( context.generic.lambdaBreaker (CG.apply (CG.fun recurse.name :: List.map CG.val (Dict.values recurse.genericArguments))), [], [] )
 
-                                _ ->
-                                    Nothing
-                        )
-                        ref.name
-                        context.generic
-                        type_
+                        Nothing ->
+                            applyResolvers
+                                (\resolver ->
+                                    case resolver of
+                                        PrimitiveResolver reference fn ->
+                                            if reference == ref then
+                                                List.map (generate False context stack) args
+                                                    |> combineResults
+                                                    |> Result.map (\( x, y, z ) -> ( fn args x, y, z ))
+                                                    |> transmogrify
+
+                                            else
+                                                Nothing
+
+                                        _ ->
+                                            Nothing
+                                )
+                                ref.name
+                                context.generic
+                                type_
 
                 ResolvedType.Function args result ->
                     Err "Could not generate definition for a function. Function types are not yet supported"
 
                 ResolvedType.TypeAlias ref generics (ResolvedType.AnonymousRecord children) ->
-                    applyCombiner type_ (ResolvedType.refToExpr context.currentModule context.existingImports ref) (List.map Tuple.second children) context
+                    applyCombiner type_ (ResolvedType.refToExpr context.currentModule context.existingImports ref) (List.map Tuple.second children) context stack
                         |> makeExternalDeclaration isTopLevel context.generic ref generics
 
                 ResolvedType.TypeAlias ref _ childType ->
-                    generate False context childType
+                    generate False context stack childType
 
                 ResolvedType.AnonymousRecord children ->
                     applyCombiner type_
@@ -491,20 +549,22 @@ generate isTopLevel context type_ =
                         )
                         (List.map Tuple.second children)
                         context
+                        stack
 
                 ResolvedType.Tuple args ->
                     case List.length args of
                         0 ->
-                            generate False context (ResolvedType.Opaque { modulePath = [ "Basics" ], name = "()" } [])
+                            generate False context stack (ResolvedType.Opaque { modulePath = [ "Basics" ], name = "()" } [])
 
                         2 ->
-                            applyCombiner type_ (CG.fqFun [ "Tuple" ] "pair") args context
+                            applyCombiner type_ (CG.fqFun [ "Tuple" ] "pair") args context stack
 
                         3 ->
                             applyCombiner type_
                                 (CG.lambda [ CG.varPattern "a", CG.varPattern "b", CG.varPattern "c" ] (CG.tuple [ CG.val "a", CG.val "b", CG.val "c" ]))
                                 args
                                 context
+                                stack
 
                         _ ->
                             Err "You tried to use an illegal tuple type"
@@ -515,8 +575,6 @@ generate isTopLevel context type_ =
                         ref
                         generics
                         (case ctors of
-                            -- [ ( ctorRef, args ) ] ->
-                            --     applyCombiner (ResolvedType.Opaque ctorRef args) (ResolvedType.refToExpr currentModule existingImports ctorRef) args generic existingImports currentModule genericProviders
                             _ ->
                                 applyResolvers
                                     (\resolver ->
@@ -525,7 +583,21 @@ generate isTopLevel context type_ =
                                                 ctors
                                                     |> List.map
                                                         (\( ctorRef, args ) ->
-                                                            applyCombiner (ResolvedType.Opaque ctorRef args) (ResolvedType.refToExpr context.currentModule context.existingImports ctorRef) args context
+                                                            applyCombiner (ResolvedType.Opaque ctorRef args)
+                                                                (ResolvedType.refToExpr context.currentModule context.existingImports ctorRef)
+                                                                args
+                                                                context
+                                                                (if isTopLevel then
+                                                                    stack
+
+                                                                 else
+                                                                    { name = context.generic.makeName ref.name
+                                                                    , ref = ref
+                                                                    , genericArguments = Dict.empty
+                                                                    , isLambdaProtected = False
+                                                                    }
+                                                                        :: stack
+                                                                )
                                                         )
                                                     |> combineResults
                                                     |> Result.map (\( x, y, z ) -> ( x |> List.map2 (\( ctorRef, _ ) -> Tuple.pair ctorRef.name) ctors |> fn ctors, y, z ))
@@ -540,22 +612,7 @@ generate isTopLevel context type_ =
                         )
 
 
-
--- _ ->
---     Err "Generics are not yet supported"
-
-
-matchType : ResolvedType -> ResolvedType -> Bool
-matchType full possiblyRef =
-    case ( full, possiblyRef ) of
-        ( ResolvedType.CustomType ref1 _ _, ResolvedType.Opaque ref2 [] ) ->
-            ref1 == ref2
-
-        _ ->
-            full == possiblyRef
-
-
-makeExternalDeclaration : Bool -> ResolvedGeneric -> Reference -> List String -> Result String ( Expression, List Function, List ( String, Expression ) ) -> Result String ( Expression, List Function, List ( String, Expression ) )
+makeExternalDeclaration : Bool -> ResolvedGeneric -> Reference -> List String -> CodeGenerationResult -> CodeGenerationResult
 makeExternalDeclaration isTopLevel generic ref generics defExpr =
     if isTopLevel then
         Result.map
@@ -632,7 +689,7 @@ makeExternalDeclaration isTopLevel generic ref generics defExpr =
             defExpr
 
 
-combineResults : List (Result String ( Expression, List Function, List ( String, Expression ) )) -> Result String ( List Expression, List Function, List ( String, Expression ) )
+combineResults : List CodeGenerationResult -> Result String ( List Expression, List Function, List ( String, Expression ) )
 combineResults =
     List.foldr
         (Result.map2
@@ -643,6 +700,7 @@ combineResults =
         (Ok ( [], [], [] ))
 
 
+applyResolvers : (ResolverImpl -> Maybe CodeGenerationResult) -> String -> ResolvedGeneric -> ResolvedType -> CodeGenerationResult
 applyResolvers fn name generic t =
     Helpers.findMap
         (\resolver ->
@@ -658,14 +716,15 @@ applyResolvers fn name generic t =
         |> Result.andThen identity
 
 
-applyCombiner t ctor children context =
+applyCombiner : ResolvedType -> Expression -> List ResolvedType -> GenerationContext -> RecursionStack -> CodeGenerationResult
+applyCombiner t ctor children context stack =
     applyResolvers
         (\resolver ->
             case resolver of
                 Combiner fn ->
                     let
                         childExprsAndDefs =
-                            List.map (generate False context) children
+                            List.map (generate False context stack) children
                                 |> combineResults
                     in
                     childExprsAndDefs
@@ -719,7 +778,8 @@ applyBindings bindings =
 {-| This simplifies expressions to make them easier on the eyes, but still super simple to program:
 
 1.  Transforms `((\foo -> foo + 1) bar)` to `(bar + 1)`
-2.  Transforms (\\foo qux -> bar foo qux) to `bar`
+2.  Transforms `(\\foo qux -> bar foo qux)` to `bar`
+3.  Transforms `((foo bar) baz)` to `(foo bar baz)`
 
 This means that generators can use the simple composability of explicit lambdas but get nice looking but still correct code.
 
@@ -749,6 +809,9 @@ postprocessExpression expression =
     Helpers.traverseExpression
         (\expr oo ->
             ( case expr of
+                Expression.Application ((Node _ (Expression.ParenthesizedExpression (Node _ (Expression.Application xs)))) :: ys) ->
+                    Expression.Application (xs ++ ys)
+
                 Expression.Application ((Node _ (Expression.LambdaExpression lambda)) :: args) ->
                     if List.length lambda.args == List.length args && List.all isPlainPattern lambda.args then
                         let
@@ -841,7 +904,7 @@ fixFunctionDeclaration func =
                     if List.isEmpty declaration.arguments then
                         ( lambda.expression, lambda.args )
 
-                    else if List.length declaration.arguments == List.length lambda.args && List.all isPlainPattern declaration.arguments && List.all isPlainPattern lambda.args then
+                    else if List.all isPlainPattern declaration.arguments && List.all isPlainPattern lambda.args then
                         let
                             bindings =
                                 List.map2
@@ -853,8 +916,8 @@ fixFunctionDeclaration func =
                                             _ ->
                                                 Nothing
                                     )
-                                    lambda.args
-                                    declaration.arguments
+                                    (List.reverse lambda.args)
+                                    (List.reverse declaration.arguments)
                                     |> List.filterMap identity
                                     |> Dict.fromList
                         in

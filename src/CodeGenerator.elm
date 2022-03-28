@@ -5,7 +5,7 @@ module CodeGenerator exposing
     , succeed, map, mapN
     , customType
     , custom
-    , combiner, dict, maybe, pipeline, triple, tuple, unit
+    , combiner, dict, lambdaBreaker, maybe, pipeline, triple, tuple, unit
     )
 
 {-| This module let's you define (or change) type-oriented principled code generators.
@@ -84,14 +84,20 @@ Also note that you will always get module names normalized, i.e. you will always
 define : String -> String -> TypePattern -> (String -> String) -> List Definition -> CodeGenerator
 define id dependency searchPattern makeName definitions =
     List.foldl
-        (\(Definition resolver) thing ->
-            { thing | resolvers = resolver :: thing.resolvers }
+        (\def thing ->
+            case def of
+                Definition resolver ->
+                    { thing | resolvers = resolver :: thing.resolvers }
+
+                LambdaBreaker breaker ->
+                    { thing | lambdaBreaker = Just breaker }
         )
         { id = id
         , searchPattern = searchPattern
         , resolvers = []
         , condition = Dependencies [ dependency ]
         , makeName = makeName
+        , lambdaBreaker = Nothing
         }
         definitions
         |> Generic
@@ -102,22 +108,37 @@ Fundamentally you can think of all the definitions put together as forming a rat
 -}
 type Definition
     = Definition Resolver
+    | LambdaBreaker { condition : Condition, implementation : Expression -> Expression }
 
 
 {-| Apply this definition conditionally if the user has this specific dependency installed (can be chained). Intended for things like json-pipeline or random-extra.
 -}
 ifUserHasDependency : String -> Definition -> Definition
-ifUserHasDependency dependency (Definition resolver) =
-    Definition
-        { resolver
-            | condition =
-                case resolver.condition of
-                    Always ->
-                        Dependencies [ dependency ]
+ifUserHasDependency dependency definition =
+    case definition of
+        Definition resolver ->
+            Definition
+                { resolver
+                    | condition =
+                        case resolver.condition of
+                            Always ->
+                                Dependencies [ dependency ]
 
-                    Dependencies existing ->
-                        Dependencies (dependency :: existing)
-        }
+                            Dependencies existing ->
+                                Dependencies (dependency :: existing)
+                }
+
+        LambdaBreaker breaker ->
+            LambdaBreaker
+                { breaker
+                    | condition =
+                        case breaker.condition of
+                            Always ->
+                                Dependencies [ dependency ]
+
+                            Dependencies existing ->
+                                Dependencies (dependency :: existing)
+                }
 
 
 simpleDef : ResolverImpl -> Definition
@@ -348,3 +369,63 @@ The recommendation here is to use the normal definitions and only use this for e
 custom : (ResolvedType -> Maybe Expression) -> Definition
 custom fn =
     UniversalResolver fn |> simpleDef
+
+
+{-| Elm only allows recursive definitions if there is a lambda somewhere in the chain. For instance:
+
+    naiveListDecoder : Decoder (List Int)
+    naiveListDecoder =
+        Decode.oneOf
+            [ Decode.map2 (::) (Decode.index 0 Decode.int) (Decode.index 1 naiveListDecoder)
+            , Decode.null []
+            ]
+
+would fail to compile, as this would crash immediately on calling the program with an infinite loop. Incidentally this would compile:
+
+    naiveListDecoder2 : Decoder a -> Decoder (List a)
+    naiveListDecoder2 childDecoder =
+        Decode.oneOf
+            [ Decode.map2 (::) (Decode.index 0 childDecoder) (Decode.index 1 (naiveListDecoder2 childDecoder))
+            , Decode.null []
+            ]
+
+But the code would fail at runtime with a Maximum Call Stack Exceeded exception. However, this version would work fine:
+
+    smartListDecoder : Decoder (List Int)
+    smartListDecoder =
+        Decode.field "length" Decode.int
+            |> Decode.andThen
+                (\l ->
+                    case l of
+                        0 ->
+                            Decode.succeed []
+
+                        2 ->
+                            Decode.map2 (::) (Decode.index 0 Decode.int) (Decode.index 1 smartListDecoder)
+
+                        _ ->
+                            Decode.fail "Unexpected list length"
+                )
+
+The reason being the lambda, that is only evaluated when a preceding step succeeds, hence there will be no infinite evaluation.
+
+Of course, most libraries have a solution to this problem, typically called `lazy`, which we could use here:
+
+    smartListDecoder2 : Decoder (List Int)
+    smartListDecoder2 =
+        Decode.oneOf
+            [ Decode.map2 (::) (Decode.index 0 Decode.int) (Decode.index 1 (Decode.lazy (\() -> smartListDecoder2))
+            , Decode.null []
+            ]
+
+However, if there is no `lazy` function, it can be implemented in terms of `andThen` and `succeed`:
+
+    lazy fn =
+        andThen fn (succeed ())
+
+We call this `lazy` function a `lambdaBreaker`, since it's purpose it to break recursion with a lambda. Implementing it will enable the code generator to deal with recursive types.
+
+-}
+lambdaBreaker : (Expression -> Expression) -> Definition
+lambdaBreaker exp =
+    LambdaBreaker { implementation = exp, condition = Always }

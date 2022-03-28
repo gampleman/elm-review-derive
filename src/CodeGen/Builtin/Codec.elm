@@ -72,6 +72,10 @@ generic =
                     _ ->
                         Nothing
             )
+        , CodeGenerator.lambdaBreaker
+            (\expr ->
+                fn1 "lazy" (CG.lambda [ CG.unitPattern ] expr)
+            )
         ]
 
 

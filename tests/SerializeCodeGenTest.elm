@@ -407,7 +407,7 @@ bCodec =
         , -- This is not supported. In fact there are 2 features here that are still TODO:
           -- 1. Support for generics
           -- 2. Support for recursive datatypes
-          Test.skip <| codeGenTest "codec with type parameter" [ elmSerialize ] [ """module A exposing (..)
+          codeGenTest "codec with type parameter" [ elmSerialize ] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -416,7 +416,7 @@ type Tree a
     | Leaf a
 
 codec : Codec e a -> Codec e (Tree a)
-codec codecA = 
+codec codecA =
     Debug.todo ""
 """ ] """module A exposing (..)
 
@@ -429,17 +429,18 @@ type Tree a
 codec : Codec e a -> Codec e (Tree a)
 codec codecA =
     Serialize.customType
-     (\\a b value ->
-         case value of
-             Node data0 ->
-                 a data0
+        (\\nodeEncoder leafEncoder value ->
+            case value of
+                Node arg0 ->
+                    nodeEncoder arg0
 
-             Leaf data0 ->
-                 b data0
-     )
-        |> Serialize.variant1 Node (treeCodec (Debug.todo "Can't handle this"))
-        |> Serialize.variant1 Leaf (Debug.todo "Can't handle this")
-        |> Serialize.finishCustomType"""
+                Leaf arg0 ->
+                    leafEncoder arg0
+        )
+        |> Serialize.variant1 Node (Serialize.lazy (\\() -> codec codecA))
+        |> Serialize.variant1 Leaf codecA
+        |> Serialize.finishCustomType
+"""
         , codeGenTest "Add codec for type inside tuple" [ elmSerialize ] [ """module Schema exposing (..)
 
 import Serialize exposing (Codec)

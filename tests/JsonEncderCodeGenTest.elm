@@ -259,4 +259,38 @@ encodeB arg =
         B arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.int arg0 ) ]
 """
+        , codeGenTest "recursive"
+            [ elmJson ]
+            [ """module A exposing (..)
+import Json.Encode as Encode exposing (Value)
+
+type Tree a
+    = Node (Tree a) a (Tree a)
+    | Empty
+
+encode : (a -> Value) -> Tree a -> Value
+encode childEncoder tree =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode as Encode exposing (Value)
+
+type Tree a
+    = Node (Tree a) a (Tree a)
+    | Empty
+
+encode : (a -> Value) -> Tree a -> Value
+encode childEncoder tree =
+    case tree of
+        Node arg0 arg1 arg2 ->
+            Encode.object
+                [ ( "tag", Encode.string "Node" )
+                , ( "0", encode childEncoder arg0 )
+                , ( "1", childEncoder arg1 )
+                , ( "2", encode childEncoder arg2 )
+                ]
+
+        Empty ->
+            Encode.string "Empty"
+"""
         ]
