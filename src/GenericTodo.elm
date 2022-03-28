@@ -481,7 +481,7 @@ generate isTopLevel context stack type_ =
             Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
 
         Nothing ->
-            case type_ of
+            case  type_ of
                 ResolvedType.GenericType name Nothing ->
                     Dict.get name context.genericArguments
                         |> Result.fromMaybe ("Could not generate definition for generic variable `" ++ name ++ "`. You need to supply an argument of that type.")
@@ -534,14 +534,14 @@ generate isTopLevel context stack type_ =
                 ResolvedType.Function args result ->
                     Err "Could not generate definition for a function. Function types are not yet supported"
 
-                ResolvedType.TypeAlias ref generics (ResolvedType.AnonymousRecord children) ->
+                ResolvedType.TypeAlias ref generics (ResolvedType.AnonymousRecord _ children) ->
                     applyCombiner type_ (ResolvedType.refToExpr context.currentModule context.existingImports ref) (List.map Tuple.second children) context stack
                         |> makeExternalDeclaration isTopLevel context.generic ref generics
 
                 ResolvedType.TypeAlias ref _ childType ->
                     generate False context stack childType
 
-                ResolvedType.AnonymousRecord children ->
+                ResolvedType.AnonymousRecord _ children ->
                     applyCombiner type_
                         (List.map (\( name, _ ) -> ( name, CG.val name )) children
                             |> CG.record

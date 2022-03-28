@@ -83,11 +83,11 @@ isExposed exposing_ functionOrValue =
 
 The constructors are:
 
-  - `GenericType "foo"` represents an unfilled type variable `foo`
+  - `GenericType "foo" ref` represents an unfilled type variable `foo`
   - `Opaque ref vars` represents a custom type (or built in type)
   - `Function args return` represents a function type
   - `TypeAliasRecord ref args definition` represents a record where we have a type alias (and therefore a constructor) available
-  - `AnonymouseRecord definition` represents an anonymous record
+  - `AnonymouseRecord extensionVar definition` represents an anonymous record
   - `CustomType ref args [(constructorRef, arguments)]` represents a reference to an exposed (or accessible) custom type
   - `Tuple args` represents a tuple.
 
@@ -101,7 +101,9 @@ Let's look at some simple examples and see how they would be represented:
 
     Int -> String  --> Function [ Opaque { modulePath = ["Basics"], name = "Int" } [] ] Opaque { modulePath = ["String"], name = "String" } []
 
-    { foo : Int } --> AnonymousRecord [ ( "foo",  Opaque { modulePath = ["Basics"], name = "Int" } [] ) ]
+    { foo : Int } --> AnonymousRecord Nothing [ ( "foo",  Opaque { modulePath = ["Basics"], name = "Int" } [] ) ]
+
+    { x | foo : Int } --> AnonymousRecord (Just "x") [ ( "foo",  Opaque { modulePath = ["Basics"], name = "Int" } [] ) ]
 
     () -> Tuple []
 
@@ -128,10 +130,9 @@ Note how in `Foo Int` the `Int` value is replaced in the definition.
 type ResolvedType
     = GenericType String (Maybe ResolvedType)
     | Opaque Reference (List ResolvedType)
-      --TODO: | Recursive Reference (List ResolvedType)
     | Function (List ResolvedType) ResolvedType
     | TypeAlias Reference (List String) ResolvedType
-    | AnonymousRecord (List ( String, ResolvedType ))
+    | AnonymousRecord (Maybe String) (List ( String, ResolvedType ))
     | CustomType Reference (List String) (List ( Reference, List ResolvedType ))
     | Tuple (List ResolvedType)
 
@@ -161,10 +162,10 @@ fromTypeSignature lookupTable availableTypes currentModule typeAnnotation =
             Tuple (List.map (\(Node _ v) -> fromTypeSignature lookupTable availableTypes currentModule v) args)
 
         TA.Record def ->
-            AnonymousRecord (List.map (\(Node _ ( Node _ k, Node _ v )) -> ( k, fromTypeSignature lookupTable availableTypes currentModule v )) def)
+            AnonymousRecord Nothing (List.map (\(Node _ ( Node _ k, Node _ v )) -> ( k, fromTypeSignature lookupTable availableTypes currentModule v )) def)
 
-        TA.GenericRecord var (Node defr def) ->
-            Debug.todo "Not sure how to handle these yet..."
+        TA.GenericRecord (Node _ var) (Node _ def) ->
+            AnonymousRecord (Just var) (List.map (\(Node _ ( Node _ k, Node _ v )) -> ( k, fromTypeSignature lookupTable availableTypes currentModule v )) def)
 
         TA.FunctionTypeAnnotation (Node _ lv) (Node _ rv) ->
             case fromTypeSignature lookupTable availableTypes currentModule rv of
@@ -225,8 +226,8 @@ map fn t =
             TypeAlias ref gens arg ->
                 TypeAlias ref gens (map fn arg)
 
-            AnonymousRecord rec ->
-                AnonymousRecord <|
+            AnonymousRecord r rec ->
+                AnonymousRecord r <|
                     List.map (Tuple.mapSecond (map fn)) rec
 
             CustomType ref args ctors ->
@@ -478,6 +479,27 @@ replaceBindings bindings t =
         Function args res ->
             Function (List.map (replaceBindings bindings) args) (replaceBindings bindings res)
 
+        -- special case for resolving extensible records
+        TypeAlias ref varNames ((AnonymousRecord (Just r) rec) as child) ->
+            case Dict.get r bindings of
+                Just (AnonymousRecord newR fields) ->
+                    AnonymousRecord newR (List.map (Tuple.mapSecond (replaceBindings bindings)) rec ++ fields)
+
+                _ ->
+                    TypeAlias ref
+                        (List.map
+                            (\varName ->
+                                case Dict.get varName bindings of
+                                    Just (GenericType newName Nothing) ->
+                                        newName
+
+                                    _ ->
+                                        varName
+                            )
+                            varNames
+                        )
+                        (replaceBindings bindings child)
+
         TypeAlias ref varNames child ->
             TypeAlias ref
                 (List.map
@@ -493,8 +515,13 @@ replaceBindings bindings t =
                 )
                 (replaceBindings bindings child)
 
-        AnonymousRecord rec ->
-            AnonymousRecord (List.map (Tuple.mapSecond (replaceBindings bindings)) rec)
+        AnonymousRecord r rec ->
+            case Maybe.andThen (\var -> Dict.get var bindings) r of
+                Just (AnonymousRecord newR fields) ->
+                    AnonymousRecord newR (List.map (Tuple.mapSecond (replaceBindings bindings)) rec ++ fields)
+
+                _ ->
+                    AnonymousRecord r (List.map (Tuple.mapSecond (replaceBindings bindings)) rec)
 
         CustomType ref varNames ctors ->
             CustomType ref

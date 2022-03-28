@@ -44,7 +44,7 @@ generic =
         , CodeGenerator.combiner
             (\t fn exprs ->
                 case t of
-                    ResolvedType.AnonymousRecord fields ->
+                    ResolvedType.AnonymousRecord _ fields ->
                         CG.lambda [ CG.varPattern "rec" ]
                             (CG.apply
                                 [ CG.fqFun [ "Json", "Encode" ] "object", CG.list (List.map2 (\( field, _ ) expr -> CG.tuple [ CG.string field, CG.apply [ expr, CG.access (CG.val "rec") field ] ]) fields exprs) ]
@@ -70,7 +70,7 @@ generic =
                                     )
                                     |> Just
 
-                    ResolvedType.TypeAlias _ _ (ResolvedType.AnonymousRecord fields) ->
+                    ResolvedType.TypeAlias _ _ (ResolvedType.AnonymousRecord _ fields) ->
                         CG.lambda [ CG.varPattern "rec" ]
                             (CG.apply
                                 [ CG.fqFun [ "Json", "Encode" ] "object", CG.list (List.map2 (\( field, _ ) expr -> CG.tuple [ CG.string field, CG.apply [ expr, CG.access (CG.val "rec") field ] ]) fields exprs) ]

@@ -293,4 +293,124 @@ encode childEncoder tree =
         Empty ->
             Encode.string "Empty"
 """
+        , codeGenTest "Generates an encoder for an inline extensible record"
+            [ elmJson ]
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+encode : { x | a : Int, b : String } -> Value
+encode ab =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+encode : { x | a : Int, b : String } -> Value
+encode ab =
+    Json.Encode.object [ ( "a", Json.Encode.int ab.a ), ( "b", Json.Encode.string ab.b ) ]
+"""
+        , codeGenTest "Generates an encoder for an declared extensible record"
+            [ elmJson ]
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo x =
+    { x | a : Int, b : String }
+
+encode : Foo x -> Value
+encode ab =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo x =
+    { x | a : Int, b : String }
+
+encode : Foo x -> Value
+encode ab =
+    Json.Encode.object [ ( "a", Json.Encode.int ab.a ), ( "b", Json.Encode.string ab.b ) ]
+"""
+        , codeGenTest "Generates an encoder for an declared applied extensible record"
+            [ elmJson ]
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo x =
+    { x | a : Int, b : String }
+
+encode : Foo { c : Int } -> Value
+encode abc =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo x =
+    { x | a : Int, b : String }
+
+encode : Foo { c : Int } -> Value
+encode abc =
+    Json.Encode.object
+        [ ( "a", Json.Encode.int abc.a ), ( "b", Json.Encode.string abc.b ), ( "c", Json.Encode.int abc.c ) ]
+"""
+        , codeGenTest "Generates an encoder for an declared declared applied extensible record"
+            [ elmJson ]
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo x =
+    { x | a : Int, b : String }
+
+type alias Bar =
+    Foo { c : Int }
+
+encode : Bar -> Value
+encode abc =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo x =
+    { x | a : Int, b : String }
+
+type alias Bar =
+    Foo { c : Int }
+
+encode : Bar -> Value
+encode abc =
+    Json.Encode.object
+        [ ( "a", Json.Encode.int abc.a ), ( "b", Json.Encode.string abc.b ), ( "c", Json.Encode.int abc.c ) ]
+"""
+        , codeGenTest "Generates an encoder with phantom types"
+            [ elmJson ]
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type Foo x =
+    Foo Int
+
+type Always =
+    Always
+
+encode : Foo { capabilites | x : Always } -> Value
+encode foo =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type Foo x =
+    Foo Int
+
+type Always =
+    Always
+
+encode : Foo { capabilites | x : Always } -> Value
+encode foo =
+    case foo of
+        Foo arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Foo" ), ( "0", Json.Encode.int arg0 ) ]
+"""
         ]

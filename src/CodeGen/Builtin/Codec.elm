@@ -63,10 +63,10 @@ generic =
                     ResolvedType.Opaque ref args ->
                         Just <| CG.apply ([ val ("variant" ++ String.fromInt (List.length args)), fn ] ++ exprs)
 
-                    ResolvedType.AnonymousRecord fields ->
+                    ResolvedType.AnonymousRecord _ fields ->
                         Just <| CG.pipe (CG.apply [ val "record", fn ]) (List.map2 (\( field, _ ) expr -> CG.apply [ val "field", CG.accessFun ("." ++ field), expr ]) fields exprs ++ [ val "finishRecord" ])
 
-                    ResolvedType.TypeAlias _ _ (ResolvedType.AnonymousRecord fields) ->
+                    ResolvedType.TypeAlias _ _ (ResolvedType.AnonymousRecord _ fields) ->
                         Just <| CG.pipe (CG.apply [ val "record", fn ]) (List.map2 (\( field, _ ) expr -> CG.apply [ val "field", CG.accessFun ("." ++ field), expr ]) fields exprs ++ [ val "finishRecord" ])
 
                     _ ->
