@@ -1,4 +1,4 @@
-module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, parenthesisIfNecessary, pipeRight, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
+module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Elm.CodeGen as CG
@@ -63,20 +63,6 @@ pipeRight eRight eLeft =
 parenthesis : Node Expression -> Node Expression
 parenthesis =
     Expression.ParenthesizedExpression >> node
-
-
-parenthesisIfNecessary : Node Expression -> Node Expression
-parenthesisIfNecessary expr =
-    case expr of
-        Node _ (Expression.Application args) ->
-            if List.length args > 1 then
-                parenthesis expr
-
-            else
-                expr
-
-        _ ->
-            expr
 
 
 {-| Find the first element that satisfies a predicate and return

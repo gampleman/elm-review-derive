@@ -47,7 +47,7 @@ refToExpr currentModule imports ref =
                             Elm.CodeGen.fqFun ref.modulePath ref.name
 
             Nothing ->
-                Debug.todo "This shouldn't happen methinks, otherwise we probably need to insert an import statement"
+                Elm.CodeGen.fqFun ref.modulePath ref.name
 
 
 isExposed : Exposing -> String -> Bool
@@ -155,7 +155,7 @@ fromTypeSignature lookupTable availableTypes currentModule typeAnnotation =
                     computeApplication (lookupDefinition { modulePath = moduleName, name = Node.value t |> Tuple.second } availableTypes) (List.map (Node.value >> fromTypeSignature lookupTable availableTypes currentModule) args)
 
                 Nothing ->
-                    Debug.todo "Some error handling?"
+                    computeApplication (lookupDefinition { modulePath = currentModule, name = Node.value t |> Tuple.second } availableTypes) (List.map (Node.value >> fromTypeSignature lookupTable availableTypes currentModule) args)
 
         --(normalizeReference lookupTable t) (List.map (\(Node r v) -> Node r (normalizeTypes lookupTable v)) args)
         TA.Tupled args ->

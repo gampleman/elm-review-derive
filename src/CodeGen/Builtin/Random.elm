@@ -52,7 +52,7 @@ generic =
             (\ctors variants ->
                 case variants of
                     [] ->
-                        Debug.todo "This should never happen"
+                        CG.val "never"
 
                     [ ( _, single ) ] ->
                         single
@@ -64,7 +64,7 @@ generic =
             (\_ variants ->
                 case variants of
                     [] ->
-                        Debug.todo "This should never happen"
+                        CG.val "never"
 
                     ( _, h ) :: t ->
                         randomExtra.choices h (CG.list (List.map Tuple.second t))
