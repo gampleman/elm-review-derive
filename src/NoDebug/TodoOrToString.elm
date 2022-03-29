@@ -1,4 +1,4 @@
-module NoDebug.Todo exposing (rule)
+module NoDebug.TodoOrToString exposing (rule)
 
 import AssocList exposing (Dict)
 import CodeGen.Builtin.Codec
@@ -12,10 +12,12 @@ import Dict
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
 import Elm.Syntax.Exposing
+import Elm.Syntax.Expression as Expression exposing (Expression)
 import Elm.Syntax.Import exposing (Import)
 import Elm.Syntax.Module exposing (Module(..))
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
+import Elm.Syntax.Range exposing (Range)
 import GenericTodo
 import Internal.ExistingImport exposing (ExistingImport)
 import ResolvedType exposing (ResolvedType)
@@ -56,6 +58,7 @@ moduleVisitor schema =
         |> Rule.withModuleDefinitionVisitor moduleDefinitionVisitor
         |> Rule.withImportVisitor importVisitor
         |> Rule.withDeclarationListVisitor declarationVisitor
+        |> Rule.withExpressionEnterVisitor expressionVisitor
 
 
 moduleDefinitionVisitor : Node Module -> ModuleContext -> ( List (Error {}), ModuleContext )
@@ -122,6 +125,7 @@ type alias ProjectContext =
     , moduleKeys : Dict ModuleName ModuleKey
     , generics : List GenericTodo.ResolvedGeneric
     , genericTodos : List ( ModuleName, GenericTodo.GenericTodo )
+    , otherTodos : List ( ModuleKey, Range )
     , genericProviders : List { moduleName : ModuleName, genericId : String, functionName : String, childType : ResolvedType }
     }
 
@@ -136,6 +140,7 @@ type alias ModuleContext =
     , currentModule : ModuleName
     , generics : List GenericTodo.ResolvedGeneric
     , genericTodos : List GenericTodo.GenericTodo
+    , otherTodos : List Range
     , genericProviders : List { genericId : String, functionName : String, childType : ResolvedType }
     }
 
@@ -148,6 +153,7 @@ initialProjectContext =
     , generics = []
     , genericTodos = []
     , genericProviders = []
+    , otherTodos = []
     }
 
 
@@ -167,6 +173,7 @@ fromProjectToModule lookupTable metadata projectContext =
     , generics = projectContext.generics
     , genericTodos = []
     , genericProviders = []
+    , otherTodos = []
     }
 
 
@@ -180,6 +187,15 @@ fromModuleToProject moduleKey metadata moduleContext =
         mapTodo : List a -> List ( ModuleName, a )
         mapTodo =
             List.map (\todo -> ( moduleName, todo ))
+
+        genericRanges =
+            List.map .range moduleContext.genericTodos
+
+        filterTodos =
+            List.filter
+                (\r ->
+                    List.all (CodeGen.Helpers.rangeContains r >> not) genericRanges
+                )
     in
     { types =
         if List.isEmpty moduleContext.exports then
@@ -206,6 +222,7 @@ fromModuleToProject moduleKey metadata moduleContext =
     , generics = moduleContext.generics
     , genericTodos = mapTodo moduleContext.genericTodos
     , genericProviders = List.map (\a -> { moduleName = moduleName, genericId = a.genericId, functionName = a.functionName, childType = a.childType }) moduleContext.genericProviders
+    , otherTodos = List.map (Tuple.pair moduleKey) (filterTodos moduleContext.otherTodos)
     }
 
 
@@ -222,6 +239,7 @@ foldProjectContexts newContext previousContext =
             newContext.generics
     , genericTodos = newContext.genericTodos ++ previousContext.genericTodos
     , genericProviders = newContext.genericProviders ++ previousContext.genericProviders
+    , otherTodos = newContext.otherTodos ++ previousContext.otherTodos
     }
 
 
@@ -288,10 +306,59 @@ declarationVisitor declarations context =
     )
 
 
+expressionVisitor : Node Expression -> ModuleContext -> ( List (Error {}), ModuleContext )
+expressionVisitor node context =
+    case Node.value node of
+        Expression.FunctionOrValue _ name ->
+            if name == "toString" then
+                case ModuleNameLookupTable.moduleNameFor context.lookupTable node of
+                    Just [ "Debug" ] ->
+                        ( [ Rule.error
+                                { message = "Remove the use of `Debug." ++ name ++ "` before shipping to production"
+                                , details =
+                                    [ "`Debug." ++ name ++ "` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
+                                    ]
+                                }
+                                (Node.range node)
+                          ]
+                        , context
+                        )
+
+                    _ ->
+                        ( [], context )
+
+            else if name == "todo" then
+                case ModuleNameLookupTable.moduleNameFor context.lookupTable node of
+                    Just [ "Debug" ] ->
+                        ( []
+                        , { context | otherTodos = Node.range node :: context.otherTodos }
+                        )
+
+                    _ ->
+                        ( [], context )
+
+            else
+                ( [], context )
+
+        _ ->
+            ( [], context )
+
+
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
-    List.filterMap
-        (\( moduleName, todo ) ->
-            GenericTodo.todoErrors projectContext moduleName todo
+    List.map
+        (\( moduleKey, range ) ->
+            Rule.errorForModule moduleKey
+                { message = "Remove the use of `Debug.todo` before shipping to production"
+                , details =
+                    [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
+                    ]
+                }
+                range
         )
-        projectContext.genericTodos
+        projectContext.otherTodos
+        ++ List.filterMap
+            (\( moduleName, todo ) ->
+                GenericTodo.todoErrors projectContext moduleName todo
+            )
+            projectContext.genericTodos

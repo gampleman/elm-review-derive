@@ -1,4 +1,4 @@
-module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
+module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, rangeContains, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Elm.Pretty
@@ -8,7 +8,7 @@ import Elm.Syntax.Infix as Infix
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
-import Elm.Syntax.Range
+import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
 import Internal.ExistingImport exposing (ExistingImport)
@@ -61,6 +61,11 @@ pipeRight eRight eLeft =
 parenthesis : Node Expression -> Node Expression
 parenthesis =
     Expression.ParenthesizedExpression >> node
+
+
+rangeContains : Range -> Range -> Bool
+rangeContains inner outer =
+    Elm.Syntax.Range.compareLocations inner.start outer.start /= LT && Elm.Syntax.Range.compareLocations inner.end outer.end /= GT
 
 
 {-| Find the first element that satisfies a predicate and return
