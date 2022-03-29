@@ -1,7 +1,6 @@
 module NoDebug.Todo exposing (rule)
 
 import AssocList exposing (Dict)
-import AssocSet exposing (Set)
 import CodeGen.Builtin.Codec
 import CodeGen.Builtin.FromString
 import CodeGen.Builtin.JsonEncoder
@@ -17,12 +16,9 @@ import Elm.Syntax.Import exposing (Import)
 import Elm.Syntax.Module exposing (Module(..))
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
-import Elm.Syntax.Type
-import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation)
-import GenericTodo as GenericTodo
+import GenericTodo
 import Internal.ExistingImport exposing (ExistingImport)
 import ResolvedType exposing (ResolvedType)
-import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Project.Dependency exposing (Dependency)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
@@ -122,22 +118,6 @@ initializeGenerics generics deps context =
 
 type alias ProjectContext =
     { types : List ( ModuleName, ResolvedType )
-
-    -- , codecs : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
-    -- , generators : List { moduleName : ModuleName, functionName : String, typeVar : QualifiedType }
-    -- , migrateFunctions :
-    --     List
-    --         { moduleName : ModuleName
-    --         , functionName : String
-    --         , oldType : QualifiedType
-    --         , newType : QualifiedType
-    --         }
-    -- , codecTodos : List ( ModuleName, CodecTodo )
-    -- , toStringTodos : List ( ModuleName, ToStringTodo )
-    -- , fromStringTodos : List ( ModuleName, FromStringTodo )
-    -- , listVariantsTodos : List ( ModuleName, ListVariantsTodo )
-    -- , randomGeneratorTodos : List ( ModuleName, CodecTodo )
-    -- , migrateTodos : List ( ModuleName, MigrateTodo )
     , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
     , moduleKeys : Dict ModuleName ModuleKey
     , generics : List GenericTodo.ResolvedGeneric
@@ -151,17 +131,6 @@ type alias ModuleContext =
     , types : List ResolvedType
     , availableTypes : List ( ModuleName, ResolvedType )
     , exports : List ( String, Bool )
-
-    -- , codecs : List { functionName : String, typeVar : QualifiedType }
-    -- , generators : List { functionName : String, typeVar : QualifiedType }
-    -- , migrateFunctions : List { functionName : String, oldType : QualifiedType, newType : QualifiedType }
-    -- , autoCodecs : List { functionName : String, typeVar : QualifiedType }
-    -- , codecTodos : List CodecTodo
-    -- , toStringTodos : List ToStringTodo
-    -- , fromStringTodos : List FromStringTodo
-    -- , listVariantsTodos : List ListVariantsTodo
-    -- , randomGeneratorTodos : List CodecTodo
-    -- , migrateTodos : List MigrateTodo
     , importStartRow : Maybe Int
     , imports : List ExistingImport
     , currentModule : ModuleName
@@ -174,16 +143,6 @@ type alias ModuleContext =
 initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
-
-    -- , codecs = []
-    -- , generators = []
-    -- , migrateFunctions = []
-    -- , codecTodos = []
-    -- , toStringTodos = []
-    -- , fromStringTodos = []
-    -- , listVariantsTodos = []
-    -- , randomGeneratorTodos = []
-    -- , migrateTodos = []
     , imports = AssocList.empty
     , moduleKeys = AssocList.empty
     , generics = []
@@ -202,17 +161,6 @@ fromProjectToModule lookupTable metadata projectContext =
     , types = []
     , exports = []
     , availableTypes = projectContext.types
-
-    -- , codecs = []
-    -- , generators = []
-    -- , autoCodecs = []
-    -- , migrateFunctions = []
-    -- , codecTodos = []
-    -- , toStringTodos = []
-    -- , fromStringTodos = []
-    -- , listVariantsTodos = []
-    -- , randomGeneratorTodos = []
-    -- , migrateTodos = []
     , importStartRow = Nothing
     , imports = []
     , currentModule = moduleName
@@ -248,31 +196,6 @@ fromModuleToProject moduleKey metadata moduleContext =
                             Just ( moduleName, t )
                 )
                 moduleContext.types
-
-    -- , codecs =
-    --     List.map
-    --         (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
-    --         moduleContext.codecs
-    -- , generators =
-    --     List.map
-    --         (\a -> { moduleName = moduleName, functionName = a.functionName, typeVar = a.typeVar })
-    --         moduleContext.generators
-    -- , migrateFunctions =
-    --     List.map
-    --         (\a ->
-    --             { moduleName = moduleName
-    --             , functionName = a.functionName
-    --             , oldType = a.oldType
-    --             , newType = a.newType
-    --             }
-    --         )
-    --         moduleContext.migrateFunctions
-    -- , codecTodos = mapTodo moduleContext.codecTodos
-    -- , toStringTodos = mapTodo moduleContext.toStringTodos
-    -- , fromStringTodos = mapTodo moduleContext.fromStringTodos
-    -- , listVariantsTodos = mapTodo moduleContext.listVariantsTodos
-    -- , randomGeneratorTodos = mapTodo moduleContext.randomGeneratorTodos
-    -- , migrateTodos = mapTodo moduleContext.migrateTodos
     , imports =
         AssocList.singleton
             moduleName
@@ -289,16 +212,6 @@ fromModuleToProject moduleKey metadata moduleContext =
 foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
-
-    -- , codecs = newContext.codecs ++ previousContext.codecs
-    -- , generators = newContext.generators ++ previousContext.generators
-    -- , migrateFunctions = newContext.migrateFunctions ++ previousContext.migrateFunctions
-    -- , codecTodos = newContext.codecTodos ++ previousContext.codecTodos
-    -- , toStringTodos = newContext.toStringTodos ++ previousContext.toStringTodos
-    -- , fromStringTodos = newContext.fromStringTodos ++ previousContext.fromStringTodos
-    -- , listVariantsTodos = newContext.listVariantsTodos ++ previousContext.listVariantsTodos
-    -- , randomGeneratorTodos = newContext.randomGeneratorTodos ++ previousContext.randomGeneratorTodos
-    -- , migrateTodos = newContext.migrateTodos ++ previousContext.migrateTodos
     , imports = AssocList.union newContext.imports previousContext.imports
     , moduleKeys = AssocList.union newContext.moduleKeys previousContext.moduleKeys
     , generics =
@@ -337,7 +250,6 @@ declarationVisitor declarations context =
         types =
             ResolvedType.resolveLocalReferences context.currentModule unresolvedTypes
 
-        -- |> ResolvedType.resolveLocalReferences context.currentModule
         availableTypes =
             types ++ externalAvailableTypes
 
@@ -352,75 +264,10 @@ declarationVisitor declarations context =
                             Nothing
                 )
                 declarations
-
-        -- codecTodos =
-        --     getTodos (CodecTodo.getTodos context)
-        -- toStringTodos =
-        --     getTodos (ToStringTodo.getTodos context)
-        -- fromStringTodos =
-        --     getTodos (FromStringTodo.getTodos context)
-        -- listVariantsTodos =
-        --     getTodos (ListVariantsTodo.getListAllTodo context)
-        -- randomGeneratorTodos =
-        --     getTodos (RandomGeneratorTodo.getTodos context)
-        -- migrateTodos =
-        --     if
-        --         List.isEmpty codecTodos
-        --             && List.isEmpty toStringTodos
-        --             && List.isEmpty fromStringTodos
-        --             && List.isEmpty listVariantsTodos
-        --             && List.isEmpty randomGeneratorTodos
-        --     then
-        --         getTodos (MigrateTodo.getTodos context)
-        --     else
-        --         []
     in
     ( []
     , { context
-        | --codecTodos = codecTodos ++ context.codecTodos
-          -- , toStringTodos = toStringTodos ++ context.toStringTodos
-          -- , fromStringTodos = fromStringTodos ++ context.fromStringTodos
-          -- , listVariantsTodos = listVariantsTodos ++ context.listVariantsTodos
-          -- , randomGeneratorTodos = randomGeneratorTodos ++ context.randomGeneratorTodos
-          -- , migrateTodos = migrateTodos ++ context.migrateTodos
-          -- types =
-          --     List.filterMap (declarationVisitorGetTypes context) declarations
-          --         ++ context.types
-          types = types ++ context.types
-
-        -- , codecs =
-        --     List.filterMap
-        --         (\declaration ->
-        --             case declaration of
-        --                 Node _ (Declaration.FunctionDeclaration function) ->
-        --                     CodecTodo.declarationVisitorGetCodecs context function
-        --                 _ ->
-        --                     Nothing
-        --         )
-        --         declarations
-        --         ++ context.codecs
-        -- , generators =
-        --     List.filterMap
-        --         (\declaration ->
-        --             case declaration of
-        --                 Node _ (Declaration.FunctionDeclaration function) ->
-        --                     RandomGeneratorTodo.declarationVisitorGetGenerators context function
-        --                 _ ->
-        --                     Nothing
-        --         )
-        --         declarations
-        --         ++ context.generators
-        -- , migrateFunctions =
-        --     List.filterMap
-        --         (\declaration ->
-        --             case declaration of
-        --                 Node _ (Declaration.FunctionDeclaration function) ->
-        --                     MigrateTodo.declarationVisitorGetMigrateFunctions context function
-        --                 _ ->
-        --                     Nothing
-        --         )
-        --         declarations
-        --         ++ context.migrateFunctions
+        | types = types ++ context.types
         , importStartRow =
             List.map (Node.range >> .start >> .row) declarations |> List.minimum
         , genericProviders =
@@ -443,39 +290,6 @@ declarationVisitor declarations context =
 
 finalProjectEvaluation : ProjectContext -> List (Error { useErrorForModule : () })
 finalProjectEvaluation projectContext =
-    -- let
-    --     codecTypeTodoFixes : List { moduleName : ModuleName, fix : Review.Fix.Fix, newImports : Set ModuleName }
-    --     codecTypeTodoFixes =
-    --         CodecTodo.codecTypeTodoFixes projectContext
-    --     randomGeneratorTypeTodoFixes : List ( ModuleName, Review.Fix.Fix )
-    --     randomGeneratorTypeTodoFixes =
-    --         RandomGeneratorTodo.randomGeneratorTypeTodoFixes projectContext
-    --     migrateTodoFixes : List { moduleName : ModuleName, fix : Review.Fix.Fix, newImports : Set ModuleName }
-    --     migrateTodoFixes =
-    --         MigrateTodo.migrateTypeTodoFixes projectContext
-    -- in
-    -- List.filterMap
-    --     (\( moduleName, todo ) -> CodecTodo.todoErrors projectContext moduleName codecTypeTodoFixes todo)
-    --     projectContext.codecTodos
-    --     ++ List.filterMap
-    --         (\( moduleName, todo ) -> ToStringTodo.todoErrors projectContext moduleName todo)
-    --         projectContext.toStringTodos
-    --     ++ List.filterMap
-    --         (\( moduleName, todo ) -> FromStringTodo.todoErrors projectContext moduleName todo)
-    --         projectContext.fromStringTodos
-    --     ++ List.filterMap
-    --         (\( moduleName, todo ) -> ListVariantsTodo.todoErrors projectContext moduleName todo)
-    --         projectContext.listVariantsTodos
-    --     ++ List.filterMap
-    --         (\( moduleName, todo ) ->
-    --             RandomGeneratorTodo.todoErrors projectContext moduleName randomGeneratorTypeTodoFixes todo
-    --         )
-    --         projectContext.randomGeneratorTodos
-    --     ++ List.filterMap
-    --         (\( moduleName, todo ) ->
-    --             MigrateTodo.todoErrors projectContext moduleName migrateTodoFixes todo
-    --         )
-    --         projectContext.migrateTodos
     List.filterMap
         (\( moduleName, todo ) ->
             GenericTodo.todoErrors projectContext moduleName todo

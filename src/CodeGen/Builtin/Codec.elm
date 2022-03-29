@@ -60,7 +60,7 @@ generic =
         , CodeGenerator.combiner
             (\t fn exprs ->
                 case t of
-                    ResolvedType.Opaque ref args ->
+                    ResolvedType.Opaque _ args ->
                         Just <| CG.apply ([ val ("variant" ++ String.fromInt (List.length args)), fn ] ++ exprs)
 
                     ResolvedType.AnonymousRecord _ fields ->

@@ -3,14 +3,8 @@ module CodeGen.Builtin.JsonEncoder exposing (generic)
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
 import Elm.Syntax.Node exposing (Node(..))
-import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
-
-
-lambdaApply : String -> CG.Expression -> CG.Expression
-lambdaApply name expr =
-    CG.lambda [ CG.varPattern name ] (CG.apply [ expr, CG.val name ])
 
 
 generic : CodeGenerator
@@ -42,7 +36,7 @@ generic =
                     )
             )
         , CodeGenerator.combiner
-            (\t fn exprs ->
+            (\t _ exprs ->
                 case t of
                     ResolvedType.AnonymousRecord _ fields ->
                         CG.lambda [ CG.varPattern "rec" ]
@@ -51,7 +45,7 @@ generic =
                             )
                             |> Just
 
-                    ResolvedType.Opaque ref args ->
+                    ResolvedType.Opaque ref _ ->
                         case exprs of
                             [] ->
                                 Just (CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ])

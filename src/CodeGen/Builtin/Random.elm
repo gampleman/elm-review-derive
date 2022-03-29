@@ -3,7 +3,6 @@ module CodeGen.Builtin.Random exposing (generic)
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
 import Elm.Syntax.Node exposing (Node(..))
-import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -49,7 +48,7 @@ generic =
         , CodeGenerator.map random.map
         , CodeGenerator.succeed random.constant
         , CodeGenerator.customType
-            (\ctors variants ->
+            (\_ variants ->
                 case variants of
                     [] ->
                         CG.val "never"

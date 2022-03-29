@@ -1,22 +1,19 @@
 module GenericTodo exposing (CodeGenerator(..), Condition(..), GenericTodo, ResolvedGeneric, Resolver, ResolverImpl(..), buildFullGeneric, declarationVisitorGetGenericTypes, getTodos, todoErrors)
 
 import AssocList exposing (Dict)
-import AssocSet as Set exposing (Set)
+import AssocSet as Set
 import CodeGen.Helpers as Helpers
 import Dict
 import Elm.CodeGen as CG exposing (signature)
-import Elm.Pretty
 import Elm.Syntax.Expression as Expression exposing (Expression(..), Function)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
-import Elm.Syntax.Type exposing (Type, ValueConstructor)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
 import Internal.ExistingImport exposing (ExistingImport)
 import List.Extra
-import Pretty
 import ResolvedType exposing (Reference, ResolvedType)
 import Review.Fix
 import Review.ModuleNameLookupTable as ModuleNameLookupTable
@@ -481,7 +478,7 @@ generate isTopLevel context stack type_ =
             Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
 
         Nothing ->
-            case  type_ of
+            case type_ of
                 ResolvedType.GenericType name Nothing ->
                     Dict.get name context.genericArguments
                         |> Result.fromMaybe ("Could not generate definition for generic variable `" ++ name ++ "`. You need to supply an argument of that type.")
@@ -531,8 +528,8 @@ generate isTopLevel context stack type_ =
                                 context.generic
                                 type_
 
-                ResolvedType.Function args result ->
-                    Err "Could not generate definition for a function. Function types are not yet supported"
+                ResolvedType.Function _ _ ->
+                    applyResolvers (always Nothing) "<function>" context.generic type_
 
                 ResolvedType.TypeAlias ref generics (ResolvedType.AnonymousRecord _ children) ->
                     applyCombiner type_ (ResolvedType.refToExpr context.currentModule context.existingImports ref) (List.map Tuple.second children) context stack

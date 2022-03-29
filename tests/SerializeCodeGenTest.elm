@@ -1,8 +1,6 @@
 module SerializeCodeGenTest exposing (suite)
 
-import NoDebug.Todo
 import Review.Project.Dependency exposing (Dependency)
-import Review.Test
 import Test exposing (..)
 import TestHelper exposing (codeGenTest)
 

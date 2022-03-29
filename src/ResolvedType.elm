@@ -320,22 +320,6 @@ resolveLocalReferences currentModule types =
     List.foldr resolveLocalReference ( initialNameDict, [] ) types |> Tuple.second
 
 
-logType label t =
-    let
-        _ =
-            Debug.log (label ++ ": " ++ toDebugString t) ""
-    in
-    t
-
-
-logTypes label ts =
-    let
-        _ =
-            Debug.log (((label :: List.map toDebugString ts) |> joinWithPadding "- ") ++ "\n") ""
-    in
-    ts
-
-
 matchType : ResolvedType -> ResolvedType -> Bool
 matchType full possiblyRef =
     case ( full, possiblyRef ) of
@@ -346,53 +330,66 @@ matchType full possiblyRef =
             full == possiblyRef
 
 
-joinWithPadding : String -> List String -> String
-joinWithPadding delim =
-    List.map (String.lines >> String.join "\n    ")
-        >> String.join ("\n    " ++ delim)
+
+{-
+         toString : ResolvedType -> (String, String)
+         toString resolvedType =
+             let
+                 list =
+                     List.foldr
+                         (\child ( strs, defs ) ->
+                             let
+                                 ( str, def ) =
+                                     helper child
+                             in
+                             ( str :: strs, def ++ defs )
+                         )
+                         ( [], [] )
+
+                 helper t =
+                     case t of
+                         GenericType varName Nothing ->
+                             ( varName, [] )
+
+                         GenericType _ (Just child) ->
+                             helper child
+
+                         Opaque ref children ->
+                             list children
+                                 |> Tuple.mapFirst (\r -> String.join " " (formatRef ref :: r))
+
+                         CustomType ref generics ctors ->
+                             "type "
+                                 ++ formatRef ref
+                                 ++ " "
+                                 ++ String.join " " generics
+                                 ++ "= \n    "
+                                 ++ joinWithPadding "|"
+                                     (List.map
+                                         (\( ctorRef, args ) ->
+                                             formatRef ctorRef ++ " " ++ String.join " " (List.map (toDebugString >> (\arg -> "<" ++ arg ++ ">")) args)
+                                         )
+                                         ctors
+                                     )
+
+                         _ ->
+                             Debug.toString t
+             in
+             helper resolvedType
 
 
-toDebugString : ResolvedType -> String
-toDebugString t =
-    case t of
-        GenericType string Nothing ->
-            string
-
-        GenericType string (Just child) ->
-            string ++ " = " ++ toDebugString child
-
-        Opaque ref children ->
-            String.join " " (formatRef ref :: List.map toDebugString children)
-
-        CustomType ref generics ctors ->
-            "type "
-                ++ formatRef ref
-                ++ " "
-                ++ String.join " " generics
-                ++ "= \n    "
-                ++ joinWithPadding "|"
-                    (List.map
-                        (\( ctorRef, args ) ->
-                            formatRef ctorRef ++ " " ++ String.join " " (List.map (toDebugString >> (\arg -> "<" ++ arg ++ ">")) args)
-                        )
-                        ctors
-                    )
-
-        _ ->
-            Debug.toString t
 
 
+      formatRef : Reference -> String
+      formatRef ref =
+          String.join "." (ref.modulePath ++ [ ref.name ])
 
--- | Function (List ResolvedType) ResolvedType
--- | TypeAlias Reference (List String) ResolvedType
--- | AnonymousRecord (List ( String, ResolvedType ))
--- |
--- | Tuple (List ResolvedType)
+   joinWithPadding : String -> List String -> String
+   joinWithPadding delim =
+       List.map (String.lines >> String.join "\n    ")
+           >> String.join ("\n    " ++ delim)
 
-
-formatRef : Reference -> String
-formatRef ref =
-    String.join "." (ref.modulePath ++ [ ref.name ])
+-}
 
 
 lookupDefinition : Reference -> List ResolvedType -> ResolvedType
@@ -403,7 +400,7 @@ lookupDefinition reference resolvedTypes =
 
         head :: tail ->
             case head of
-                Opaque ref args ->
+                Opaque ref _ ->
                     if ref == reference then
                         head
 
@@ -434,7 +431,7 @@ computeApplication applicant arguments =
         Opaque ref args ->
             Opaque ref (replaceOpaqueArgs args arguments)
 
-        TypeAlias ref args t ->
+        TypeAlias ref args _ ->
             let
                 bindings =
                     List.map2 Tuple.pair args arguments
@@ -442,7 +439,7 @@ computeApplication applicant arguments =
             in
             replaceBindings bindings applicant
 
-        CustomType ref args ctors ->
+        CustomType ref args _ ->
             let
                 bindings =
                     List.map2 Tuple.pair args arguments

@@ -45,7 +45,6 @@ By principled we mean that the generated code will for the foremost follow compo
 
 import Elm.CodeGen as CG
 import Elm.Syntax.Expression exposing (Expression)
-import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation)
 import GenericTodo exposing (CodeGenerator(..), Condition(..), Resolver, ResolverImpl(..))
 import ResolvedType exposing (ResolvedType)
 import TypePattern exposing (TypePattern)

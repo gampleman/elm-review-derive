@@ -1,11 +1,9 @@
 module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
-import Elm.CodeGen as CG
 import Elm.Pretty
 import Elm.Syntax.Exposing exposing (Exposing(..), TopLevelExpose(..))
 import Elm.Syntax.Expression as Expression exposing (Expression(..), Function, LetDeclaration(..))
-import Elm.Syntax.Import exposing (Import)
 import Elm.Syntax.Infix as Infix
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
@@ -207,10 +205,10 @@ traverseExpression fn initial expression =
                     traverseNode a0 accumulator
 
                 ( b1, accu2 ) =
-                    traverseNode b0 accumulator
+                    traverseNode b0 accu1
 
                 ( c1, accu3 ) =
-                    traverseNode c0 accumulator
+                    traverseNode c0 accu2
             in
             ( IfBlock a1 b1 c1, accu3 )
 
@@ -259,7 +257,7 @@ traverseExpression fn initial expression =
 
         CaseExpression ce ->
             let
-                ( expr, accu0 ) =
+                ( expr, _ ) =
                     traverseNode ce.expression accumulator
 
                 ( cases, accu1 ) =
