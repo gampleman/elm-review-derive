@@ -1,12 +1,12 @@
 module FromStringCodeGenTest exposing (..)
 
+import CodeGenerator.Test exposing (codeGenTest)
 import Test
-import TestHelper exposing (codeGenTest)
 
 
 suite =
     Test.describe "fromString"
-        [ codeGenTest "custom type from string" [] [ """module A exposing (..)
+        [ codeGenTest "custom type from string" [] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -43,7 +43,7 @@ fromString a =
             Nothing
 """
         , -- Not sure this is worth supporting... How imprecise should this stuff be?
-          Test.skip <| codeGenTest "custom type from string missing maybe" [] [ """module A exposing (..)
+          Test.skip <| codeGenTest "custom type from string missing maybe" [] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -78,6 +78,7 @@ fromString a =
             Nothing"""
         , Test.skip <|
             codeGenTest "custom type from string missing parameter"
+                []
                 []
                 [ """module A exposing (..)
 

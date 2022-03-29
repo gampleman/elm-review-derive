@@ -1,13 +1,14 @@
 module ToStringCodeGenTest exposing (..)
 
+import CodeGenerator.Test exposing (codeGenTest)
 import Test
-import TestHelper exposing (codeGenTest)
 
 
 suite =
     Test.describe "toString"
         [ Test.skip <|
             codeGenTest "tree to string"
+                []
                 []
                 [ """module A exposing (..)
 
@@ -33,7 +34,7 @@ treeToString tree =
 
         Leaf _ ->
             "Leaf\""""
-        , Test.skip <| codeGenTest "tree to string missing parameter" [] [ """module A exposing (..)
+        , Test.skip <| codeGenTest "tree to string missing parameter" [] [] [ """module A exposing (..)
 
 type Tree a
     = Node (Tree a) (Tree a)

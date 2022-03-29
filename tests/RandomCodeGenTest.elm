@@ -1,18 +1,18 @@
 module RandomCodeGenTest exposing (..)
 
+import CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith)
 import Review.Project.Dependency exposing (Dependency)
 import Test exposing (Test, describe)
-import TestHelper exposing (codeGenTest, codeGenTestFailsWith)
 
 
 elmRandom : Dependency
 elmRandom =
-    TestHelper.fakeDependency "elm/random"
+    CodeGenerator.Test.fakeDependency "elm/random"
 
 
 randomExtra : Dependency
 randomExtra =
-    TestHelper.fakeDependency "elm-community/random-extra"
+    CodeGenerator.Test.fakeDependency "elm-community/random-extra"
 
 
 suite : Test
@@ -20,6 +20,7 @@ suite =
     describe "RandomGeneratorTodo"
         [ codeGenTest "Generates a generator for a int"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -36,6 +37,7 @@ generator =
 """
         , codeGenTest "Generates a generator for a basic custom type"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -58,6 +60,7 @@ generator =
 """
         , codeGenTest "Generates a generator for an inline record"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -77,6 +80,7 @@ generator =
 """
         , codeGenTest "Generates a generator for a declared record"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -99,6 +103,7 @@ generator =
 """
         , codeGenTest "Generates a generator for a declared record with > 5 fields"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -127,6 +132,7 @@ generator =
 """
         , codeGenTest "Generates a generator for a declared record with > 5 fields nicer with random-extra"
             [ elmRandom, randomExtra ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -158,6 +164,7 @@ generator =
 """
         , codeGenTest "Generates a generator for a enum"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -180,6 +187,7 @@ generator =
 """
         , codeGenTest "Generates a generator for a custom type"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -207,6 +215,7 @@ generator =
 """
         , codeGenTest "Picks up random-extra for nicer code"
             [ elmRandom, randomExtra ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -236,6 +245,7 @@ generator =
 """
         , codeGenTest "Picks up a generator from another file"
             [ elmRandom ]
+            []
             [ """module A exposing (A, generator)
 import Random
 
@@ -270,6 +280,7 @@ generator =
 """
         , codeGenTest "Picks up a generator from another file with different import notation"
             [ elmRandom ]
+            []
             [ """module A exposing (A, generator)
 import Random as R exposing (Generator)
 
@@ -304,6 +315,7 @@ generator =
 """
         , codeGenTestFailsWith "Fails when no way to generate opaque type"
             [ elmRandom ]
+            []
             [ """module A exposing (A)
 import Random
 
@@ -324,6 +336,7 @@ generator =
             "Could not automatically generate a definition for `A`, as we don't know how to implement this type."
         , codeGenTest "Generates a generator for a subtype"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -356,6 +369,7 @@ randomB =
 """
         , codeGenTest "Applied generic"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -378,6 +392,7 @@ generator =
 """
         , codeGenTest "full generic 1 arg"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -400,6 +415,7 @@ generator a =
 """
         , codeGenTest "full generic 1 arg with aliasing"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -422,6 +438,7 @@ generator x =
 """
         , codeGenTest "full generic 2 arg"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -444,6 +461,7 @@ generator a b =
 """
         , codeGenTest "full generic 2 arg aliasing"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -466,6 +484,7 @@ generator d s =
 """
         , codeGenTest "partial generic"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -498,6 +517,7 @@ randomBar x =
 """
         , codeGenTest "recursive"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 
@@ -530,6 +550,7 @@ generator childGenerator =
 """
         , codeGenTest "complex mutually recursive"
             [ elmRandom ]
+            []
             [ """module A exposing (..)
 import Random
 

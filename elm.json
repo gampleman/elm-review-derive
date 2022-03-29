@@ -7,6 +7,7 @@
     "exposed-modules": [
         "NoDebug.Todo",
         "CodeGenerator",
+        "CodeGenerator.Test",
         "TypePattern",
         "ResolvedType"
     ],
@@ -20,10 +21,10 @@
         "pzp1997/assoc-list": "1.0.0 <= v < 2.0.0",
         "stil4m/elm-syntax": "7.2.1 <= v < 8.0.0",
         "the-sett/elm-pretty-printer": "3.0.0 <= v < 4.0.0",
-        "the-sett/elm-syntax-dsl": "6.0.1 <= v < 7.0.0"
-    },
-    "test-dependencies": {
+        "the-sett/elm-syntax-dsl": "6.0.1 <= v < 7.0.0",
         "elm-explorations/test": "1.2.2 <= v < 2.0.0",
         "elm/json": "1.1.3 <= v < 2.0.0"
+    },
+    "test-dependencies": {
     }
 }

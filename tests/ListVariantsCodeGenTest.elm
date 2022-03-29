@@ -1,12 +1,12 @@
 module ListVariantsCodeGenTest exposing (..)
 
+import CodeGenerator.Test exposing (codeGenTest)
 import Test
-import TestHelper exposing (codeGenTest)
 
 
 suite =
     Test.describe "all variant"
-        [ codeGenTest "list all variants" [] [ """module A exposing (..)
+        [ codeGenTest "list all variants" [] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 

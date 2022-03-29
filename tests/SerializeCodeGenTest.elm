@@ -1,19 +1,19 @@
 module SerializeCodeGenTest exposing (suite)
 
+import CodeGenerator.Test exposing (codeGenTest)
 import Review.Project.Dependency exposing (Dependency)
 import Test exposing (..)
-import TestHelper exposing (codeGenTest)
 
 
 elmSerialize : Dependency
 elmSerialize =
-    TestHelper.fakeDependency "MartinSStewart/elm-serialize"
+    CodeGenerator.Test.fakeDependency "MartinSStewart/elm-serialize"
 
 
 suite : Test
 suite =
     describe "Serialize code gen todo"
-        [ codeGenTest "record codec" [ elmSerialize ] [ """module A exposing (..)
+        [ codeGenTest "record codec" [ elmSerialize ] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -42,7 +42,7 @@ bCodec : Codec e B
 bCodec =
     Serialize.record B |> Serialize.field .fieldD Serialize.float |> Serialize.finishRecord
 """
-        , codeGenTest "qualified codec" [ elmSerialize ] [ """module A exposing (..)
+        , codeGenTest "qualified codec" [ elmSerialize ] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -62,7 +62,7 @@ codec =
     Serialize.record A |> Serialize.field .fieldA Serialize.int |> Serialize.finishRecord
 """
         , codeGenTest "custom type codec"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -105,7 +105,7 @@ codec =
         |> Serialize.finishCustomType
 """
         , codeGenTest "custom type in another module"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -148,7 +148,7 @@ codec =
         |> Serialize.finishCustomType
 """
         , codeGenTest "reuse existing codec in another module"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -197,7 +197,7 @@ codec : Codec e A
 codec =
     Serialize.record A |> Serialize.field .field OtherModule.codec |> Serialize.finishRecord
 """
-        , codeGenTest "maybe codec" [ elmSerialize ] [ """module A exposing (..)
+        , codeGenTest "maybe codec" [ elmSerialize ] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -216,7 +216,7 @@ codec : Codec e MyType
 codec =
     Serialize.record MyType |> Serialize.field .fieldA (Serialize.maybe Serialize.int) |> Serialize.finishRecord
 """
-        , codeGenTest "dict codec" [ elmSerialize ] [ """module A exposing (..)
+        , codeGenTest "dict codec" [ elmSerialize ] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 import Dict exposing (Dict)
@@ -244,7 +244,7 @@ codec =
         |> Serialize.finishRecord
 """
         , codeGenTest "nested record codec"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -273,7 +273,7 @@ codec =
             )
         |> Serialize.finishRecord
 """
-        , codeGenTest "add nested codec" [ elmSerialize ] [ """module A exposing (..)
+        , codeGenTest "add nested codec" [ elmSerialize ] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -301,7 +301,7 @@ myOtherTypeCodec =
     Serialize.record MyOtherType |> Serialize.field .fieldB Serialize.int |> Serialize.finishRecord
 """
         , codeGenTest "nested codec in another module"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -333,7 +333,7 @@ bCodec =
     Serialize.record B |> Serialize.field .field Serialize.int |> Serialize.finishRecord
 """
         , codeGenTest "twice nested codec in another module"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -371,7 +371,7 @@ b2Codec =
     Serialize.record B.B2 |> Serialize.field .field2 Serialize.int |> Serialize.finishRecord
 """
         , codeGenTest "nested codec in list"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module A exposing (..)
 
 import Serialize exposing (Codec)
@@ -405,7 +405,7 @@ bCodec =
         , -- This is not supported. In fact there are 2 features here that are still TODO:
           -- 1. Support for generics
           -- 2. Support for recursive datatypes
-          codeGenTest "codec with type parameter" [ elmSerialize ] [ """module A exposing (..)
+          codeGenTest "codec with type parameter" [ elmSerialize ] [] [ """module A exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -439,7 +439,7 @@ codec codecA =
         |> Serialize.variant1 Leaf codecA
         |> Serialize.finishCustomType
 """
-        , codeGenTest "Add codec for type inside tuple" [ elmSerialize ] [ """module Schema exposing (..)
+        , codeGenTest "Add codec for type inside tuple" [ elmSerialize ] [] [ """module Schema exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -468,7 +468,7 @@ bCodec : Codec e B
 bCodec =
     Serialize.record B |> Serialize.field .b Serialize.int |> Serialize.finishRecord
 """
-        , codeGenTest "Add codec for type inside nested record" [ elmSerialize ] [ """module Schema exposing (..)
+        , codeGenTest "Add codec for type inside nested record" [ elmSerialize ] [] [ """module Schema exposing (..)
 
 import Serialize exposing (Codec)
 
@@ -502,7 +502,7 @@ bCodec =
     Serialize.record B |> Serialize.field .b Serialize.int |> Serialize.finishRecord
 """
         , codeGenTest "CaseId.codec not found regression test"
-            [ elmSerialize ]
+            [ elmSerialize ] []
             [ """module Route exposing (..)
 import Serialize exposing (Codec)
 import CaseId exposing (CaseId)

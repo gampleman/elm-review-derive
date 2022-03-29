@@ -1,13 +1,13 @@
 module JsonEncderCodeGenTest exposing (..)
 
+import CodeGenerator.Test exposing (codeGenTest)
 import Review.Project.Dependency exposing (Dependency)
 import Test exposing (Test, describe)
-import TestHelper exposing (codeGenTest)
 
 
 elmJson : Dependency
 elmJson =
-    TestHelper.fakeDependency "elm/json"
+    CodeGenerator.Test.fakeDependency "elm/json"
 
 
 suite : Test
@@ -15,6 +15,7 @@ suite =
     describe "JsonEncoderTodo"
         [ codeGenTest "Generates a generator for an int"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -31,6 +32,7 @@ generator =
 """
         , codeGenTest "Generates an encoder for a basic custom type"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -55,6 +57,7 @@ encode foo =
 """
         , codeGenTest "Generates an encoder for an inline record"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -71,6 +74,7 @@ encode ab =
 """
         , codeGenTest "Generates an encoder for a declared record"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -93,6 +97,7 @@ encode foo =
 """
         , codeGenTest "Generates an encoder for an enum"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -120,6 +125,7 @@ encode foo =
 """
         , codeGenTest "Generates an encoder for a custom type"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -149,6 +155,7 @@ encode foo =
 """
         , codeGenTest "Picks up an encoder from another file"
             [ elmJson ]
+            []
             [ """module A exposing (A, encode)
 import Json.Encode exposing (Value)
 
@@ -187,6 +194,7 @@ encode b =
 """
         , codeGenTest "Picks up a generator from another file with different import notation"
             [ elmJson ]
+            []
             [ """module A exposing (A, generator)
 import Json.Encode as Encode
 
@@ -225,6 +233,7 @@ encode b =
 """
         , codeGenTest "Generates an encoder for a subtype"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -261,6 +270,7 @@ encodeB arg =
 """
         , codeGenTest "recursive"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode as Encode exposing (Value)
 
@@ -295,6 +305,7 @@ encode childEncoder tree =
 """
         , codeGenTest "Generates an encoder for an inline extensible record"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -311,6 +322,7 @@ encode ab =
 """
         , codeGenTest "Generates an encoder for an declared extensible record"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -333,6 +345,7 @@ encode ab =
 """
         , codeGenTest "Generates an encoder for an declared applied extensible record"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -356,6 +369,7 @@ encode abc =
 """
         , codeGenTest "Generates an encoder for an declared declared applied extensible record"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
@@ -385,6 +399,7 @@ encode abc =
 """
         , codeGenTest "Generates an encoder with phantom types"
             [ elmJson ]
+            []
             [ """module A exposing (..)
 import Json.Encode exposing (Value)
 
