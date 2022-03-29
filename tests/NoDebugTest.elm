@@ -1,6 +1,6 @@
 module NoDebugTest exposing (all)
 
-import NoDebug.TodoOrToString exposing (rule)
+import NoDebug.TodoOrToString
 import Review.Test exposing (ReviewResult)
 import Review.Test.Dependencies
 import Test exposing (Test, describe, test)
@@ -10,7 +10,7 @@ testRule : String -> ReviewResult
 testRule string =
     "module A exposing (..)\n\n"
         ++ string
-        |> Review.Test.runWithProjectData Review.Test.Dependencies.projectWithElmCore rule
+        |> Review.Test.runWithProjectData Review.Test.Dependencies.projectWithElmCore (NoDebug.TodoOrToString.rule [])
 
 
 todoMessage : String

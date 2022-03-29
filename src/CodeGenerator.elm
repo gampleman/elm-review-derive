@@ -1,5 +1,5 @@
 module CodeGenerator exposing
-    ( CodeGenerator, define
+    ( CodeGenerator, define, amend
     , Definition, ifUserHasDependency
     , int, float, string, char, list
     , succeed, map, mapN
@@ -14,7 +14,7 @@ By type oriented we mean generators that are driven by a type definition provide
 
 By principled we mean that the generated code will for the foremost follow compositional patterns to be able to express (almost) any type.
 
-@docs CodeGenerator, define
+@docs CodeGenerator, define, amend
 
 
 ### Defining code generators
@@ -45,7 +45,7 @@ By principled we mean that the generated code will for the foremost follow compo
 
 import Elm.CodeGen as CG
 import Elm.Syntax.Expression exposing (Expression)
-import GenericTodo exposing (CodeGenerator(..), Condition(..), Resolver, ResolverImpl(..))
+import Internal.CodeGenerator exposing (CodeGenerator(..), Condition(..), Resolver, ResolverImpl(..))
 import ResolvedType exposing (ResolvedType)
 import TypePattern exposing (TypePattern)
 
@@ -53,7 +53,7 @@ import TypePattern exposing (TypePattern)
 {-| Represents a code generator configuration.
 -}
 type alias CodeGenerator =
-    GenericTodo.CodeGenerator
+    Internal.CodeGenerator.CodeGenerator
 
 
 {-| Create a code generator. This requires the following pieces:
@@ -100,6 +100,22 @@ define id dependency searchPattern makeName definitions =
         }
         definitions
         |> Generic
+
+
+amend : String -> List Definition -> CodeGenerator
+amend id definition =
+    Amendment id
+        (List.filterMap
+            (\def ->
+                case def of
+                    Definition resolver ->
+                        Just resolver
+
+                    LambdaBreaker _ ->
+                        Nothing
+            )
+            definition
+        )
 
 
 {-| Definitions are a way to to generate and compose small snippets of code to handle specific situations that might occur in an Elm type.

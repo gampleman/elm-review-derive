@@ -1,8 +1,7 @@
-module CodeGen.Builtin.Random exposing (generic)
+module Internal.Builtin.Random exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Elm.Syntax.Node exposing (Node(..))
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -28,8 +27,8 @@ randomExtra =
     }
 
 
-generic : CodeGenerator
-generic =
+codeGen : CodeGenerator
+codeGen =
     CodeGenerator.define "elm/random/Random.Generator"
         "elm/random"
         (Typed [ "Random" ] "Generator" [ Target ])

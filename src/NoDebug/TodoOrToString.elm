@@ -1,13 +1,6 @@
 module NoDebug.TodoOrToString exposing (rule)
 
 import AssocList exposing (Dict)
-import CodeGen.Builtin.Codec
-import CodeGen.Builtin.FromString
-import CodeGen.Builtin.JsonEncoder
-import CodeGen.Builtin.ListAllVariants
-import CodeGen.Builtin.Random
-import CodeGen.Builtin.ToString
-import CodeGen.Helpers
 import Dict
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
@@ -18,25 +11,35 @@ import Elm.Syntax.Module exposing (Module(..))
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Range exposing (Range)
-import GenericTodo
+import Internal.Builtin.Codec
+import Internal.Builtin.FromString
+import Internal.Builtin.JsonEncoder
+import Internal.Builtin.ListAllVariants
+import Internal.Builtin.Random
+import Internal.Builtin.ToString
+import Internal.CodeGenTodo exposing (CodeGenTodo)
+import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator)
 import Internal.ExistingImport exposing (ExistingImport)
+import Internal.Helpers
+import Internal.ResolvedType as ResolvedType
 import ResolvedType exposing (ResolvedType)
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Project.Dependency exposing (Dependency)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
 
 
-rule : Rule
-rule =
+rule : List CodeGenerator -> Rule
+rule generators =
     let
-        generics =
-            [ CodeGen.Builtin.Random.generic
-            , CodeGen.Builtin.JsonEncoder.generic
-            , CodeGen.Builtin.Codec.generic
-            , CodeGen.Builtin.ListAllVariants.generic
-            , CodeGen.Builtin.ToString.generic
-            , CodeGen.Builtin.FromString.generic
-            ]
+        codeGens =
+            generators
+                ++ [ Internal.Builtin.Random.codeGen
+                   , Internal.Builtin.JsonEncoder.codeGen
+                   , Internal.Builtin.Codec.codeGen
+                   , Internal.Builtin.ListAllVariants.codeGen
+                   , Internal.Builtin.ToString.codeGen
+                   , Internal.Builtin.FromString.codeGen
+                   ]
     in
     Rule.newProjectRuleSchema "CodeGen" initialProjectContext
         |> Rule.withContextFromImportedModules
@@ -47,7 +50,7 @@ rule =
             , foldProjectContexts = foldProjectContexts
             }
         |> Rule.withElmJsonProjectVisitor elmJsonVisitor
-        |> Rule.withDependenciesProjectVisitor (initializeGenerics generics)
+        |> Rule.withDependenciesProjectVisitor (initializeCodeGens codeGens)
         |> Rule.withFinalProjectEvaluation finalProjectEvaluation
         |> Rule.fromProjectRuleSchema
 
@@ -112,10 +115,10 @@ importVisitor (Node _ import_) context =
     )
 
 
-initializeGenerics : List GenericTodo.CodeGenerator -> Dict.Dict String Dependency -> ProjectContext -> ( List (Error { useErrorForModule : () }), ProjectContext )
-initializeGenerics generics deps context =
+initializeCodeGens : List CodeGenerator -> Dict.Dict String Dependency -> ProjectContext -> ( List (Error { useErrorForModule : () }), ProjectContext )
+initializeCodeGens codeGens deps context =
     ( []
-    , { context | generics = GenericTodo.buildFullGeneric (Dict.keys deps) generics }
+    , { context | codeGens = Internal.CodeGenerator.configureCodeGenerators (Dict.keys deps) codeGens }
     )
 
 
@@ -123,10 +126,10 @@ type alias ProjectContext =
     { types : List ( ModuleName, ResolvedType )
     , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
     , moduleKeys : Dict ModuleName ModuleKey
-    , generics : List GenericTodo.ResolvedGeneric
-    , genericTodos : List ( ModuleName, GenericTodo.GenericTodo )
+    , codeGens : List ConfiguredCodeGenerator
+    , codeGenTodos : List ( ModuleName, CodeGenTodo )
     , otherTodos : List ( ModuleKey, Range )
-    , genericProviders : List { moduleName : ModuleName, genericId : String, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List { moduleName : ModuleName, codeGenId : String, functionName : String, childType : ResolvedType }
     }
 
 
@@ -138,10 +141,10 @@ type alias ModuleContext =
     , importStartRow : Maybe Int
     , imports : List ExistingImport
     , currentModule : ModuleName
-    , generics : List GenericTodo.ResolvedGeneric
-    , genericTodos : List GenericTodo.GenericTodo
+    , codeGens : List ConfiguredCodeGenerator
+    , codeGenTodos : List CodeGenTodo
     , otherTodos : List Range
-    , genericProviders : List { genericId : String, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List { codeGenId : String, functionName : String, childType : ResolvedType }
     }
 
 
@@ -150,9 +153,9 @@ initialProjectContext =
     { types = []
     , imports = AssocList.empty
     , moduleKeys = AssocList.empty
-    , generics = []
-    , genericTodos = []
-    , genericProviders = []
+    , codeGens = []
+    , codeGenTodos = []
+    , existingFunctionProviders = []
     , otherTodos = []
     }
 
@@ -170,9 +173,9 @@ fromProjectToModule lookupTable metadata projectContext =
     , importStartRow = Nothing
     , imports = []
     , currentModule = moduleName
-    , generics = projectContext.generics
-    , genericTodos = []
-    , genericProviders = []
+    , codeGens = projectContext.codeGens
+    , codeGenTodos = []
+    , existingFunctionProviders = []
     , otherTodos = []
     }
 
@@ -188,13 +191,13 @@ fromModuleToProject moduleKey metadata moduleContext =
         mapTodo =
             List.map (\todo -> ( moduleName, todo ))
 
-        genericRanges =
-            List.map .range moduleContext.genericTodos
+        codeGenRanges =
+            List.map .range moduleContext.codeGenTodos
 
         filterTodos =
             List.filter
                 (\r ->
-                    List.all (CodeGen.Helpers.rangeContains r >> not) genericRanges
+                    List.all (Internal.Helpers.rangeContains r >> not) codeGenRanges
                 )
     in
     { types =
@@ -206,7 +209,7 @@ fromModuleToProject moduleKey metadata moduleContext =
                 (\t ->
                     case t of
                         ResolvedType.CustomType ref _ _ ->
-                            Maybe.map (always ( moduleName, t )) (CodeGen.Helpers.find (\( exp, open ) -> ref.name == exp && open) moduleContext.exports)
+                            Maybe.map (always ( moduleName, t )) (Internal.Helpers.find (\( exp, open ) -> ref.name == exp && open) moduleContext.exports)
 
                         _ ->
                             Just ( moduleName, t )
@@ -219,9 +222,9 @@ fromModuleToProject moduleKey metadata moduleContext =
             , existingImports = moduleContext.imports
             }
     , moduleKeys = AssocList.singleton moduleName moduleKey
-    , generics = moduleContext.generics
-    , genericTodos = mapTodo moduleContext.genericTodos
-    , genericProviders = List.map (\a -> { moduleName = moduleName, genericId = a.genericId, functionName = a.functionName, childType = a.childType }) moduleContext.genericProviders
+    , codeGens = moduleContext.codeGens
+    , codeGenTodos = mapTodo moduleContext.codeGenTodos
+    , existingFunctionProviders = List.map (\a -> { moduleName = moduleName, codeGenId = a.codeGenId, functionName = a.functionName, childType = a.childType }) moduleContext.existingFunctionProviders
     , otherTodos = List.map (Tuple.pair moduleKey) (filterTodos moduleContext.otherTodos)
     }
 
@@ -231,14 +234,14 @@ foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , imports = AssocList.union newContext.imports previousContext.imports
     , moduleKeys = AssocList.union newContext.moduleKeys previousContext.moduleKeys
-    , generics =
-        if List.isEmpty newContext.generics then
-            previousContext.generics
+    , codeGens =
+        if List.isEmpty newContext.codeGens then
+            previousContext.codeGens
 
         else
-            newContext.generics
-    , genericTodos = newContext.genericTodos ++ previousContext.genericTodos
-    , genericProviders = newContext.genericProviders ++ previousContext.genericProviders
+            newContext.codeGens
+    , codeGenTodos = newContext.codeGenTodos ++ previousContext.codeGenTodos
+    , existingFunctionProviders = newContext.existingFunctionProviders ++ previousContext.existingFunctionProviders
     , otherTodos = newContext.otherTodos ++ previousContext.otherTodos
     }
 
@@ -288,20 +291,20 @@ declarationVisitor declarations context =
         | types = types ++ context.types
         , importStartRow =
             List.map (Node.range >> .start >> .row) declarations |> List.minimum
-        , genericProviders =
+        , existingFunctionProviders =
             List.filterMap
                 (\declaration ->
                     case declaration of
                         Node _ (Declaration.FunctionDeclaration function) ->
-                            GenericTodo.declarationVisitorGetGenericTypes context function
-                                |> Maybe.map (\rec -> { genericId = rec.genericId, functionName = rec.functionName, childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule rec.childType })
+                            Internal.CodeGenTodo.declarationVisitorGetExistingFunctionProviders context function
+                                |> Maybe.map (\rec -> { codeGenId = rec.codeGenId, functionName = rec.functionName, childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule rec.childType })
 
                         _ ->
                             Nothing
                 )
                 declarations
-                ++ context.genericProviders
-        , genericTodos = getTodos (GenericTodo.getTodos context availableTypes) ++ context.genericTodos
+                ++ context.existingFunctionProviders
+        , codeGenTodos = getTodos (Internal.CodeGenTodo.getTodos context availableTypes) ++ context.codeGenTodos
       }
     )
 
@@ -314,9 +317,9 @@ expressionVisitor node context =
                 case ModuleNameLookupTable.moduleNameFor context.lookupTable node of
                     Just [ "Debug" ] ->
                         ( [ Rule.error
-                                { message = "Remove the use of `Debug." ++ name ++ "` before shipping to production"
+                                { message = "Remove the use of `Debug.toString` before shipping to production"
                                 , details =
-                                    [ "`Debug." ++ name ++ "` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
+                                    [ "`Debug.toString` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
                                     ]
                                 }
                                 (Node.range node)
@@ -359,6 +362,6 @@ finalProjectEvaluation projectContext =
         projectContext.otherTodos
         ++ List.filterMap
             (\( moduleName, todo ) ->
-                GenericTodo.todoErrors projectContext moduleName todo
+                Internal.CodeGenTodo.todoErrors projectContext moduleName todo
             )
-            projectContext.genericTodos
+            projectContext.codeGenTodos

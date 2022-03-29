@@ -51,7 +51,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -102,7 +102,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -156,7 +156,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -210,7 +210,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -256,7 +256,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -302,7 +302,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -348,7 +348,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -394,7 +394,7 @@ migrateA old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "A"
                               , [ Review.Test.error
@@ -519,7 +519,7 @@ migrateFormCondition old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -571,7 +571,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -623,7 +623,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -681,7 +681,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -733,7 +733,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -839,7 +839,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -895,7 +895,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error
@@ -951,7 +951,7 @@ migrateMyType old =
 """
                                 |> String.replace "\u{000D}" ""
                     in
-                    Review.Test.runOnModules NoDebug.TodoOrToString.rule [ moduleA, moduleB ]
+                    Review.Test.runOnModules (NoDebug.TodoOrToString.rule []) [ moduleA, moduleB ]
                         |> Review.Test.expectErrorsForModules
                             [ ( "Schema"
                               , [ Review.Test.error

@@ -33,7 +33,7 @@ codeGenTestFailsWith description dependencies modules expectedFailureDetails =
                 project =
                     List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
             in
-            Review.Test.runOnModulesWithProjectData project NoDebug.TodoOrToString.rule inputModules
+            Review.Test.runOnModulesWithProjectData project (NoDebug.TodoOrToString.rule []) inputModules
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error
@@ -60,7 +60,7 @@ codeGenTest description dependencies modules expected =
                 project =
                     List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
             in
-            Review.Test.runOnModulesWithProjectData project NoDebug.TodoOrToString.rule inputModules
+            Review.Test.runOnModulesWithProjectData project (NoDebug.TodoOrToString.rule []) inputModules
                 |> Review.Test.expectErrorsForModules
                     [ ( result.module_
                       , [ Review.Test.error

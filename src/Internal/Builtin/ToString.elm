@@ -1,4 +1,4 @@
-module CodeGen.Builtin.ListAllVariants exposing (generic)
+module Internal.Builtin.ToString exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
@@ -6,11 +6,11 @@ import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
 
-generic : CodeGenerator
-generic =
-    CodeGenerator.define "elm/core/ListAllGenerics"
+codeGen : CodeGenerator
+codeGen =
+    CodeGenerator.define "elm/core/ToString"
         "elm/core"
-        (Typed [ "List" ] "List" [ Target ])
+        (Function Target (Typed [ "String" ] "String" []))
         (\name -> "all" ++ name)
         [ CodeGenerator.custom
             (\t ->

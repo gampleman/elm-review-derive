@@ -1,4 +1,4 @@
-module CodeGen.Builtin.FromString exposing (..)
+module Internal.Builtin.FromString exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
@@ -6,8 +6,8 @@ import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
 
-generic : CodeGenerator
-generic =
+codeGen : CodeGenerator
+codeGen =
     CodeGenerator.define "elm/core/FromString"
         "elm/core"
         (Function (Typed [ "String" ] "String" []) (Typed [ "Maybe" ] "Maybe" [ Target ]))

@@ -1,14 +1,13 @@
-module CodeGen.Builtin.JsonEncoder exposing (generic)
+module Internal.Builtin.JsonEncoder exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Elm.Syntax.Node exposing (Node(..))
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
 
-generic : CodeGenerator
-generic =
+codeGen : CodeGenerator
+codeGen =
     CodeGenerator.define "elm/json/Json.Encode.Value"
         "elm/json"
         (Function Target (Typed [ "Json", "Encode" ] "Value" []))

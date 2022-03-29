@@ -1,9 +1,7 @@
-module CodeGen.Builtin.Codec exposing (..)
+module Internal.Builtin.Codec exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Elm.Syntax.Node exposing (Node(..))
-import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -23,8 +21,8 @@ toValueCase v =
         |> Maybe.withDefault v
 
 
-generic : CodeGenerator
-generic =
+codeGen : CodeGenerator
+codeGen =
     CodeGenerator.define "MartinSStewart/elm-serialize/Codec"
         "MartinSStewart/elm-serialize"
         (Typed [ "Serialize" ] "Codec" [ GenericType "e", Target ])

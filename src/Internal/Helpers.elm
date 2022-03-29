@@ -1,16 +1,15 @@
-module CodeGen.Helpers exposing (application, capitalize, errorMessage, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, functionOrValue, hasDebugTodo, importsFix, node, notSupportedErrorMessage, parenthesis, pipeRight, rangeContains, traverseExpression, typeAnnotationReturnValue, uncapitalize, varFromInt, writeDeclaration, writeExpression)
+module Internal.Helpers exposing (find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, node, rangeContains, traverseExpression, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Elm.Pretty
 import Elm.Syntax.Exposing exposing (Exposing(..), TopLevelExpose(..))
 import Elm.Syntax.Expression as Expression exposing (Expression(..), Function, LetDeclaration(..))
-import Elm.Syntax.Infix as Infix
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
-import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
+import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation(..))
 import Internal.ExistingImport exposing (ExistingImport)
 import Pretty
 import Review.Fix
@@ -26,41 +25,9 @@ writeExpression =
     Elm.Pretty.prettyExpression >> Pretty.pretty 120
 
 
-notSupportedErrorMessage : Node Expression
-notSupportedErrorMessage =
-    errorMessage "Can't handle this"
-
-
-errorMessage : String -> Node Expression
-errorMessage error =
-    application
-        [ functionOrValue [ "Debug" ] "todo"
-        , Expression.Literal error |> node
-        ]
-        |> parenthesis
-
-
+node : a -> Node a
 node =
     Node Elm.Syntax.Range.emptyRange
-
-
-application =
-    Expression.Application >> node
-
-
-functionOrValue : ModuleName -> String -> Node Expression
-functionOrValue moduleName functionOrValueName =
-    Expression.FunctionOrValue moduleName functionOrValueName |> node
-
-
-pipeRight : Node Expression -> Node Expression -> Node Expression
-pipeRight eRight eLeft =
-    Expression.OperatorApplication "|>" Infix.Left eLeft eRight |> node
-
-
-parenthesis : Node Expression -> Node Expression
-parenthesis =
-    Expression.ParenthesizedExpression >> node
 
 
 rangeContains : Range -> Range -> Bool
@@ -105,16 +72,6 @@ findMap fn list =
                     findMap fn rest
 
 
-uncapitalize : String -> String
-uncapitalize text =
-    String.toLower (String.left 1 text) ++ String.dropLeft 1 text
-
-
-capitalize : String -> String
-capitalize text =
-    String.toUpper (String.left 1 text) ++ String.dropLeft 1 text
-
-
 hasDebugTodo : { a | expression : Node Expression } -> Bool
 hasDebugTodo declaration =
     case declaration.expression of
@@ -123,23 +80,6 @@ hasDebugTodo declaration =
 
         _ ->
             False
-
-
-varFromInt : Int -> String
-varFromInt =
-    (+) (Char.toCode 'a')
-        >> Char.fromCode
-        >> String.fromChar
-
-
-typeAnnotationReturnValue : Node TypeAnnotation -> Node TypeAnnotation
-typeAnnotationReturnValue typeAnnotation =
-    case typeAnnotation of
-        Node _ (TypeAnnotation.FunctionTypeAnnotation _ node_) ->
-            typeAnnotationReturnValue node_
-
-        _ ->
-            typeAnnotation
 
 
 importsFix : ModuleName -> List ExistingImport -> Int -> Set ModuleName -> Maybe Review.Fix.Fix
