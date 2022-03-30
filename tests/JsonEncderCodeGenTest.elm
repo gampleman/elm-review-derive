@@ -20,8 +20,7 @@ suite =
 import Json.Encode exposing (Value)
 
 generator : Int -> Value
-generator =
-    Debug.todo ""
+generator =  Debug.todo ""
 """ ]
             """module A exposing (..)
 import Json.Encode exposing (Value)

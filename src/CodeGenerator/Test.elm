@@ -1,5 +1,6 @@
 module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, fakeDependency)
 
+import Array
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen
 import Elm.Parser
@@ -10,6 +11,7 @@ import Elm.RawFile
 import Elm.Syntax.Declaration exposing (Declaration(..))
 import Elm.Syntax.Expression
 import Elm.Syntax.Node exposing (Node(..))
+import Elm.Syntax.Range exposing (Range)
 import Elm.Writer
 import Expect exposing (Expectation)
 import Json.Decode
@@ -82,6 +84,28 @@ codeGenTest description dependencies codeGens modules expected =
         )
 
 
+extractSubstring : Range -> String -> String
+extractSubstring { start, end } file =
+    case
+        String.lines file
+            |> Array.fromList
+            |> Array.slice (start.row - 1) end.row
+            |> Array.toList
+    of
+        [] ->
+            ""
+
+        fst :: rest ->
+            case List.reverse (String.dropLeft (start.column - 1) fst :: rest) of
+                [] ->
+                    ""
+
+                last :: head ->
+                    (String.dropRight (String.length last - end.column) last :: head)
+                        |> List.reverse
+                        |> String.join "\n"
+
+
 fakeDependency : String -> Dependency
 fakeDependency name =
     case Json.Decode.decodeString Elm.Project.decoder ("""{
@@ -125,8 +149,7 @@ findTodo modules =
                                                 Node _ (Elm.Syntax.Expression.Application ((Node _ (Elm.Syntax.Expression.FunctionOrValue [ "Debug" ] "todo")) :: _)) ->
                                                     Just
                                                         { module_ = Elm.RawFile.moduleName rawFile |> String.join "."
-                                                        , under =
-                                                            Elm.Syntax.Node.value node |> Elm.CodeGen.DeclNoComment |> Elm.Pretty.prettyDeclaration 4 |> Pretty.pretty 160
+                                                        , under = extractSubstring (Elm.Syntax.Node.range node) current
                                                         }
 
                                                 _ ->
