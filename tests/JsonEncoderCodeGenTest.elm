@@ -1,4 +1,4 @@
-module JsonEncderCodeGenTest exposing (..)
+module JsonEncoderCodeGenTest exposing (..)
 
 import CodeGenerator.Test exposing (codeGenTest)
 import Review.Project.Dependency exposing (Dependency)
