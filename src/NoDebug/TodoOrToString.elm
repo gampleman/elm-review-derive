@@ -1,5 +1,11 @@
 module NoDebug.TodoOrToString exposing (rule)
 
+{-|
+
+@docs rule
+
+-}
+
 import AssocList exposing (Dict)
 import Dict
 import Elm.Project
@@ -28,6 +34,86 @@ import Review.Project.Dependency exposing (Dependency)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
 
 
+{-| Forbid the use of [`Debug.todo`] and [`Debug.toString`].
+
+    config =
+        [ NoDebug.TodoOrToString.rule []
+        ]
+
+The reason why there is a is separate rule for handling [`Debug.log`] and one for
+handling [`Debug.todo`] and [`Debug.toString`], is because these two functions
+are reasonable and useful to have in tests.
+
+You can for instance create test data without having to handle the error case
+everywhere. If you do enter the error case in the following example, then tests
+will fail.
+
+    testEmail : Email
+    testEmail =
+        case Email.fromString "some.email@domain.com" of
+            Just email ->
+                email
+
+            Nothing ->
+                Debug.todo "Supplied an invalid email in tests"
+
+If you want to allow these functions in tests but not in production code, you
+can configure the rule like this.
+
+import Review.Rule as Rule exposing (Rule)
+
+    config =
+        [ NoDebug.TodoOrToString.rule []
+            |> Rule.ignoreErrorsForDirectories [ "tests/" ]
+        ]
+
+
+## Fail
+
+    _ =
+        if condition then
+            a
+
+        else
+            Debug.todo ""
+
+    _ =
+        Debug.toString data
+
+
+## Success
+
+    if condition then
+        a
+
+    else
+        b
+
+🔧 Running with `--fix` will automatically generate code to replace some `Debug.todo` uses.
+
+In particular it will generate code when `Debug.todo` is used in a top-level definition with an explicit
+type annotation, like so:
+
+     someFunction : Decoder SomeType
+     someFunction =
+            Debug.todo ""
+
+There is an ever-expanding list of type signatures that this rule supports, however, it is relatively straightforward to
+add your own.  See [`CodeGenerator`](CodeGenerator) for details.
+
+## Try it out
+
+You can try this rule out by running the following command:
+
+```bash
+elm-review --template MartinSStewart/elm-review-todo-it-for-me/example --rules NoDebug.TodoOrToString
+```
+
+[`Debug.log`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#log
+[`Debug.todo`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#todo
+[`Debug.toString`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#toString
+
+-}
 rule : List CodeGenerator -> Rule
 rule generators =
     let

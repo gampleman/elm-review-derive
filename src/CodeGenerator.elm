@@ -1,11 +1,11 @@
 module CodeGenerator exposing
     ( CodeGenerator, define, amend
     , Definition, ifUserHasDependency
-    , int, float, string, char, list
-    , succeed, map, mapN
-    , customType
+    , int, float, string, char, list, dict, maybe
+    , unit, tuple, triple
+    , succeed, map, mapN, pipeline, combiner
+    , customType, lambdaBreaker
     , custom
-    , combiner, dict, lambdaBreaker, maybe, pipeline, triple, tuple, unit
     )
 
 {-| This module let's you define (or change) type-oriented principled code generators.
@@ -24,17 +24,22 @@ By principled we mean that the generated code will for the foremost follow compo
 
 ### Primitives
 
-@docs int, float, string, char, list
+@docs int, float, string, char, list, dict, maybe
+
+
+### Tuples
+
+@docs unit, tuple, triple
 
 
 ### Combining values
 
-@docs succeed, map, mapN, pipeline\
+@docs succeed, map, mapN, pipeline, combiner
 
 
 ### Dealing with custom types
 
-@docs customType
+@docs customType, lambdaBreaker
 
 
 ### Going crazy
@@ -102,6 +107,11 @@ define id dependency searchPattern makeName definitions =
         |> Generic
 
 
+{-| Don't like how one of the built-in or third-party generators generates code?
+Code generation can be a little opinionated after all. With this function you can override pieces of another code
+generators behavior. You'll need to find out the target generators ID, then you can pass in the new definitions that will
+take precedence over the existing ones.
+-}
 amend : String -> List Definition -> CodeGenerator
 amend id definition =
     Amendment id
@@ -193,6 +203,8 @@ char =
     Just >> always >> always >> PrimitiveResolver { modulePath = [ "Char" ], name = "Char" } >> simpleDef
 
 
+{-| Handle the unit `()` type.
+-}
 unit : Expression -> Definition
 unit =
     Just >> always >> always >> PrimitiveResolver { modulePath = [ "Basics" ], name = "()" } >> simpleDef
@@ -240,6 +252,8 @@ arg2Primitive modPath name fn =
         |> simpleDef
 
 
+{-| Handle a `Dict`.
+-}
 dict : (Expression -> Expression -> Expression) -> Definition
 dict =
     arg2Primitive [ "Dict" ] "Dict"
@@ -354,6 +368,13 @@ triple fn =
 
 
 {-| If map, mapN, succeed, pipeline don't work for you, this is a more custom way to combine these.
+
+The arguments that the function you pass will recieve are:
+
+1.  Information about the type being constructed (e.g. `Foo Int`).
+2.  An expression representing a function that creates the type in question (e.g. `makeFoo : Int -> Foo`).
+3.  A list of expressions that have already been generated (e.g. `[ Decode.int ]`)
+
 -}
 combiner : (ResolvedType -> Expression -> List Expression -> Maybe Expression) -> Definition
 combiner fn =

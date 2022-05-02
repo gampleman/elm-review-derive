@@ -1,5 +1,11 @@
 module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, fakeDependency)
 
+{-| Testing code generators can be tricky, but very rewarding as it makes developing CodeGenerators much easier.
+
+@docs codeGenTest, codeGenTestFailsWith, fakeDependency
+
+-}
+
 import Array
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen
@@ -43,6 +49,8 @@ codeGenTestHelper description dependencies codeGens modules fn =
                     Expect.fail msg
 
 
+{-| Like `codeGenTest`, but expects the code generator to not be able to generate code. The final string is the expected error message.
+-}
 codeGenTestFailsWith : String -> List Dependency -> List CodeGenerator -> List String -> String -> Test
 codeGenTestFailsWith description dependencies codeGens modules expectedFailureDetails =
     codeGenTestHelper description
@@ -63,6 +71,35 @@ codeGenTestFailsWith description dependencies codeGens modules expectedFailureDe
         )
 
 
+{-| Tests that a single `Debug.todo` gets replaced with a particular piece of code.
+
+    codeGenTest "Generates a generator for a int"
+        [ fakeDependency "elm/random" ]
+        [ elmRandomCodeGeneratorUnderTest ]
+        [ """module A exposing (..)
+    import Random
+
+    generator : Random.Generator Int
+    generator =
+        Debug.todo ""
+    """ ]
+        """module A exposing (..)
+    import Random
+
+    generator : Random.Generator Int
+    generator =
+        Random.int Random.minInt Random.maxInt
+    """
+
+The arguments are:
+
+1.  Description (i.e. what you would normally pass to `Test.test`)
+2.  A list of dependencies. Note that this rule will only activate code generators based on dependencies in the user's project. This allows you to control which dependencies are present.
+3.  A list of code generators. Typically this will be the code generator under test, but can also be used to test interactions between multiple.
+4.  A list of code modules that form the project the rule is being run on. Exactly one of these must have a single top level `Debug.todo` that the test is trying to replace.
+5.  The expected source code of the module containing the `Debug.todo` after running the code generator.
+
+-}
 codeGenTest : String -> List Dependency -> List CodeGenerator -> List String -> String -> Test
 codeGenTest description dependencies codeGens modules expected =
     codeGenTestHelper description
@@ -106,6 +143,8 @@ extractSubstring { start, end } file =
                         |> String.join "\n"
 
 
+{-| Creates a fake elm review dependency type. This should only be used with the other helpers in this module, as the information inside the returned type is mostly rubbish.
+-}
 fakeDependency : String -> Dependency
 fakeDependency name =
     case Json.Decode.decodeString Elm.Project.decoder ("""{
