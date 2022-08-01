@@ -206,7 +206,7 @@ generate isTopLevel context stack type_ =
                                         _ ->
                                             Nothing
                                 )
-                                ref.name
+                                (Helpers.writeExpression (ResolvedType.refToExpr context.currentModule context.existingImports ref))
                                 context.codeGen
                                 type_
 
