@@ -29,6 +29,22 @@ generator : Int -> Value
 generator =
     Json.Encode.int
 """
+        , codeGenTest "Generates a generator for an int with an explicit arg"
+            [ elmJson ]
+            []
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+generator : Int -> Value
+generator a =  Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+generator : Int -> Value
+generator a =
+    Json.Encode.int a
+"""
         , codeGenTest "Generates an encoder for a basic custom type"
             [ elmJson ]
             []
@@ -426,5 +442,83 @@ encode foo =
     case foo of
         Foo arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "Foo" ), ( "0", Json.Encode.int arg0 ) ]
+"""
+        , codeGenTest "Generates an encoder with a list"
+            [ elmJson ]
+            []
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo =
+    List Int
+
+encode : Foo -> Value
+encode =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+
+type alias Foo =
+    List Int
+
+encode : Foo -> Value
+encode =
+    Json.Encode.list Json.Encode.int
+"""
+        , codeGenTest "Generates an encoder with container types"
+            [ elmJson ]
+            []
+            [ """module A exposing (..)
+import Json.Encode exposing (Value)
+import Array exposing (Array)
+import Dict exposing (Dict)
+import Set exposing (Set)
+
+type alias Foo =
+    { maybe : Maybe Int
+    , list: List Int
+    , array : Array Int
+    , set : Set Int
+    , strDict : Dict String String
+    , intDict : Dict Int String
+    }
+
+encode : Foo -> Value
+encode =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Json.Encode exposing (Value)
+import Array exposing (Array)
+import Dict exposing (Dict)
+import Set exposing (Set)
+
+type alias Foo =
+    { maybe : Maybe Int
+    , list: List Int
+    , array : Array Int
+    , set : Set Int
+    , strDict : Dict String String
+    , intDict : Dict Int String
+    }
+
+encode : Foo -> Value
+encode rec =
+    Json.Encode.object
+        [ ( "maybe"
+          , case rec.maybe of
+                Just val ->
+                    Json.Encode.int val
+
+                Nothing ->
+                    Json.Encode.null
+          )
+        , ( "list", Json.Encode.list Json.Encode.int rec.list )
+        , ( "array", Json.Encode.array Json.Encode.int rec.array )
+        , ( "set", Json.Encode.set Json.Encode.int rec.set )
+        , ( "strDict", Json.Encode.dict identity Json.Encode.string rec.strDict )
+        , ( "intDict", Json.Encode.dict (Json.Encode.int >> Json.Encode.encode 0) Json.Encode.string rec.intDict )
+        ]
 """
         ]

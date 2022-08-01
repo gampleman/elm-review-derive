@@ -15,6 +15,41 @@ codeGen =
         [ CodeGenerator.int (CG.fqFun [ "Json", "Encode" ] "int")
         , CodeGenerator.string (CG.fqFun [ "Json", "Encode" ] "string")
         , CodeGenerator.float (CG.fqFun [ "Json", "Encode" ] "float")
+        , CodeGenerator.bool (CG.fqFun [ "Json", "Encode" ] "bool")
+        , CodeGenerator.list (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "list", arg ])
+        , CodeGenerator.array (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "array", arg ])
+        , CodeGenerator.set (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "set", arg ])
+        , CodeGenerator.customDict
+            (\( keyType, keyEncoder ) ( _, valEncoder ) ->
+                CG.apply
+                    [ CG.fqFun [ "Json", "Encode" ] "dict"
+                    , case keyType of
+                        ResolvedType.Opaque ref _ ->
+                            if ref.modulePath == [ "String" ] && ref.name == "String" then
+                                CG.val "identity"
+
+                            else
+                                -- TODO: For int and float, we could probably more idiomatically do String.fromInt etc
+                                CG.chain keyEncoder [ CG.apply [ CG.fqFun [ "Json", "Encode" ] "encode", CG.int 0 ] ]
+
+                        _ ->
+                            CG.chain keyEncoder [ CG.apply [ CG.fqFun [ "Json", "Encode" ] "encode", CG.int 0 ] ]
+                    , valEncoder
+                    ]
+            )
+        , CodeGenerator.maybe
+            (\encoder ->
+                CG.lambda [ CG.varPattern "arg" ]
+                    (CG.caseExpr (CG.val "arg")
+                        [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
+                          , CG.apply [ encoder, CG.val "val" ]
+                          )
+                        , ( CG.fqNamedPattern [] "Nothing" []
+                          , CG.fqVal [ "Json", "Encode" ] "null"
+                          )
+                        ]
+                    )
+            )
         , CodeGenerator.customType
             (\ctors variants ->
                 CG.lambda [ CG.varPattern "arg" ]

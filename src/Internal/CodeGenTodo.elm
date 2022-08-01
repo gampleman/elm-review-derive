@@ -286,10 +286,25 @@ createFixes projectContext codeGen imports currentModule todo =
                                     ( newDecl, foundImports ) =
                                         Helpers.fixNamesAndImportsInFunctionDeclaration decl currentModule imports.existingImports
                                 in
-                                ( (Helpers.writeDeclaration (CodeGenerator.fixFunctionDeclaration newDecl) ++ "\n") :: soFar, foundImports ++ imports_ )
+                                ( (Helpers.writeDeclaration (CodeGenerator.fixFunctionDeclaration [] newDecl) ++ "\n") :: soFar, foundImports ++ imports_ )
                             )
                             ( [], newImports_ )
                             declarations_
+
+                    genericArgs =
+                        Dict.values todo.genericArguments
+
+                    applicableArgs =
+                        List.filter
+                            (\arg ->
+                                case arg of
+                                    Node _ (Elm.Syntax.Pattern.VarPattern n) ->
+                                        not (List.member n genericArgs)
+
+                                    _ ->
+                                        False
+                            )
+                            todo.parameters
                 in
                 Review.Fix.replaceRangeBy todo.range
                     ({ documentation = Nothing
@@ -301,7 +316,7 @@ createFixes projectContext codeGen imports currentModule todo =
                             , expression = Helpers.node expression
                             }
                      }
-                        |> CodeGenerator.fixFunctionDeclaration
+                        |> CodeGenerator.fixFunctionDeclaration applicableArgs
                         |> Helpers.writeDeclaration
                     )
                     :: List.indexedMap

@@ -1,7 +1,7 @@
 module CodeGenerator exposing
     ( CodeGenerator, define, amend
     , Definition, ifUserHasDependency
-    , int, float, string, char, list, dict, maybe
+    , bool, int, float, string, char, list, array, set, dict, maybe, customDict
     , unit, tuple, triple
     , succeed, map, mapN, pipeline, combiner
     , customType, lambdaBreaker
@@ -24,7 +24,7 @@ By principled we mean that the generated code will for the foremost follow compo
 
 ### Primitives
 
-@docs int, float, string, char, list, dict, maybe
+@docs bool, int, float, string, char, list, array, set, dict, maybe, customDict
 
 
 ### Tuples
@@ -175,6 +175,13 @@ simpleDef impl =
 -- Primitives
 
 
+{-| Handle an `Bool` type.
+-}
+bool : Expression -> Definition
+bool =
+    Just >> always >> always >> PrimitiveResolver { modulePath = [ "Basics" ], name = "Bool" } >> simpleDef
+
+
 {-| Handle an `Int` type.
 -}
 int : Expression -> Definition
@@ -231,6 +238,20 @@ list =
     arg1Primitive [ "List" ] "List"
 
 
+{-| Handle a `List a` type. You will be given code that handles the `a` subtype.
+-}
+array : (Expression -> Expression) -> Definition
+array =
+    arg1Primitive [ "Array" ] "Array"
+
+
+{-| Handle a `List a` type. You will be given code that handles the `a` subtype.
+-}
+set : (Expression -> Expression) -> Definition
+set =
+    arg1Primitive [ "Set" ] "Set"
+
+
 {-| Handle a `Maybe a` type. You will be given code that handles the `a` subtype.
 -}
 maybe : (Expression -> Expression) -> Definition
@@ -257,6 +278,22 @@ arg2Primitive modPath name fn =
 dict : (Expression -> Expression -> Expression) -> Definition
 dict =
     arg2Primitive [ "Dict" ] "Dict"
+
+
+{-| Handle a `Dict`, but get information about the types. This is useful, since sometimes we need the type of the keys.
+-}
+customDict : (( ResolvedType, Expression ) -> ( ResolvedType, Expression ) -> Expression) -> Definition
+customDict fn =
+    PrimitiveResolver { modulePath = [ "Dict" ], name = "Dict" }
+        (\types args ->
+            case ( types, args ) of
+                ( [ t0, t1 ], [ arg0, arg1 ] ) ->
+                    Just (fn ( t0, arg0 ) ( t1, arg1 ))
+
+                _ ->
+                    Nothing
+        )
+        |> simpleDef
 
 
 

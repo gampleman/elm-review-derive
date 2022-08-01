@@ -571,11 +571,23 @@ to
         arg ++ d
 
 -}
-fixFunctionDeclaration : Function -> Function
-fixFunctionDeclaration func =
+fixFunctionDeclaration : List (Node Pattern) -> Function -> Function
+fixFunctionDeclaration applicableArgs func =
     let
         declaration =
             Node.value func.declaration
+
+        asVals =
+            List.filterMap
+                (\p ->
+                    case p of
+                        Node _ (VarPattern n) ->
+                            Just (CG.val n)
+
+                        _ ->
+                            Nothing
+                )
+                applicableArgs
 
         ( newExpr, newArgs ) =
             case postprocessExpression (Node.value declaration.expression) of
@@ -596,7 +608,7 @@ fixFunctionDeclaration func =
                                                 Nothing
                                     )
                                     (List.reverse lambda.args)
-                                    (List.reverse declaration.arguments)
+                                    (List.reverse applicableArgs)
                                     |> List.filterMap identity
                                     |> Dict.fromList
                         in
@@ -622,9 +634,18 @@ fixFunctionDeclaration func =
                         )
 
                     else
-                        ( declaration.expression, declaration.arguments )
+                        ( CG.apply (Node.value declaration.expression :: asVals) |> Helpers.node, declaration.arguments )
 
-                _ ->
-                    ( declaration.expression, declaration.arguments )
+                exp ->
+                    ( if List.isEmpty applicableArgs then
+                        declaration.expression
+
+                      else
+                        CG.apply
+                            (exp :: asVals)
+                            |> postprocessExpression
+                            |> Helpers.node
+                    , declaration.arguments
+                    )
     in
     { func | declaration = Helpers.node { declaration | expression = newExpr, arguments = newArgs } }
