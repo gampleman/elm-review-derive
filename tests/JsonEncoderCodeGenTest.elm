@@ -324,6 +324,52 @@ encode b =
         B arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int arg0 ) ]
 """
+        , codeGenTest "Picks up an encoder from same file with multiple generics"
+            [ elmJson ]
+            []
+            [ """module A exposing (A, encode)
+import Json.Encode exposing (Value)
+
+type A
+  = A (Result String Int)
+ 
+
+encode : A val -> Value
+encode encodeVal a =
+   Debug.todo ""
+
+encodeResult : (err -> Value) -> (ok -> Value) -> Result err ok -> Value
+encodeResult err ok val =
+    case val of
+        Err arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", err arg0 ) ]
+
+        Ok arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok arg0 ) ]
+""" ]
+            """module A exposing (A, encode)
+import Json.Encode exposing (Value)
+
+type A
+  = A (Result String Int)
+ 
+
+encode : A val -> Value
+encode encodeVal a =
+    case a of
+        A arg0 ->
+            Json.Encode.object
+                [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int arg0 ) ]
+
+encodeResult : (err -> Value) -> (ok -> Value) -> Result err ok -> Value
+encodeResult err ok val =
+    case val of
+        Err arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", err arg0 ) ]
+
+        Ok arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok arg0 ) ]
+"""
         , codeGenTest "Generates an encoder for a subtype"
             [ elmJson ]
             []

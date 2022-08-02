@@ -253,6 +253,25 @@ matchType full possiblyRef =
         ( TypeAlias ref1 gens1 _, TypeAlias ref2 gens2 _ ) ->
             ref1 == ref2 && List.length gens1 == List.length gens2
 
+        ( Opaque ref1 gens1, Opaque ref2 gens2 ) ->
+            ref1
+                == ref2
+                && List.length gens1
+                == List.length gens2
+                && List.all identity
+                    (List.map2
+                        (\gen1 gen2 ->
+                            case gen1 of
+                                GenericType _ Nothing ->
+                                    True
+
+                                _ ->
+                                    gen1 == gen2
+                        )
+                        gens1
+                        gens2
+                    )
+
         _ ->
             full == possiblyRef
 
@@ -276,6 +295,29 @@ findGenericAssignments full possiblyRef =
                         Dict.get name bindings
                             |> Maybe.map (\newName -> ( newName, t ))
                     )
+                |> Dict.fromList
+
+        ( Opaque _ gens1, Opaque _ gens2 ) ->
+            List.map2
+                (\gen1 gen2 ->
+                    case gen1 of
+                        GenericType name Nothing ->
+                            case gen2 of
+                                GenericType _ (Just t) ->
+                                    Just ( name, t )
+
+                                GenericType _ Nothing ->
+                                    Nothing
+
+                                _ ->
+                                    Just ( name, gen2 )
+
+                        _ ->
+                            Nothing
+                )
+                gens1
+                gens2
+                |> List.filterMap identity
                 |> Dict.fromList
 
         _ ->
