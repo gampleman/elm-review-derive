@@ -122,11 +122,20 @@ configureCodeGenerators dependencies codeGens =
         |> Tuple.second
 
 
+type alias ExistingFunctionProvider =
+    { codeGenId : String
+    , moduleName : ModuleName
+    , functionName : String
+    , childType : ResolvedType
+    , genericArguments : List String
+    }
+
+
 type alias GenerationContext =
     { codeGen : ConfiguredCodeGenerator
     , existingImports : List ExistingImport
     , currentModule : ModuleName
-    , existingFunctionProviders : List { codeGenId : String, moduleName : ModuleName, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List ExistingFunctionProvider
     , genericArguments : Dict.Dict String String
     }
 
@@ -157,7 +166,23 @@ generate : Bool -> GenerationContext -> RecursionStack -> ResolvedType -> CodeGe
 generate isTopLevel context stack type_ =
     case Helpers.find (\provider -> ResolvedType.matchType provider.childType type_) context.existingFunctionProviders of
         Just provider ->
-            Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
+            let
+                assignments =
+                    ResolvedType.findGenericAssignments provider.childType type_
+            in
+            if Dict.isEmpty assignments then
+                Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
+
+            else
+                let
+                    childExprsAndDefs =
+                        provider.genericArguments
+                            |> List.filterMap (\name -> Dict.get name assignments)
+                            |> List.map (generate False context stack)
+                            |> combineResults
+                in
+                childExprsAndDefs
+                    |> Result.map (\( x, y, z ) -> ( CG.apply (CG.fqFun provider.moduleName provider.functionName :: x), y, z ))
 
         Nothing ->
             case type_ of

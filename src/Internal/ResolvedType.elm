@@ -1,4 +1,4 @@
-module Internal.ResolvedType exposing (fromDeclaration, fromTypeSignature, matchType, refToExpr, resolveLocalReferences)
+module Internal.ResolvedType exposing (findGenericAssignments, fromDeclaration, fromTypeSignature, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
 
 import Dict
 import Elm.CodeGen
@@ -250,8 +250,64 @@ matchType full possiblyRef =
         ( CustomType ref1 gens1 _, Opaque ref2 gens2 ) ->
             ref1 == ref2 && List.length gens1 == List.length gens2
 
+        ( TypeAlias ref1 gens1 _, TypeAlias ref2 gens2 _ ) ->
+            ref1 == ref2 && List.length gens1 == List.length gens2
+
         _ ->
             full == possiblyRef
+
+
+{-| Returns a dictionary of type variable => occupied type
+-}
+findGenericAssignments : ResolvedType -> ResolvedType -> Dict.Dict String ResolvedType
+findGenericAssignments full possiblyRef =
+    case ( full, possiblyRef ) of
+        ( CustomType _ gens1 _, Opaque _ gens2 ) ->
+            List.map2 Tuple.pair gens1 gens2 |> Dict.fromList
+
+        ( TypeAlias _ gens1 _, TypeAlias ref2 gens2 struct ) ->
+            let
+                bindings =
+                    List.map2 Tuple.pair gens1 gens2 |> Dict.fromList
+            in
+            getFilledGenericSlots struct
+                |> List.filterMap
+                    (\( name, t ) ->
+                        Dict.get name bindings
+                            |> Maybe.map (\newName -> ( newName, t ))
+                    )
+                |> Dict.fromList
+
+        _ ->
+            Dict.empty
+
+
+getFilledGenericSlots : ResolvedType -> List ( String, ResolvedType )
+getFilledGenericSlots t =
+    case t of
+        GenericType n (Just child) ->
+            [ ( n, child ) ]
+
+        GenericType _ Nothing ->
+            []
+
+        Opaque _ args ->
+            List.concatMap getFilledGenericSlots args
+
+        Function args res ->
+            List.concatMap getFilledGenericSlots args ++ getFilledGenericSlots res
+
+        TypeAlias _ _ arg ->
+            getFilledGenericSlots arg
+
+        AnonymousRecord _ rec ->
+            List.concatMap (Tuple.second >> getFilledGenericSlots) rec
+
+        CustomType _ _ ctors ->
+            List.concatMap (Tuple.second >> List.concatMap getFilledGenericSlots) ctors
+
+        Tuple items ->
+            List.concatMap getFilledGenericSlots items
 
 
 

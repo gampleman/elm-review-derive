@@ -24,7 +24,7 @@ import Internal.Builtin.ListAllVariants
 import Internal.Builtin.Random
 import Internal.Builtin.ToString
 import Internal.CodeGenTodo exposing (CodeGenTodo)
-import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator)
+import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator, ExistingFunctionProvider)
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers
 import Internal.ResolvedType as ResolvedType
@@ -99,7 +99,8 @@ type annotation, like so:
             Debug.todo ""
 
 There is an ever-expanding list of type signatures that this rule supports, however, it is relatively straightforward to
-add your own.  See [`CodeGenerator`](CodeGenerator) for details.
+add your own. See [`CodeGenerator`](CodeGenerator) for details.
+
 
 ## Try it out
 
@@ -215,7 +216,7 @@ type alias ProjectContext =
     , codeGens : List ConfiguredCodeGenerator
     , codeGenTodos : List ( ModuleName, CodeGenTodo )
     , otherTodos : List ( ModuleKey, Range )
-    , existingFunctionProviders : List { moduleName : ModuleName, codeGenId : String, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List ExistingFunctionProvider
     }
 
 
@@ -230,7 +231,7 @@ type alias ModuleContext =
     , codeGens : List ConfiguredCodeGenerator
     , codeGenTodos : List CodeGenTodo
     , otherTodos : List Range
-    , existingFunctionProviders : List { codeGenId : String, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List ExistingFunctionProvider
     }
 
 
@@ -310,7 +311,7 @@ fromModuleToProject moduleKey metadata moduleContext =
     , moduleKeys = AssocList.singleton moduleName moduleKey
     , codeGens = moduleContext.codeGens
     , codeGenTodos = mapTodo moduleContext.codeGenTodos
-    , existingFunctionProviders = List.map (\a -> { moduleName = moduleName, codeGenId = a.codeGenId, functionName = a.functionName, childType = a.childType }) moduleContext.existingFunctionProviders
+    , existingFunctionProviders = moduleContext.existingFunctionProviders
     , otherTodos = List.map (Tuple.pair moduleKey) (filterTodos moduleContext.otherTodos)
     }
 
@@ -357,40 +358,16 @@ declarationVisitor declarations context =
         types =
             ResolvedType.resolveLocalReferences context.currentModule unresolvedTypes
 
-        availableTypes =
-            types ++ externalAvailableTypes
-
-        getTodos getTodoFunc =
-            List.filterMap
-                (\declaration ->
-                    case declaration of
-                        Node range (Declaration.FunctionDeclaration function) ->
-                            getTodoFunc range function
-
-                        _ ->
-                            Nothing
-                )
-                declarations
+        results =
+            Internal.CodeGenTodo.declarationsVisitor context (types ++ externalAvailableTypes) declarations
     in
     ( []
     , { context
         | types = types ++ context.types
         , importStartRow =
             List.map (Node.range >> .start >> .row) declarations |> List.minimum
-        , existingFunctionProviders =
-            List.filterMap
-                (\declaration ->
-                    case declaration of
-                        Node _ (Declaration.FunctionDeclaration function) ->
-                            Internal.CodeGenTodo.declarationVisitorGetExistingFunctionProviders context function
-                                |> Maybe.map (\rec -> { codeGenId = rec.codeGenId, functionName = rec.functionName, childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule rec.childType })
-
-                        _ ->
-                            Nothing
-                )
-                declarations
-                ++ context.existingFunctionProviders
-        , codeGenTodos = getTodos (Internal.CodeGenTodo.getTodos context availableTypes) ++ context.codeGenTodos
+        , existingFunctionProviders = results.providers ++ context.existingFunctionProviders
+        , codeGenTodos = results.todos ++ context.codeGenTodos
       }
     )
 
@@ -448,6 +425,15 @@ finalProjectEvaluation projectContext =
         projectContext.otherTodos
         ++ List.filterMap
             (\( moduleName, todo ) ->
-                Internal.CodeGenTodo.todoErrors projectContext moduleName todo
+                Internal.CodeGenTodo.todoErrors
+                    { projectContext
+                        | existingFunctionProviders =
+                            -- We sort by generic arguments here, since we assume that using a provider for `Maybe Int`
+                            -- is better than `Maybe a` if both happen to be available. This would be more obvious in
+                            -- `CodeGenerator.generate`, but we do it here to only do the sort once.
+                            List.sortBy (\provider -> List.length provider.genericArguments) projectContext.existingFunctionProviders
+                    }
+                    moduleName
+                    todo
             )
             projectContext.codeGenTodos

@@ -1,8 +1,9 @@
-module Internal.CodeGenTodo exposing (CodeGenTodo, declarationVisitorGetExistingFunctionProviders, getTodos, todoErrors)
+module Internal.CodeGenTodo exposing (CodeGenTodo, declarationsVisitor, todoErrors)
 
 import AssocList exposing (Dict)
 import AssocSet as Set
 import Dict
+import Elm.Syntax.Declaration as Declaration exposing (Declaration)
 import Elm.Syntax.Expression exposing (Function)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
@@ -10,7 +11,7 @@ import Elm.Syntax.Pattern exposing (Pattern)
 import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
-import Internal.CodeGenerator as CodeGenerator exposing (ConfiguredCodeGenerator)
+import Internal.CodeGenerator as CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers as Helpers
 import Internal.ResolvedType as ResolvedType
@@ -32,10 +33,6 @@ type alias CodeGenTodo =
     }
 
 
-type alias ExistingFunctionProvider =
-    { codeGenId : String, moduleName : ModuleName, functionName : String, childType : ResolvedType }
-
-
 type alias ProjectContext a =
     { a
         | types : List ( ModuleName, ResolvedType )
@@ -45,46 +42,6 @@ type alias ProjectContext a =
         , moduleKeys : Dict ModuleName ModuleKey
         , codeGens : List ConfiguredCodeGenerator
     }
-
-
-declarationVisitorGetExistingFunctionProviders :
-    { a | codeGens : List ConfiguredCodeGenerator, lookupTable : ModuleNameLookupTable.ModuleNameLookupTable, currentModule : ModuleName }
-    -> Function
-    -> Maybe { codeGenId : String, functionName : String, childType : TypeAnnotation }
-declarationVisitorGetExistingFunctionProviders context function =
-    case ( function.signature, function.declaration ) of
-        ( Just (Node _ signature), Node _ declaration ) ->
-            findMatchingPattern context.codeGens (normalizeTypes context.lookupTable (Node.value signature.typeAnnotation))
-                |> Maybe.andThen
-                    (\( codeGenId, childType ) ->
-                        if Helpers.hasDebugTodo declaration then
-                            Nothing
-
-                        else
-                            Just
-                                { functionName = Node.value signature.name
-                                , childType = childType
-                                , codeGenId = codeGenId
-                                }
-                    )
-
-        _ ->
-            Nothing
-
-
-findMatchingPattern : List ConfiguredCodeGenerator -> TypeAnnotation -> Maybe ( String, TypeAnnotation )
-findMatchingPattern codeGens annotation =
-    case codeGens of
-        h :: t ->
-            case h.searchPattern annotation of
-                Just childType ->
-                    Just ( h.id, childType )
-
-                Nothing ->
-                    findMatchingPattern t annotation
-
-        [] ->
-            Nothing
 
 
 findMatchingPatternWithGenerics : List ConfiguredCodeGenerator -> TypeAnnotation -> Maybe ( String, TypeAnnotation, List String )
@@ -176,13 +133,48 @@ normalizeTypes lookupTable signature =
             FunctionTypeAnnotation (Node lr (normalizeTypes lookupTable lv)) (Node rr (normalizeTypes lookupTable rv))
 
 
-getTodos :
+type DeclarationSearchResult
+    = FoundTodo CodeGenTodo
+    | FoundProvider ExistingFunctionProvider
+    | NotFound
+
+
+declarationsVisitor :
+    { a | codeGens : List ConfiguredCodeGenerator, lookupTable : ModuleNameLookupTable.ModuleNameLookupTable, currentModule : ModuleName }
+    -> List ResolvedType
+    -> List (Node Declaration)
+    -> { todos : List CodeGenTodo, providers : List ExistingFunctionProvider }
+declarationsVisitor context availableTypes =
+    let
+        go todos providers decls =
+            case decls of
+                [] ->
+                    { todos = todos, providers = providers }
+
+                (Node range (Declaration.FunctionDeclaration function)) :: rest ->
+                    case declarationVisitor context availableTypes range function of
+                        NotFound ->
+                            go todos providers rest
+
+                        FoundTodo todo ->
+                            go (todo :: todos) providers rest
+
+                        FoundProvider provider ->
+                            go todos (provider :: providers) rest
+
+                _ :: rest ->
+                    go todos providers rest
+    in
+    go [] []
+
+
+declarationVisitor :
     { a | codeGens : List ConfiguredCodeGenerator, lookupTable : ModuleNameLookupTable.ModuleNameLookupTable, currentModule : ModuleName }
     -> List ResolvedType
     -> Range
     -> Function
-    -> Maybe CodeGenTodo
-getTodos context availableTypes declarationRange function =
+    -> DeclarationSearchResult
+declarationVisitor context availableTypes declarationRange function =
     let
         declaration =
             Node.value function.declaration
@@ -209,20 +201,30 @@ getTodos context availableTypes declarationRange function =
                                     |> List.foldr (Maybe.map2 (::)) (Just [])
                                     |> Maybe.map
                                         (\genericAssigments ->
-                                            { functionName = Node.value signature.name
-                                            , childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule childType
-                                            , range = declarationRange
-                                            , parameters = declaration.arguments
-                                            , signature = signature
-                                            , codeGenId = codeGenId
-                                            , genericArguments = Dict.fromList genericAssigments
-                                            }
+                                            FoundTodo
+                                                { functionName = Node.value signature.name
+                                                , childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule childType
+                                                , range = declarationRange
+                                                , parameters = declaration.arguments
+                                                , signature = signature
+                                                , codeGenId = codeGenId
+                                                , genericArguments = Dict.fromList genericAssigments
+                                                }
                                         )
 
                             else
-                                Nothing
+                                Just
+                                    (FoundProvider
+                                        { functionName = Node.value signature.name
+                                        , childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule childType
+                                        , codeGenId = codeGenId
+                                        , moduleName = context.currentModule
+                                        , genericArguments = assignments
+                                        }
+                                    )
                         )
             )
+        |> Maybe.withDefault NotFound
 
 
 todoErrors : ProjectContext a -> ModuleName -> CodeGenTodo -> Maybe (Rule.Error { useErrorForModule : () })
@@ -259,7 +261,14 @@ todoErrors projectContext currentModule todo =
 createFixes : ProjectContext a -> ConfiguredCodeGenerator -> { newImportStartRow : Int, existingImports : List ExistingImport } -> ModuleName -> CodeGenTodo -> Result String (List Review.Fix.Fix)
 createFixes projectContext codeGen imports currentModule todo =
     CodeGenerator.generate True
-        { codeGen = codeGen, existingImports = imports.existingImports, currentModule = currentModule, existingFunctionProviders = List.filter (\provider -> provider.codeGenId == codeGen.id) projectContext.existingFunctionProviders, genericArguments = todo.genericArguments }
+        { codeGen = codeGen
+        , existingImports = imports.existingImports
+        , currentModule = currentModule
+        , existingFunctionProviders =
+            projectContext.existingFunctionProviders
+                |> List.filter (\provider -> provider.codeGenId == codeGen.id)
+        , genericArguments = todo.genericArguments
+        }
         (case todo.childType of
             ResolvedType.CustomType ref _ _ ->
                 [ { name = todo.functionName

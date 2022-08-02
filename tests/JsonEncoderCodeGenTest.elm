@@ -246,6 +246,84 @@ encode b =
         B arg0 ->
             Encode.object [ ( "tag", Encode.string "B" ), ( "0", A.encode arg0 ) ]
 """
+        , codeGenTest "Picks up an encoder from another file with generics"
+            [ elmJson ]
+            []
+            [ """module A exposing (A, encode)
+import Json.Encode exposing (Value)
+
+type A val
+  = A val
+ 
+
+encode : (val -> Value) -> A val -> Value
+encode encodeVal a =
+    case a of
+        A arg ->
+            encodeVal arg
+""", """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type B =
+    B (A Int)
+
+encode : B -> Value
+encode b =
+    Debug.todo ""
+""" ]
+            """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type B =
+    B (A Int)
+
+encode : B -> Value
+encode b =
+    case b of
+        B arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int arg0 ) ]
+"""
+        , codeGenTest "Picks up an encoder from another file with generics type alias"
+            [ elmJson ]
+            []
+            [ """module A exposing (A, encode)
+import Json.Encode exposing (Value)
+
+type alias A val
+  = { a : val }
+ 
+
+encode : (val -> Value) -> A val -> Value
+encode encodeVal a =
+    case a of
+        A arg ->
+            encodeVal arg
+""", """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type B =
+    B (A Int)
+
+encode : B Int -> Value
+encode b =
+    Debug.todo ""
+""" ]
+            """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type B =
+    B (A Int)
+
+encode : B Int -> Value
+encode b =
+    case b of
+        B arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int arg0 ) ]
+"""
         , codeGenTest "Generates an encoder for a subtype"
             [ elmJson ]
             []
