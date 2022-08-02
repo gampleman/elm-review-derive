@@ -606,6 +606,8 @@ type alias Foo =
     , set : Set Int
     , strDict : Dict String String
     , intDict : Dict Int String
+    , tuple : (Int, String)
+    , triple : (Int, String, Char)
     }
 
 encode : Foo -> Value
@@ -625,6 +627,8 @@ type alias Foo =
     , set : Set Int
     , strDict : Dict String String
     , intDict : Dict Int String
+    , tuple : (Int, String)
+    , triple : (Int, String, Char)
     }
 
 encode : Foo -> Value
@@ -643,6 +647,20 @@ encode rec =
         , ( "set", Json.Encode.set Json.Encode.int rec.set )
         , ( "strDict", Json.Encode.dict identity Json.Encode.string rec.strDict )
         , ( "intDict", Json.Encode.dict (Json.Encode.int >> Json.Encode.encode 0) Json.Encode.string rec.intDict )
+        , ( "tuple"
+          , Json.Encode.list
+                identity
+                [ Json.Encode.int (Tuple.first rec.tuple), Json.Encode.string (Tuple.second rec.tuple) ]
+          )
+        , ( "triple"
+          , let
+                ( a, b, c ) =
+                    rec.triple
+            in
+            Json.Encode.list
+                identity
+                [ Json.Encode.int a, Json.Encode.string b, Json.Encode.string (String.fromChar c) ]
+          )
         ]
 """
         ]

@@ -6,6 +6,11 @@ import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
 
+lambdaWrap : String -> (CG.Expression -> CG.Expression) -> CG.Expression
+lambdaWrap name fn =
+    CG.lambda [ CG.varPattern name ] (fn (CG.val name))
+
+
 codeGen : CodeGenerator
 codeGen =
     CodeGenerator.define "elm/json/Json.Encode.Value"
@@ -14,6 +19,7 @@ codeGen =
         (\name -> "encode" ++ name)
         [ CodeGenerator.int (CG.fqFun [ "Json", "Encode" ] "int")
         , CodeGenerator.string (CG.fqFun [ "Json", "Encode" ] "string")
+        , CodeGenerator.char (lambdaWrap "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
         , CodeGenerator.float (CG.fqFun [ "Json", "Encode" ] "float")
         , CodeGenerator.bool (CG.fqFun [ "Json", "Encode" ] "bool")
         , CodeGenerator.list (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "list", arg ])
@@ -39,15 +45,16 @@ codeGen =
             )
         , CodeGenerator.maybe
             (\encoder ->
-                CG.lambda [ CG.varPattern "arg" ]
-                    (CG.caseExpr (CG.val "arg")
-                        [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
-                          , CG.apply [ encoder, CG.val "val" ]
-                          )
-                        , ( CG.fqNamedPattern [] "Nothing" []
-                          , CG.fqVal [ "Json", "Encode" ] "null"
-                          )
-                        ]
+                lambdaWrap "arg"
+                    (\arg ->
+                        CG.caseExpr arg
+                            [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
+                              , CG.apply [ encoder, CG.val "val" ]
+                              )
+                            , ( CG.fqNamedPattern [] "Nothing" []
+                              , CG.fqVal [ "Json", "Encode" ] "null"
+                              )
+                            ]
                     )
             )
         , CodeGenerator.customType
@@ -107,6 +114,42 @@ codeGen =
 
                     ResolvedType.TypeAlias _ _ _ ->
                         List.head exprs
+
+                    ResolvedType.Tuple _ ->
+                        case exprs of
+                            [ fst, snd ] ->
+                                lambdaWrap "tuple"
+                                    (\tuple ->
+                                        CG.apply
+                                            [ CG.fqFun [ "Json", "Encode" ] "list"
+                                            , CG.val "identity"
+                                            , CG.list
+                                                [ CG.apply [ fst, CG.apply [ CG.fqFun [ "Tuple" ] "first", tuple ] ]
+                                                , CG.apply [ snd, CG.apply [ CG.fqFun [ "Tuple" ] "second", tuple ] ]
+                                                ]
+                                            ]
+                                    )
+                                    |> Just
+
+                            [ fst, snd, thrd ] ->
+                                lambdaWrap "triple"
+                                    (\triple ->
+                                        CG.letExpr [ CG.letDestructuring (CG.tuplePattern [ CG.varPattern "a", CG.varPattern "b", CG.varPattern "c" ]) triple ]
+                                            (CG.apply
+                                                [ CG.fqFun [ "Json", "Encode" ] "list"
+                                                , CG.val "identity"
+                                                , CG.list
+                                                    [ CG.apply [ fst, CG.val "a" ]
+                                                    , CG.apply [ snd, CG.val "b" ]
+                                                    , CG.apply [ thrd, CG.val "c" ]
+                                                    ]
+                                                ]
+                                            )
+                                    )
+                                    |> Just
+
+                            _ ->
+                                Nothing
 
                     -- ResolvedType.CustomType _ _ [ ( ref, [] ) ] ->
                     --     Just (CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ])
