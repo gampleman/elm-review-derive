@@ -220,6 +220,7 @@ declarationVisitor context availableTypes declarationRange function =
                                         , codeGenId = codeGenId
                                         , moduleName = context.currentModule
                                         , genericArguments = assignments
+                                        , privateTo = Nothing
                                         }
                                     )
                         )

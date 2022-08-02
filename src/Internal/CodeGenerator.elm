@@ -128,6 +128,7 @@ type alias ExistingFunctionProvider =
     , functionName : String
     , childType : ResolvedType
     , genericArguments : List String
+    , privateTo : Maybe (List String)
     }
 
 

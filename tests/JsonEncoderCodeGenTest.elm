@@ -1,6 +1,6 @@
 module JsonEncoderCodeGenTest exposing (..)
 
-import CodeGenerator.Test exposing (codeGenTest)
+import CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith)
 import Review.Project.Dependency exposing (Dependency)
 import Test exposing (Test, describe)
 
@@ -210,7 +210,7 @@ encode b =
         , codeGenTest "Picks up a generator from another file with different import notation"
             [ elmJson ]
             []
-            [ """module A exposing (A, generator)
+            [ """module A exposing (A, encode)
 import Json.Encode as Encode
 
 type A
@@ -324,6 +324,33 @@ encode b =
         B arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int arg0 ) ]
 """
+        , codeGenTestFailsWith "Doesn't pick up an encoder if not exposed"
+            [ elmJson ]
+            []
+            [ """module A exposing (A)
+import Json.Encode exposing (Value)
+
+type A val
+  = A val
+ 
+
+encode : (val -> Value) -> A val -> Value
+encode encodeVal a =
+    case a of
+        A arg ->
+            encodeVal arg
+""", """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type B =
+    B (A Int)
+
+encode : B Int -> Value
+encode b =
+    Debug.todo ""
+""" ]
+            """Could not automatically generate a definition for `A`, as we don't know how to implement this type."""
         , codeGenTest "Picks up an encoder from same file with multiple generics"
             [ elmJson ]
             []

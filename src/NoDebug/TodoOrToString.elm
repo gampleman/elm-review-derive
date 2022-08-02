@@ -311,7 +311,20 @@ fromModuleToProject moduleKey metadata moduleContext =
     , moduleKeys = AssocList.singleton moduleName moduleKey
     , codeGens = moduleContext.codeGens
     , codeGenTodos = mapTodo moduleContext.codeGenTodos
-    , existingFunctionProviders = moduleContext.existingFunctionProviders
+    , existingFunctionProviders =
+        if List.isEmpty moduleContext.exports then
+            moduleContext.existingFunctionProviders
+
+        else
+            List.map
+                (\provider ->
+                    if List.member ( provider.functionName, False ) moduleContext.exports then
+                        provider
+
+                    else
+                        { provider | privateTo = Just moduleName }
+                )
+                moduleContext.existingFunctionProviders
     , otherTodos = List.map (Tuple.pair moduleKey) (filterTodos moduleContext.otherTodos)
     }
 
@@ -366,7 +379,7 @@ declarationVisitor declarations context =
         | types = types ++ context.types
         , importStartRow =
             List.map (Node.range >> .start >> .row) declarations |> List.minimum
-        , existingFunctionProviders = results.providers ++ context.existingFunctionProviders
+        , existingFunctionProviders = results.providers
         , codeGenTodos = results.todos ++ context.codeGenTodos
       }
     )
@@ -428,10 +441,15 @@ finalProjectEvaluation projectContext =
                 Internal.CodeGenTodo.todoErrors
                     { projectContext
                         | existingFunctionProviders =
-                            -- We sort by generic arguments here, since we assume that using a provider for `Maybe Int`
-                            -- is better than `Maybe a` if both happen to be available. This would be more obvious in
-                            -- `CodeGenerator.generate`, but we do it here to only do the sort once.
-                            List.sortBy (\provider -> List.length provider.genericArguments) projectContext.existingFunctionProviders
+                            projectContext.existingFunctionProviders
+                                |> List.filter
+                                    (\provider ->
+                                        provider.privateTo == Nothing || provider.privateTo == Just moduleName
+                                    )
+                                -- We sort by generic arguments here, since we assume that using a provider for `Maybe Int`
+                                -- is better than `Maybe a` if both happen to be available. This would be more obvious in
+                                -- `CodeGenerator.generate`, but we do it here to only do the sort once.
+                                |> List.sortBy (\provider -> List.length provider.genericArguments)
                     }
                     moduleName
                     todo
