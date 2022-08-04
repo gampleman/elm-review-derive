@@ -351,6 +351,153 @@ encode b =
     Debug.todo ""
 """ ]
             """Could not automatically generate a definition for `A`, as we don't know how to implement this type."""
+        , codeGenTestFailsWith "Doesn't generate an encoder if type not sufficiently exposed"
+            [ elmJson ]
+            []
+            [ """module A exposing (A, B(..))
+import Json.Encode exposing (Value)
+
+
+type A
+  = A Int
+
+type B =
+    B String
+ 
+""", """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A, B)
+
+type C =
+    C A B
+
+encode : C -> Value
+encode c =
+    Debug.todo ""
+""" ]
+            """Could not automatically generate a definition for `A`, as we don't know how to implement this type."""
+        , codeGenTest "Adds proper imports as needed"
+            [ elmJson ]
+            []
+            [ """module A exposing (A(..), B(..))
+import C
+
+type A = 
+    A B C.C
+
+type B = 
+    B Int
+
+
+"""
+            , """module C exposing (C(..))
+
+type C =
+    C Int
+
+"""
+            , """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type Foo =
+    B A
+
+encode : Foo -> Value
+encode b =
+    Debug.todo ""
+"""
+            ]
+            """module B exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+import C
+
+type Foo =
+    B A
+
+encode : Foo -> Value
+encode b =
+    case b of
+        B arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", encodeA arg0 ) ]
+
+encodeA : A -> Value
+encodeA arg =
+    case arg of
+        A.A arg0 arg1 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", encodeB arg0 ), ( "1", encodeC arg1 ) ]
+
+encodeB : A.B -> Value
+encodeB arg =
+    case arg of
+        A.B arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.int arg0 ) ]
+
+encodeC : C.C -> Value
+encodeC arg =
+    case arg of
+        C.C arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "C" ), ( "0", Json.Encode.int arg0 ) ]
+"""
+        , codeGenTestFailsWith "Fails when necessary sub-values don't have sufficient visibility"
+            [ elmJson ]
+            []
+            [ """module A exposing (A(..), B)
+
+type A = 
+    A B 
+
+-- Note: Type A is exposed here, but type B is private. 
+type B = 
+    B Int
+"""
+            , """module Foo exposing (..)
+import Json.Encode exposing (Value)
+import A exposing (A)
+
+type Foo =
+    B A
+
+encode : Foo -> Value
+encode b =
+    Debug.todo ""
+"""
+            ]
+            """Could not automatically generate a definition for `A.B`, as we don't know how to implement this type."""
+        , codeGenTest "Generates a generator for a non-exposed value"
+            [ elmJson ]
+            []
+            [ """module A exposing (main)
+import Json.Encode exposing (Value)
+
+
+type A =
+    A Int
+
+encode : A -> Value
+encode =  Debug.todo ""
+
+main =
+    Json.Encode.encode 2 (encode (A 2))
+""" ]
+            """module A exposing (main)
+import Json.Encode exposing (Value)
+
+
+type A =
+    A Int
+
+encode : A -> Value
+encode arg =
+    case arg of
+        A arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", Json.Encode.int arg0 ) ]
+
+main =
+    Json.Encode.encode 2 (encode (A 2))
+"""
         , codeGenTest "Picks up an encoder from same file with multiple generics"
             [ elmJson ]
             []

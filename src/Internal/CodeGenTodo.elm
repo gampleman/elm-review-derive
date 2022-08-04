@@ -39,6 +39,7 @@ type alias ProjectContext a =
         , existingFunctionProviders : List ExistingFunctionProvider
         , codeGenTodos : List ( ModuleName, CodeGenTodo )
         , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
+        , exports : Dict ModuleName (List ( String, Bool ))
         , moduleKeys : Dict ModuleName ModuleKey
         , codeGens : List ConfiguredCodeGenerator
     }
@@ -261,6 +262,10 @@ todoErrors projectContext currentModule todo =
 
 createFixes : ProjectContext a -> ConfiguredCodeGenerator -> { newImportStartRow : Int, existingImports : List ExistingImport } -> ModuleName -> CodeGenTodo -> Result String (List Review.Fix.Fix)
 createFixes projectContext codeGen imports currentModule todo =
+    let
+        childType =
+            ResolvedType.computeVisibility currentModule projectContext.exports todo.childType
+    in
     CodeGenerator.generate True
         { codeGen = codeGen
         , existingImports = imports.existingImports
@@ -270,7 +275,7 @@ createFixes projectContext codeGen imports currentModule todo =
                 |> List.filter (\provider -> provider.codeGenId == codeGen.id)
         , genericArguments = todo.genericArguments
         }
-        (case todo.childType of
+        (case childType of
             ResolvedType.CustomType ref _ _ ->
                 [ { name = todo.functionName
                   , ref = ref
@@ -282,7 +287,7 @@ createFixes projectContext codeGen imports currentModule todo =
             _ ->
                 []
         )
-        todo.childType
+        childType
         |> Result.map
             (\( expr, declarations_, _ ) ->
                 let

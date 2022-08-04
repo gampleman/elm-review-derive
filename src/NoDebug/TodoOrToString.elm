@@ -212,6 +212,7 @@ initializeCodeGens codeGens deps context =
 type alias ProjectContext =
     { types : List ( ModuleName, ResolvedType )
     , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
+    , exports : Dict ModuleName (List ( String, Bool ))
     , moduleKeys : Dict ModuleName ModuleKey
     , codeGens : List ConfiguredCodeGenerator
     , codeGenTodos : List ( ModuleName, CodeGenTodo )
@@ -239,6 +240,7 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , imports = AssocList.empty
+    , exports = AssocList.empty
     , moduleKeys = AssocList.empty
     , codeGens = []
     , codeGenTodos = []
@@ -308,6 +310,7 @@ fromModuleToProject moduleKey metadata moduleContext =
             { newImportStartRow = Maybe.withDefault 3 moduleContext.importStartRow
             , existingImports = moduleContext.imports
             }
+    , exports = AssocList.singleton moduleName moduleContext.exports
     , moduleKeys = AssocList.singleton moduleName moduleKey
     , codeGens = moduleContext.codeGens
     , codeGenTodos = mapTodo moduleContext.codeGenTodos
@@ -333,6 +336,7 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , imports = AssocList.union newContext.imports previousContext.imports
+    , exports = AssocList.union newContext.exports previousContext.exports
     , moduleKeys = AssocList.union newContext.moduleKeys previousContext.moduleKeys
     , codeGens =
         if List.isEmpty newContext.codeGens then

@@ -1,5 +1,6 @@
-module Internal.ResolvedType exposing (findGenericAssignments, fromDeclaration, fromTypeSignature, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
+module Internal.ResolvedType exposing (computeVisibility, findGenericAssignments, fromDeclaration, fromTypeSignature, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
 
+import AssocList
 import Dict
 import Elm.CodeGen
 import Elm.Syntax.Declaration exposing (Declaration(..))
@@ -580,3 +581,41 @@ replaceOpaqueArgs args vals =
 
         [] ->
             vals
+
+
+{-| Modifies a type to reflect export declarations. This will typically turn things into `Opaque` values.
+-}
+computeVisibility : ModuleName -> AssocList.Dict ModuleName (List ( String, Bool )) -> ResolvedType -> ResolvedType
+computeVisibility currentModule exports =
+    map
+        (\t ->
+            case t of
+                CustomType ref gens _ ->
+                    if ref.modulePath == currentModule then
+                        t
+
+                    else
+                        case AssocList.get ref.modulePath exports of
+                            Just [] ->
+                                -- this is a `exposing (..)` module
+                                t
+
+                            Just exps ->
+                                if List.member ( ref.name, True ) exps then
+                                    t
+
+                                else
+                                    let
+                                        bindings =
+                                            getFilledGenericSlots t
+                                                |> Dict.fromList
+                                    in
+                                    Opaque ref (List.filterMap (\n -> Dict.get n bindings) gens)
+
+                            Nothing ->
+                                -- I don't know? How do we know anything about this type in this situation?
+                                t
+
+                _ ->
+                    t
+        )
