@@ -185,6 +185,33 @@ generator : Random.Generator Foo
 generator =
     Random.uniform A [ B ]
 """
+        , codeGenTest "Generates a generator for a type aliased enum"
+            [ elmRandom ]
+            []
+            [ """module A exposing (..)
+import Random
+
+type Foo =
+  A | B
+
+type alias Bar = Foo
+
+generator : Random.Generator Bar
+generator =
+    Debug.todo ""
+""" ]
+            """module A exposing (..)
+import Random
+
+type Foo =
+  A | B
+
+type alias Bar = Foo
+
+generator : Random.Generator Bar
+generator =
+    Random.uniform A [ B ]
+"""
         , codeGenTest "Generates a generator for a custom type"
             [ elmRandom ]
             []

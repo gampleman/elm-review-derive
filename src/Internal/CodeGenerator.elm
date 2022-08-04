@@ -244,7 +244,7 @@ generate isTopLevel context stack type_ =
                         |> makeExternalDeclaration isTopLevel context.codeGen ref generics
 
                 ResolvedType.TypeAlias _ _ childType ->
-                    generate False context stack childType
+                    generate isTopLevel context stack childType
 
                 ResolvedType.AnonymousRecord _ children ->
                     applyCombiner type_
