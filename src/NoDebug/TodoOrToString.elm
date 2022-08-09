@@ -1,5 +1,11 @@
 module NoDebug.TodoOrToString exposing (rule)
 
+{-|
+
+@docs rule
+
+-}
+
 import AssocList exposing (Dict)
 import Dict
 import Elm.Project
@@ -18,7 +24,7 @@ import Internal.Builtin.ListAllVariants
 import Internal.Builtin.Random
 import Internal.Builtin.ToString
 import Internal.CodeGenTodo exposing (CodeGenTodo)
-import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator)
+import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator, ExistingFunctionProvider)
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers
 import Internal.ResolvedType as ResolvedType
@@ -28,6 +34,87 @@ import Review.Project.Dependency exposing (Dependency)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
 
 
+{-| Forbid the use of [`Debug.todo`] and [`Debug.toString`].
+
+    config =
+        [ NoDebug.TodoOrToString.rule []
+        ]
+
+The reason why there is a is separate rule for handling [`Debug.log`] and one for
+handling [`Debug.todo`] and [`Debug.toString`], is because these two functions
+are reasonable and useful to have in tests.
+
+You can for instance create test data without having to handle the error case
+everywhere. If you do enter the error case in the following example, then tests
+will fail.
+
+    testEmail : Email
+    testEmail =
+        case Email.fromString "some.email@domain.com" of
+            Just email ->
+                email
+
+            Nothing ->
+                Debug.todo "Supplied an invalid email in tests"
+
+If you want to allow these functions in tests but not in production code, you
+can configure the rule like this.
+
+import Review.Rule as Rule exposing (Rule)
+
+    config =
+        [ NoDebug.TodoOrToString.rule []
+            |> Rule.ignoreErrorsForDirectories [ "tests/" ]
+        ]
+
+
+## Fail
+
+    _ =
+        if condition then
+            a
+
+        else
+            Debug.todo ""
+
+    _ =
+        Debug.toString data
+
+
+## Success
+
+    if condition then
+        a
+
+    else
+        b
+
+🔧 Running with `--fix` will automatically generate code to replace some `Debug.todo` uses.
+
+In particular it will generate code when `Debug.todo` is used in a top-level definition with an explicit
+type annotation, like so:
+
+     someFunction : Decoder SomeType
+     someFunction =
+            Debug.todo ""
+
+There is an ever-expanding list of type signatures that this rule supports, however, it is relatively straightforward to
+add your own. See [`CodeGenerator`](CodeGenerator) for details.
+
+
+## Try it out
+
+You can try this rule out by running the following command:
+
+```bash
+elm-review --template MartinSStewart/elm-review-todo-it-for-me/example --rules NoDebug.TodoOrToString
+```
+
+[`Debug.log`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#log
+[`Debug.todo`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#todo
+[`Debug.toString`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#toString
+
+-}
 rule : List CodeGenerator -> Rule
 rule generators =
     let
@@ -125,11 +212,12 @@ initializeCodeGens codeGens deps context =
 type alias ProjectContext =
     { types : List ( ModuleName, ResolvedType )
     , imports : Dict ModuleName { newImportStartRow : Int, existingImports : List ExistingImport }
+    , exports : Dict ModuleName (List ( String, Bool ))
     , moduleKeys : Dict ModuleName ModuleKey
     , codeGens : List ConfiguredCodeGenerator
     , codeGenTodos : List ( ModuleName, CodeGenTodo )
     , otherTodos : List ( ModuleKey, Range )
-    , existingFunctionProviders : List { moduleName : ModuleName, codeGenId : String, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List ExistingFunctionProvider
     }
 
 
@@ -144,7 +232,7 @@ type alias ModuleContext =
     , codeGens : List ConfiguredCodeGenerator
     , codeGenTodos : List CodeGenTodo
     , otherTodos : List Range
-    , existingFunctionProviders : List { codeGenId : String, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List ExistingFunctionProvider
     }
 
 
@@ -152,6 +240,7 @@ initialProjectContext : ProjectContext
 initialProjectContext =
     { types = []
     , imports = AssocList.empty
+    , exports = AssocList.empty
     , moduleKeys = AssocList.empty
     , codeGens = []
     , codeGenTodos = []
@@ -221,10 +310,24 @@ fromModuleToProject moduleKey metadata moduleContext =
             { newImportStartRow = Maybe.withDefault 3 moduleContext.importStartRow
             , existingImports = moduleContext.imports
             }
+    , exports = AssocList.singleton moduleName moduleContext.exports
     , moduleKeys = AssocList.singleton moduleName moduleKey
     , codeGens = moduleContext.codeGens
     , codeGenTodos = mapTodo moduleContext.codeGenTodos
-    , existingFunctionProviders = List.map (\a -> { moduleName = moduleName, codeGenId = a.codeGenId, functionName = a.functionName, childType = a.childType }) moduleContext.existingFunctionProviders
+    , existingFunctionProviders =
+        if List.isEmpty moduleContext.exports then
+            moduleContext.existingFunctionProviders
+
+        else
+            List.map
+                (\provider ->
+                    if List.member ( provider.functionName, False ) moduleContext.exports then
+                        provider
+
+                    else
+                        { provider | privateTo = Just moduleName }
+                )
+                moduleContext.existingFunctionProviders
     , otherTodos = List.map (Tuple.pair moduleKey) (filterTodos moduleContext.otherTodos)
     }
 
@@ -233,6 +336,7 @@ foldProjectContexts : ProjectContext -> ProjectContext -> ProjectContext
 foldProjectContexts newContext previousContext =
     { types = newContext.types ++ previousContext.types
     , imports = AssocList.union newContext.imports previousContext.imports
+    , exports = AssocList.union newContext.exports previousContext.exports
     , moduleKeys = AssocList.union newContext.moduleKeys previousContext.moduleKeys
     , codeGens =
         if List.isEmpty newContext.codeGens then
@@ -271,40 +375,16 @@ declarationVisitor declarations context =
         types =
             ResolvedType.resolveLocalReferences context.currentModule unresolvedTypes
 
-        availableTypes =
-            types ++ externalAvailableTypes
-
-        getTodos getTodoFunc =
-            List.filterMap
-                (\declaration ->
-                    case declaration of
-                        Node range (Declaration.FunctionDeclaration function) ->
-                            getTodoFunc range function
-
-                        _ ->
-                            Nothing
-                )
-                declarations
+        results =
+            Internal.CodeGenTodo.declarationsVisitor context (types ++ externalAvailableTypes) declarations
     in
     ( []
     , { context
         | types = types ++ context.types
         , importStartRow =
             List.map (Node.range >> .start >> .row) declarations |> List.minimum
-        , existingFunctionProviders =
-            List.filterMap
-                (\declaration ->
-                    case declaration of
-                        Node _ (Declaration.FunctionDeclaration function) ->
-                            Internal.CodeGenTodo.declarationVisitorGetExistingFunctionProviders context function
-                                |> Maybe.map (\rec -> { codeGenId = rec.codeGenId, functionName = rec.functionName, childType = ResolvedType.fromTypeSignature context.lookupTable availableTypes context.currentModule rec.childType })
-
-                        _ ->
-                            Nothing
-                )
-                declarations
-                ++ context.existingFunctionProviders
-        , codeGenTodos = getTodos (Internal.CodeGenTodo.getTodos context availableTypes) ++ context.codeGenTodos
+        , existingFunctionProviders = results.providers
+        , codeGenTodos = results.todos ++ context.codeGenTodos
       }
     )
 
@@ -362,6 +442,20 @@ finalProjectEvaluation projectContext =
         projectContext.otherTodos
         ++ List.filterMap
             (\( moduleName, todo ) ->
-                Internal.CodeGenTodo.todoErrors projectContext moduleName todo
+                Internal.CodeGenTodo.todoErrors
+                    { projectContext
+                        | existingFunctionProviders =
+                            projectContext.existingFunctionProviders
+                                |> List.filter
+                                    (\provider ->
+                                        provider.privateTo == Nothing || provider.privateTo == Just moduleName
+                                    )
+                                -- We sort by generic arguments here, since we assume that using a provider for `Maybe Int`
+                                -- is better than `Maybe a` if both happen to be available. This would be more obvious in
+                                -- `CodeGenerator.generate`, but we do it here to only do the sort once.
+                                |> List.sortBy (\provider -> List.length provider.genericArguments)
+                    }
+                    moduleName
+                    todo
             )
             projectContext.codeGenTodos

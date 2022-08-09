@@ -1,5 +1,6 @@
-module Internal.ResolvedType exposing (fromDeclaration, fromTypeSignature, matchType, refToExpr, resolveLocalReferences)
+module Internal.ResolvedType exposing (computeVisibility, findGenericAssignments, fromDeclaration, fromTypeSignature, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
 
+import AssocList
 import Dict
 import Elm.CodeGen
 import Elm.Syntax.Declaration exposing (Declaration(..))
@@ -250,8 +251,106 @@ matchType full possiblyRef =
         ( CustomType ref1 gens1 _, Opaque ref2 gens2 ) ->
             ref1 == ref2 && List.length gens1 == List.length gens2
 
+        ( TypeAlias ref1 gens1 _, TypeAlias ref2 gens2 _ ) ->
+            ref1 == ref2 && List.length gens1 == List.length gens2
+
+        ( Opaque ref1 gens1, Opaque ref2 gens2 ) ->
+            ref1
+                == ref2
+                && List.length gens1
+                == List.length gens2
+                && List.all identity
+                    (List.map2
+                        (\gen1 gen2 ->
+                            case gen1 of
+                                GenericType _ Nothing ->
+                                    True
+
+                                _ ->
+                                    gen1 == gen2
+                        )
+                        gens1
+                        gens2
+                    )
+
         _ ->
             full == possiblyRef
+
+
+{-| Returns a dictionary of type variable => occupied type
+-}
+findGenericAssignments : ResolvedType -> ResolvedType -> Dict.Dict String ResolvedType
+findGenericAssignments full possiblyRef =
+    case ( full, possiblyRef ) of
+        ( CustomType _ gens1 _, Opaque _ gens2 ) ->
+            List.map2 Tuple.pair gens1 gens2 |> Dict.fromList
+
+        ( TypeAlias _ gens1 _, TypeAlias ref2 gens2 struct ) ->
+            let
+                bindings =
+                    List.map2 Tuple.pair gens1 gens2 |> Dict.fromList
+            in
+            getFilledGenericSlots struct
+                |> List.filterMap
+                    (\( name, t ) ->
+                        Dict.get name bindings
+                            |> Maybe.map (\newName -> ( newName, t ))
+                    )
+                |> Dict.fromList
+
+        ( Opaque _ gens1, Opaque _ gens2 ) ->
+            List.map2
+                (\gen1 gen2 ->
+                    case gen1 of
+                        GenericType name Nothing ->
+                            case gen2 of
+                                GenericType _ (Just t) ->
+                                    Just ( name, t )
+
+                                GenericType _ Nothing ->
+                                    Nothing
+
+                                _ ->
+                                    Just ( name, gen2 )
+
+                        _ ->
+                            Nothing
+                )
+                gens1
+                gens2
+                |> List.filterMap identity
+                |> Dict.fromList
+
+        _ ->
+            Dict.empty
+
+
+getFilledGenericSlots : ResolvedType -> List ( String, ResolvedType )
+getFilledGenericSlots t =
+    case t of
+        GenericType n (Just child) ->
+            [ ( n, child ) ]
+
+        GenericType _ Nothing ->
+            []
+
+        Opaque _ args ->
+            List.concatMap getFilledGenericSlots args
+
+        Function args res ->
+            List.concatMap getFilledGenericSlots args ++ getFilledGenericSlots res
+
+        TypeAlias _ _ arg ->
+            getFilledGenericSlots arg
+
+        AnonymousRecord _ rec ->
+            List.concatMap (Tuple.second >> getFilledGenericSlots) rec
+
+        CustomType _ _ ctors ->
+            List.concatMap (Tuple.second >> List.concatMap getFilledGenericSlots) ctors
+
+        Tuple items ->
+            List.concatMap getFilledGenericSlots items
 
 
 
@@ -482,3 +581,41 @@ replaceOpaqueArgs args vals =
 
         [] ->
             vals
+
+
+{-| Modifies a type to reflect export declarations. This will typically turn things into `Opaque` values.
+-}
+computeVisibility : ModuleName -> AssocList.Dict ModuleName (List ( String, Bool )) -> ResolvedType -> ResolvedType
+computeVisibility currentModule exports =
+    map
+        (\t ->
+            case t of
+                CustomType ref gens _ ->
+                    if ref.modulePath == currentModule then
+                        t
+
+                    else
+                        case AssocList.get ref.modulePath exports of
+                            Just [] ->
+                                -- this is a `exposing (..)` module
+                                t
+
+                            Just exps ->
+                                if List.member ( ref.name, True ) exps then
+                                    t
+
+                                else
+                                    let
+                                        bindings =
+                                            getFilledGenericSlots t
+                                                |> Dict.fromList
+                                    in
+                                    Opaque ref (List.filterMap (\n -> Dict.get n bindings) gens)
+
+                            Nothing ->
+                                -- I don't know? How do we know anything about this type in this situation?
+                                t
+
+                _ ->
+                    t
+        )

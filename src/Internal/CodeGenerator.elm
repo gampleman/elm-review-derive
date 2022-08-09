@@ -122,11 +122,21 @@ configureCodeGenerators dependencies codeGens =
         |> Tuple.second
 
 
+type alias ExistingFunctionProvider =
+    { codeGenId : String
+    , moduleName : ModuleName
+    , functionName : String
+    , childType : ResolvedType
+    , genericArguments : List String
+    , privateTo : Maybe (List String)
+    }
+
+
 type alias GenerationContext =
     { codeGen : ConfiguredCodeGenerator
     , existingImports : List ExistingImport
     , currentModule : ModuleName
-    , existingFunctionProviders : List { codeGenId : String, moduleName : ModuleName, functionName : String, childType : ResolvedType }
+    , existingFunctionProviders : List ExistingFunctionProvider
     , genericArguments : Dict.Dict String String
     }
 
@@ -157,7 +167,23 @@ generate : Bool -> GenerationContext -> RecursionStack -> ResolvedType -> CodeGe
 generate isTopLevel context stack type_ =
     case Helpers.find (\provider -> ResolvedType.matchType provider.childType type_) context.existingFunctionProviders of
         Just provider ->
-            Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
+            let
+                assignments =
+                    ResolvedType.findGenericAssignments provider.childType type_
+            in
+            if Dict.isEmpty assignments then
+                Ok ( CG.fqFun provider.moduleName provider.functionName, [], [] )
+
+            else
+                let
+                    childExprsAndDefs =
+                        provider.genericArguments
+                            |> List.filterMap (\name -> Dict.get name assignments)
+                            |> List.map (generate False context stack)
+                            |> combineResults
+                in
+                childExprsAndDefs
+                    |> Result.map (\( x, y, z ) -> ( CG.apply (CG.fqFun provider.moduleName provider.functionName :: x), y, z ))
 
         Nothing ->
             case type_ of
@@ -206,7 +232,7 @@ generate isTopLevel context stack type_ =
                                         _ ->
                                             Nothing
                                 )
-                                ref.name
+                                (Helpers.writeExpression (ResolvedType.refToExpr context.currentModule context.existingImports ref))
                                 context.codeGen
                                 type_
 
@@ -218,7 +244,7 @@ generate isTopLevel context stack type_ =
                         |> makeExternalDeclaration isTopLevel context.codeGen ref generics
 
                 ResolvedType.TypeAlias _ _ childType ->
-                    generate False context stack childType
+                    generate isTopLevel context stack childType
 
                 ResolvedType.AnonymousRecord _ children ->
                     applyCombiner type_
@@ -571,11 +597,23 @@ to
         arg ++ d
 
 -}
-fixFunctionDeclaration : Function -> Function
-fixFunctionDeclaration func =
+fixFunctionDeclaration : List (Node Pattern) -> Function -> Function
+fixFunctionDeclaration applicableArgs func =
     let
         declaration =
             Node.value func.declaration
+
+        asVals =
+            List.filterMap
+                (\p ->
+                    case p of
+                        Node _ (VarPattern n) ->
+                            Just (CG.val n)
+
+                        _ ->
+                            Nothing
+                )
+                applicableArgs
 
         ( newExpr, newArgs ) =
             case postprocessExpression (Node.value declaration.expression) of
@@ -596,7 +634,7 @@ fixFunctionDeclaration func =
                                                 Nothing
                                     )
                                     (List.reverse lambda.args)
-                                    (List.reverse declaration.arguments)
+                                    (List.reverse applicableArgs)
                                     |> List.filterMap identity
                                     |> Dict.fromList
                         in
@@ -622,9 +660,18 @@ fixFunctionDeclaration func =
                         )
 
                     else
-                        ( declaration.expression, declaration.arguments )
+                        ( CG.apply (Node.value declaration.expression :: asVals) |> Helpers.node, declaration.arguments )
 
-                _ ->
-                    ( declaration.expression, declaration.arguments )
+                exp ->
+                    ( if List.isEmpty applicableArgs then
+                        declaration.expression
+
+                      else
+                        CG.apply
+                            (exp :: asVals)
+                            |> postprocessExpression
+                            |> Helpers.node
+                    , declaration.arguments
+                    )
     in
     { func | declaration = Helpers.node { declaration | expression = newExpr, arguments = newArgs } }

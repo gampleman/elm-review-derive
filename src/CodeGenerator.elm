@@ -1,11 +1,11 @@
 module CodeGenerator exposing
     ( CodeGenerator, define, amend
     , Definition, ifUserHasDependency
-    , int, float, string, char, list
-    , succeed, map, mapN
-    , customType
+    , bool, int, float, string, char, list, array, set, dict, maybe, customDict
+    , unit, tuple, triple
+    , succeed, map, mapN, pipeline, combiner
+    , customType, lambdaBreaker
     , custom
-    , combiner, dict, lambdaBreaker, maybe, pipeline, triple, tuple, unit
     )
 
 {-| This module let's you define (or change) type-oriented principled code generators.
@@ -24,17 +24,22 @@ By principled we mean that the generated code will for the foremost follow compo
 
 ### Primitives
 
-@docs int, float, string, char, list
+@docs bool, int, float, string, char, list, array, set, dict, maybe, customDict
+
+
+### Tuples
+
+@docs unit, tuple, triple
 
 
 ### Combining values
 
-@docs succeed, map, mapN, pipeline\
+@docs succeed, map, mapN, pipeline, combiner
 
 
 ### Dealing with custom types
 
-@docs customType
+@docs customType, lambdaBreaker
 
 
 ### Going crazy
@@ -102,6 +107,11 @@ define id dependency searchPattern makeName definitions =
         |> Generic
 
 
+{-| Don't like how one of the built-in or third-party generators generates code?
+Code generation can be a little opinionated after all. With this function you can override pieces of another code
+generators behavior. You'll need to find out the target generators ID, then you can pass in the new definitions that will
+take precedence over the existing ones.
+-}
 amend : String -> List Definition -> CodeGenerator
 amend id definition =
     Amendment id
@@ -165,6 +175,13 @@ simpleDef impl =
 -- Primitives
 
 
+{-| Handle an `Bool` type.
+-}
+bool : Expression -> Definition
+bool =
+    Just >> always >> always >> PrimitiveResolver { modulePath = [ "Basics" ], name = "Bool" } >> simpleDef
+
+
 {-| Handle an `Int` type.
 -}
 int : Expression -> Definition
@@ -193,6 +210,8 @@ char =
     Just >> always >> always >> PrimitiveResolver { modulePath = [ "Char" ], name = "Char" } >> simpleDef
 
 
+{-| Handle the unit `()` type.
+-}
 unit : Expression -> Definition
 unit =
     Just >> always >> always >> PrimitiveResolver { modulePath = [ "Basics" ], name = "()" } >> simpleDef
@@ -219,6 +238,20 @@ list =
     arg1Primitive [ "List" ] "List"
 
 
+{-| Handle a `List a` type. You will be given code that handles the `a` subtype.
+-}
+array : (Expression -> Expression) -> Definition
+array =
+    arg1Primitive [ "Array" ] "Array"
+
+
+{-| Handle a `List a` type. You will be given code that handles the `a` subtype.
+-}
+set : (Expression -> Expression) -> Definition
+set =
+    arg1Primitive [ "Set" ] "Set"
+
+
 {-| Handle a `Maybe a` type. You will be given code that handles the `a` subtype.
 -}
 maybe : (Expression -> Expression) -> Definition
@@ -240,9 +273,27 @@ arg2Primitive modPath name fn =
         |> simpleDef
 
 
+{-| Handle a `Dict`.
+-}
 dict : (Expression -> Expression -> Expression) -> Definition
 dict =
     arg2Primitive [ "Dict" ] "Dict"
+
+
+{-| Handle a `Dict`, but get information about the types. This is useful, since sometimes we need the type of the keys.
+-}
+customDict : (( ResolvedType, Expression ) -> ( ResolvedType, Expression ) -> Expression) -> Definition
+customDict fn =
+    PrimitiveResolver { modulePath = [ "Dict" ], name = "Dict" }
+        (\types args ->
+            case ( types, args ) of
+                ( [ t0, t1 ], [ arg0, arg1 ] ) ->
+                    Just (fn ( t0, arg0 ) ( t1, arg1 ))
+
+                _ ->
+                    Nothing
+        )
+        |> simpleDef
 
 
 
@@ -354,6 +405,13 @@ triple fn =
 
 
 {-| If map, mapN, succeed, pipeline don't work for you, this is a more custom way to combine these.
+
+The arguments that the function you pass will recieve are:
+
+1.  Information about the type being constructed (e.g. `Foo Int`).
+2.  An expression representing a function that creates the type in question (e.g. `makeFoo : Int -> Foo`).
+3.  A list of expressions that have already been generated (e.g. `[ Decode.int ]`)
+
 -}
 combiner : (ResolvedType -> Expression -> List Expression -> Maybe Expression) -> Definition
 combiner fn =
