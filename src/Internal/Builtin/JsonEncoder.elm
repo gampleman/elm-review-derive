@@ -17,14 +17,7 @@ codeGen =
         "elm/json"
         (Function Target (Typed [ "Json", "Encode" ] "Value" []))
         (\name -> "encode" ++ name)
-        [ CodeGenerator.int (CG.fqFun [ "Json", "Encode" ] "int")
-        , CodeGenerator.string (CG.fqFun [ "Json", "Encode" ] "string")
-        , CodeGenerator.char (lambdaWrap "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
-        , CodeGenerator.float (CG.fqFun [ "Json", "Encode" ] "float")
-        , CodeGenerator.bool (CG.fqFun [ "Json", "Encode" ] "bool")
-        , CodeGenerator.list (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "list", arg ])
-        , CodeGenerator.array (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "array", arg ])
-        , CodeGenerator.set (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "set", arg ])
+        [ CodeGenerator.char (lambdaWrap "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
         , CodeGenerator.customDict
             (\( keyType, keyEncoder ) ( _, valEncoder ) ->
                 CG.apply

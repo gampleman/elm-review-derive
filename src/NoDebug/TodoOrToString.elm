@@ -25,6 +25,7 @@ import Internal.Builtin.Random
 import Internal.Builtin.ToString
 import Internal.CodeGenTodo exposing (CodeGenTodo)
 import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator, ExistingFunctionProvider)
+import Internal.DependencyScanner
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers
 import Internal.ResolvedType as ResolvedType
@@ -137,7 +138,7 @@ rule generators =
             , foldProjectContexts = foldProjectContexts
             }
         |> Rule.withElmJsonProjectVisitor elmJsonVisitor
-        |> Rule.withDependenciesProjectVisitor (initializeCodeGens codeGens)
+        |> Rule.withDependenciesProjectVisitor (initializeCodeGensAndScanForDependencyProviders codeGens)
         |> Rule.withFinalProjectEvaluation finalProjectEvaluation
         |> Rule.fromProjectRuleSchema
 
@@ -202,10 +203,14 @@ importVisitor (Node _ import_) context =
     )
 
 
-initializeCodeGens : List CodeGenerator -> Dict.Dict String Dependency -> ProjectContext -> ( List (Error { useErrorForModule : () }), ProjectContext )
-initializeCodeGens codeGens deps context =
+initializeCodeGensAndScanForDependencyProviders : List CodeGenerator -> Dict.Dict String Dependency -> ProjectContext -> ( List (Error { useErrorForModule : () }), ProjectContext )
+initializeCodeGensAndScanForDependencyProviders rawCodeGens deps context =
+    let
+        codeGens =
+            Internal.CodeGenerator.configureCodeGenerators (Dict.keys deps) rawCodeGens
+    in
     ( []
-    , { context | codeGens = Internal.CodeGenerator.configureCodeGenerators (Dict.keys deps) codeGens }
+    , { context | codeGens = codeGens, existingFunctionProviders = context.existingFunctionProviders ++ Internal.DependencyScanner.findProviders codeGens deps }
     )
 
 

@@ -21,7 +21,7 @@ type CodeGenerator
         { id : String
         , searchPattern : TypePattern
         , resolvers : List Resolver
-        , condition : Condition
+        , dependency : String
         , makeName : String -> String
         , lambdaBreaker : Maybe { condition : Condition, implementation : Expression -> Expression }
         }
@@ -75,10 +75,10 @@ processResolvers dependencies resolvers =
 
 type alias ConfiguredCodeGenerator =
     { id : String
-    , searchPattern : TypeAnnotation -> Maybe TypeAnnotation
+    , searchPattern : TypePattern
+    , dependency : String
     , resolvers : List ResolverImpl
     , makeName : String -> String
-    , makeAnnotation : TypeAnnotation -> TypeAnnotation
     , lambdaBreaker : Expression -> Expression
     }
 
@@ -92,13 +92,13 @@ configureCodeGenerators dependencies codeGens =
                     ( Dict.update id (Maybe.map (\e -> Just (resolvers ++ e)) >> Maybe.withDefault (Just resolvers)) amendments, resolved )
 
                 Generic gen ->
-                    if evalCondition dependencies gen.condition then
+                    if List.member gen.dependency dependencies then
                         ( Dict.remove gen.id amendments
                         , { id = gen.id
-                          , searchPattern = TypePattern.matches gen.searchPattern
+                          , dependency = gen.dependency
+                          , searchPattern = gen.searchPattern
                           , resolvers = processResolvers dependencies (Dict.get gen.id amendments |> Maybe.withDefault []) ++ processResolvers dependencies gen.resolvers
                           , makeName = gen.makeName
-                          , makeAnnotation = TypePattern.generate gen.searchPattern
                           , lambdaBreaker =
                                 Maybe.andThen
                                     (\breaker ->
@@ -339,9 +339,9 @@ makeExternalDeclaration isTopLevel codeGen ref generics defExpr =
             annotation =
                 List.foldl
                     (\r anno ->
-                        CG.funAnn (codeGen.makeAnnotation (CG.typeVar r)) anno
+                        CG.funAnn (TypePattern.generate codeGen.searchPattern (CG.typeVar r)) anno
                     )
-                    (codeGen.makeAnnotation (CG.fqTyped ref.modulePath ref.name (List.map (\r -> CG.fqTyped [] r []) generics)))
+                    (TypePattern.generate codeGen.searchPattern (CG.fqTyped ref.modulePath ref.name (List.map (\r -> CG.fqTyped [] r []) generics)))
                     generics
         in
         Result.map

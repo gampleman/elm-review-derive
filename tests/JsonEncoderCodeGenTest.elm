@@ -1,13 +1,32 @@
 module JsonEncoderCodeGenTest exposing (..)
 
-import CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith)
-import Review.Project.Dependency exposing (Dependency)
+import CodeGenerator.Test exposing (FakeDependency, codeGenTest, codeGenTestFailsWith)
 import Test exposing (Test, describe)
 
 
-elmJson : Dependency
+elmJson : FakeDependency
 elmJson =
-    CodeGenerator.Test.fakeDependency "elm/json"
+    CodeGenerator.Test.fakeDependency
+        { name = "elm/json"
+        , dependencies = []
+        , modules =
+            [ { name = "Json.Encode"
+              , values =
+                    [ ( "array", "(a -> Json.Encode.Value) -> Array.Array a -> Json.Encode.Value" )
+                    , ( "bool", "Basics.Bool -> Json.Encode.Value" )
+                    , ( "dict", "(k -> String.String) -> (v -> Json.Encode.Value) -> Dict.Dict k v -> Json.Encode.Value" )
+                    , ( "encode", "Basics.Int -> Json.Encode.Value -> String.String" )
+                    , ( "float", "Basics.Float -> Json.Encode.Value" )
+                    , ( "int", "Basics.Int -> Json.Encode.Value" )
+                    , ( "list", "(a -> Json.Encode.Value) -> List.List a -> Json.Encode.Value" )
+                    , ( "null", "Json.Encode.Value" )
+                    , ( "object", "List.List ( String.String, Json.Encode.Value ) -> Json.Encode.Value" )
+                    , ( "set", "(a -> Json.Encode.Value) -> Set.Set a -> Json.Encode.Value" )
+                    , ( "string", "String.String -> Json.Encode.Value" )
+                    ]
+              }
+            ]
+        }
 
 
 suite : Test
