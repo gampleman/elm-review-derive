@@ -36,20 +36,6 @@ codeGen =
                     , valEncoder
                     ]
             )
-        , CodeGenerator.maybe
-            (\encoder ->
-                lambdaWrap "arg"
-                    (\arg ->
-                        CG.caseExpr arg
-                            [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
-                              , CG.apply [ encoder, CG.val "val" ]
-                              )
-                            , ( CG.fqNamedPattern [] "Nothing" []
-                              , CG.fqVal [ "Json", "Encode" ] "null"
-                              )
-                            ]
-                    )
-            )
         , CodeGenerator.customType
             (\ctors variants ->
                 CG.lambda [ CG.varPattern "arg" ]
@@ -127,14 +113,14 @@ codeGen =
                             [ fst, snd, thrd ] ->
                                 lambdaWrap "triple"
                                     (\triple ->
-                                        CG.letExpr [ CG.letDestructuring (CG.tuplePattern [ CG.varPattern "a", CG.varPattern "b", CG.varPattern "c" ]) triple ]
+                                        CG.letExpr [ CG.letDestructuring (CG.tuplePattern [ CG.varPattern "first", CG.varPattern "second", CG.varPattern "third" ]) triple ]
                                             (CG.apply
                                                 [ CG.fqFun [ "Json", "Encode" ] "list"
                                                 , CG.val "identity"
                                                 , CG.list
-                                                    [ CG.apply [ fst, CG.val "a" ]
-                                                    , CG.apply [ snd, CG.val "b" ]
-                                                    , CG.apply [ thrd, CG.val "c" ]
+                                                    [ CG.apply [ fst, CG.val "first" ]
+                                                    , CG.apply [ snd, CG.val "second" ]
+                                                    , CG.apply [ thrd, CG.val "third" ]
                                                     ]
                                                 ]
                                             )
@@ -148,6 +134,20 @@ codeGen =
                     --     Just (CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ])
                     _ ->
                         Nothing
+            )
+        , CodeGenerator.maybe
+            (\encoder ->
+                lambdaWrap "arg"
+                    (\arg ->
+                        CG.caseExpr arg
+                            [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
+                              , CG.apply [ encoder, CG.val "val" ]
+                              )
+                            , ( CG.fqNamedPattern [] "Nothing" []
+                              , CG.fqVal [ "Json", "Encode" ] "null"
+                              )
+                            ]
+                    )
             )
         ]
 

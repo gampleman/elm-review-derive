@@ -223,6 +223,7 @@ declarationVisitor context availableTypes declarationRange function =
                                         , moduleName = context.currentModule
                                         , genericArguments = assignments
                                         , privateTo = Nothing
+                                        , fromDependency = False
                                         }
                                     )
                         )

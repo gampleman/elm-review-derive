@@ -10,7 +10,53 @@ elmSerialize =
     CodeGenerator.Test.fakeDependency
         { name = "MartinSStewart/elm-serialize"
         , dependencies = []
-        , modules = []
+        , modules =
+            [ { name = "Serialize"
+              , values =
+                    [ ( "array", "Serialize.Codec e a -> Serialize.Codec e (Array.Array a)" )
+                    , ( "bool", "Serialize.Codec e Basics.Bool" )
+                    , ( "byte", "Serialize.Codec e Basics.Int" )
+                    , ( "bytes", "Serialize.Codec e Bytes.Bytes" )
+                    , ( "customType", "match -> Serialize.CustomTypeCodec { youNeedAtLeastOneVariant : () } e match value" )
+                    , ( "decodeFromBytes", "Serialize.Codec e a -> Bytes.Bytes -> Result.Result (Serialize.Error e) a" )
+                    , ( "decodeFromJson", "Serialize.Codec e a -> Json.Encode.Value -> Result.Result (Serialize.Error e) a" )
+                    , ( "decodeFromString", "Serialize.Codec e a -> String.String -> Result.Result (Serialize.Error e) a" )
+                    , ( "dict", "Serialize.Codec e comparable -> Serialize.Codec e a -> Serialize.Codec e (Dict.Dict comparable a)" )
+                    , ( "encodeToBytes", "Serialize.Codec e a -> a -> Bytes.Bytes" )
+                    , ( "encodeToJson", "Serialize.Codec e a -> a -> Json.Encode.Value" )
+                    , ( "encodeToString", "Serialize.Codec e a -> a -> String.String" )
+                    , ( "enum", "a -> List.List a -> Serialize.Codec e a" )
+                    , ( "field", "(a -> f) -> Serialize.Codec e f -> Serialize.RecordCodec e a (f -> b) -> Serialize.RecordCodec e a b" )
+                    , ( "finishCustomType", "Serialize.CustomTypeCodec () e (a -> Serialize.VariantEncoder) a -> Serialize.Codec e a" )
+                    , ( "finishRecord", "Serialize.RecordCodec e a a -> Serialize.Codec e a" )
+                    , ( "float", "Serialize.Codec e Basics.Float" )
+                    , ( "getJsonDecoder", "(e -> String.String) -> Serialize.Codec e a -> Json.Decode.Decoder a" )
+                    , ( "int", "Serialize.Codec e Basics.Int" )
+                    , ( "lazy", "(() -> Serialize.Codec e a) -> Serialize.Codec e a" )
+                    , ( "list", "Serialize.Codec e a -> Serialize.Codec e (List.List a)" )
+                    , ( "map", "(a -> b) -> (b -> a) -> Serialize.Codec e a -> Serialize.Codec e b" )
+                    , ( "mapError", "(e1 -> e2) -> Serialize.Codec e1 a -> Serialize.Codec e2 a" )
+                    , ( "mapValid", "(a -> Result.Result e b) -> (b -> a) -> Serialize.Codec e a -> Serialize.Codec e b" )
+                    , ( "maybe", "Serialize.Codec e a -> Serialize.Codec e (Maybe.Maybe a)" )
+                    , ( "record", "b -> Serialize.RecordCodec e a b" )
+                    , ( "result", "Serialize.Codec e error -> Serialize.Codec e value -> Serialize.Codec e (Result.Result error value)" )
+                    , ( "set", "Serialize.Codec e comparable -> Serialize.Codec e (Set.Set comparable)" )
+                    , ( "string", "Serialize.Codec e String.String" )
+                    , ( "triple", "Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e c -> Serialize.Codec e ( a, b, c )" )
+                    , ( "tuple", "Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e ( a, b )" )
+                    , ( "unit", "Serialize.Codec e ()" )
+                    , ( "variant0", "v -> Serialize.CustomTypeCodec z e (Serialize.VariantEncoder -> a) v -> Serialize.CustomTypeCodec () e a v" )
+                    , ( "variant1", "(a -> v) -> Serialize.Codec error a -> Serialize.CustomTypeCodec z error ((a -> Serialize.VariantEncoder) -> b) v -> Serialize.CustomTypeCodec () error b v" )
+                    , ( "variant2", "(a -> b -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.CustomTypeCodec z error ((a -> b -> Serialize.VariantEncoder) -> c) v -> Serialize.CustomTypeCodec () error c v" )
+                    , ( "variant3", "(a -> b -> c -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.Codec error c -> Serialize.CustomTypeCodec z error ((a -> b -> c -> Serialize.VariantEncoder) -> partial) v -> Serialize.CustomTypeCodec () error partial v" )
+                    , ( "variant4", "(a -> b -> c -> d -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.Codec error c -> Serialize.Codec error d -> Serialize.CustomTypeCodec z error ((a -> b -> c -> d -> Serialize.VariantEncoder) -> partial) v -> Serialize.CustomTypeCodec () error partial v" )
+                    , ( "variant5", "(a -> b -> c -> d -> e -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.Codec error c -> Serialize.Codec error d -> Serialize.Codec error e -> Serialize.CustomTypeCodec z error ((a -> b -> c -> d -> e -> Serialize.VariantEncoder) -> partial) v -> Serialize.CustomTypeCodec () error partial v" )
+                    , ( "variant6", "(a -> b -> c -> d -> e -> f -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.Codec error c -> Serialize.Codec error d -> Serialize.Codec error e -> Serialize.Codec error f -> Serialize.CustomTypeCodec z error ((a -> b -> c -> d -> e -> f -> Serialize.VariantEncoder) -> partial) v -> Serialize.CustomTypeCodec () error partial v" )
+                    , ( "variant7", "(a -> b -> c -> d -> e -> f -> g -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.Codec error c -> Serialize.Codec error d -> Serialize.Codec error e -> Serialize.Codec error f -> Serialize.Codec error g -> Serialize.CustomTypeCodec z error ((a -> b -> c -> d -> e -> f -> g -> Serialize.VariantEncoder) -> partial) v -> Serialize.CustomTypeCodec () error partial v" )
+                    , ( "variant8", "(a -> b -> c -> d -> e -> f -> g -> h -> v) -> Serialize.Codec error a -> Serialize.Codec error b -> Serialize.Codec error c -> Serialize.Codec error d -> Serialize.Codec error e -> Serialize.Codec error f -> Serialize.Codec error g -> Serialize.Codec error h -> Serialize.CustomTypeCodec z error ((a -> b -> c -> d -> e -> f -> g -> h -> Serialize.VariantEncoder) -> partial) v -> Serialize.CustomTypeCodec () error partial v" )
+                    ]
+              }
+            ]
         }
 
 

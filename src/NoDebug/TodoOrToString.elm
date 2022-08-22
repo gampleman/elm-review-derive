@@ -7,6 +7,7 @@ module NoDebug.TodoOrToString exposing (rule)
 -}
 
 import AssocList exposing (Dict)
+import AssocSet
 import Dict
 import Elm.Project
 import Elm.Syntax.Declaration as Declaration exposing (Declaration)
@@ -210,7 +211,11 @@ initializeCodeGensAndScanForDependencyProviders rawCodeGens deps context =
             Internal.CodeGenerator.configureCodeGenerators (Dict.keys deps) rawCodeGens
     in
     ( []
-    , { context | codeGens = codeGens, existingFunctionProviders = context.existingFunctionProviders ++ Internal.DependencyScanner.findProviders codeGens deps }
+    , { context
+        | codeGens = codeGens
+        , existingFunctionProviders = context.existingFunctionProviders ++ Internal.DependencyScanner.findProviders codeGens deps
+        , types = context.types ++ Internal.DependencyScanner.findTypes deps
+      }
     )
 
 
@@ -265,7 +270,7 @@ fromProjectToModule lookupTable metadata projectContext =
     , exports = []
     , availableTypes = projectContext.types
     , importStartRow = Nothing
-    , imports = []
+    , imports = Internal.ExistingImport.defaults
     , currentModule = moduleName
     , codeGens = projectContext.codeGens
     , codeGenTodos = []
@@ -447,6 +452,13 @@ finalProjectEvaluation projectContext =
         projectContext.otherTodos
         ++ List.filterMap
             (\( moduleName, todo ) ->
+                let
+                    imports =
+                        AssocList.get moduleName projectContext.imports
+                            |> Maybe.map (.existingImports >> List.map .moduleName)
+                            |> Maybe.withDefault []
+                            |> AssocSet.fromList
+                in
                 Internal.CodeGenTodo.todoErrors
                     { projectContext
                         | existingFunctionProviders =
@@ -458,9 +470,30 @@ finalProjectEvaluation projectContext =
                                 -- We sort by generic arguments here, since we assume that using a provider for `Maybe Int`
                                 -- is better than `Maybe a` if both happen to be available. This would be more obvious in
                                 -- `CodeGenerator.generate`, but we do it here to only do the sort once.
-                                |> List.sortBy (\provider -> List.length provider.genericArguments)
+                                |> List.sortBy (byExposureCriteria imports moduleName)
                     }
                     moduleName
                     todo
             )
             projectContext.codeGenTodos
+
+
+byExposureCriteria : AssocSet.Set (List String) -> List String -> ExistingFunctionProvider -> ( Int, Int )
+byExposureCriteria imports moduleName provider =
+    ( if provider.moduleName == moduleName then
+        1
+
+      else if AssocSet.member provider.moduleName imports then
+        if provider.fromDependency then
+            3
+
+        else
+            2
+
+      else if provider.fromDependency then
+        4
+
+      else
+        5
+    , List.length provider.genericArguments
+    )

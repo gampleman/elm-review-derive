@@ -1,9 +1,10 @@
-module Internal.DependencyScanner exposing (findProviders)
+module Internal.DependencyScanner exposing (findProviders, findTypes)
 
 import Dict exposing (Dict)
 import Elm.Module
 import Elm.Package
 import Elm.Project
+import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Type as T exposing (Type)
 import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
 import List.Extra
@@ -37,6 +38,7 @@ findProviders codeGens deps =
                                                     , moduleName = String.split "." mod.name
                                                     , genericArguments = assignments
                                                     , privateTo = Nothing
+                                                    , fromDependency = True
                                                     }
 
                                             Nothing ->
@@ -52,11 +54,45 @@ findProviders codeGens deps =
             )
 
 
+findTypes : Dict String Dependency -> List ( ModuleName, ResolvedType )
+findTypes deps =
+    Dict.values deps
+        |> List.concatMap Dependency.modules
+        |> List.concatMap
+            (\mod ->
+                let
+                    name =
+                        String.split "." mod.name
+                in
+                List.map
+                    (\alias_ ->
+                        ( name, RT.TypeAlias { modulePath = name, name = alias_.name } alias_.args (resolvedTypeFromDocsType mod.name alias_.tipe) )
+                    )
+                    mod.aliases
+                    ++ List.map
+                        (\union ->
+                            ( name
+                            , if List.isEmpty union.tags then
+                                RT.Opaque { modulePath = name, name = union.name } (List.map (\varName -> RT.GenericType varName Nothing) union.args)
+
+                              else
+                                RT.CustomType { modulePath = name, name = union.name }
+                                    union.args
+                                    (List.map
+                                        (\( tag, tipes ) -> ( { modulePath = name, name = tag }, List.map (resolvedTypeFromDocsType mod.name) tipes ))
+                                        union.tags
+                                    )
+                            )
+                        )
+                        mod.unions
+            )
+
+
 {-| This is an opinionated heuristic. Generally if a module provides more than one implementation for a type, than that's a good hint that there are multiple nonequivalent ways of doing it and it probably requires programmer discretion.
 -}
 heuristicRejectIfMultiplePatternsForSameType : List ExistingFunctionProvider -> List ExistingFunctionProvider
 heuristicRejectIfMultiplePatternsForSameType providers =
-    List.Extra.gatherEqualsBy .childType providers
+    List.Extra.gatherEqualsBy (\v -> ( v.childType, v.codeGenId )) providers
         |> List.filterMap
             (\( provider, rest ) ->
                 if List.isEmpty rest then

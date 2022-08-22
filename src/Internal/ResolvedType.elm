@@ -1,4 +1,4 @@
-module Internal.ResolvedType exposing (computeVisibility, findGenericAssignments, fromDeclaration, fromTypeSignature, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
+module Internal.ResolvedType exposing (computeVisibility, findGenericAssignments, fromDeclaration, fromTypeSignature, getArgs, getRef, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
 
 import AssocList
 import Dict
@@ -251,6 +251,9 @@ matchType full possiblyRef =
         ( CustomType ref1 gens1 _, Opaque ref2 gens2 ) ->
             ref1 == ref2 && List.length gens1 == List.length gens2
 
+        ( Opaque ref2 gens2, CustomType ref1 gens1 _ ) ->
+            ref1 == ref2 && List.length gens1 == List.length gens2
+
         ( TypeAlias ref1 gens1 _, TypeAlias ref2 gens2 _ ) ->
             ref1 == ref2 && List.length gens1 == List.length gens2
 
@@ -273,6 +276,38 @@ matchType full possiblyRef =
                         gens2
                     )
 
+        ( CustomType ref1 gens1 ctors1, CustomType ref2 gens2 ctors2 ) ->
+            if full == possiblyRef then
+                True
+
+            else if ref1 == ref2 then
+                let
+                    bindings =
+                        List.map2 Tuple.pair gens1 gens2
+                            |> Dict.fromList
+
+                    slots2 =
+                        getFilledGenericSlots possiblyRef
+                            |> Dict.fromList
+                in
+                getFilledGenericSlots full
+                    |> List.all
+                        (\( name, t1 ) ->
+                            Dict.get name bindings
+                                |> Maybe.andThen
+                                    (\newName ->
+                                        Dict.get newName slots2
+                                    )
+                                |> Maybe.map
+                                    (\t2 ->
+                                        matchType t1 t2
+                                    )
+                                |> Maybe.withDefault False
+                        )
+
+            else
+                False
+
         _ ->
             full == possiblyRef
 
@@ -284,6 +319,48 @@ findGenericAssignments full possiblyRef =
     case ( full, possiblyRef ) of
         ( CustomType _ gens1 _, Opaque _ gens2 ) ->
             List.map2 Tuple.pair gens1 gens2 |> Dict.fromList
+
+        ( Opaque _ gens1, CustomType _ names ctors ) ->
+            let
+                bindings =
+                    List.map2 Tuple.pair names gens1
+                        |> List.filterMap
+                            (\( name, gen ) ->
+                                case gen of
+                                    GenericType newName Nothing ->
+                                        Just ( name, newName )
+
+                                    _ ->
+                                        Nothing
+                            )
+                        |> Dict.fromList
+            in
+            getFilledGenericSlots possiblyRef
+                |> List.filterMap
+                    (\( name, t ) ->
+                        Dict.get name bindings
+                            |> Maybe.map (\newName -> ( newName, t ))
+                    )
+                |> Dict.fromList
+
+        ( CustomType ref1 gens1 ctors1, CustomType ref2 gens2 ctors2 ) ->
+            let
+                bindings =
+                    List.map2 Tuple.pair gens2 gens1
+                        |> Dict.fromList
+            in
+            getFilledGenericSlots possiblyRef
+                |> List.filterMap
+                    (\( name, t1 ) ->
+                        Dict.get name bindings
+                            |> Maybe.map
+                                (\newName ->
+                                    ( newName
+                                    , t1
+                                    )
+                                )
+                    )
+                |> Dict.fromList
 
         ( TypeAlias _ gens1 _, TypeAlias ref2 gens2 struct ) ->
             let
@@ -327,30 +404,50 @@ findGenericAssignments full possiblyRef =
 
 getFilledGenericSlots : ResolvedType -> List ( String, ResolvedType )
 getFilledGenericSlots t =
+    getGenericSlots t |> List.filterMap (\( n, mt ) -> Maybe.map (\tt -> ( n, tt )) mt)
+
+
+getArgs : ResolvedType -> List ResolvedType
+getArgs t =
     case t of
-        GenericType n (Just child) ->
-            [ ( n, child ) ]
-
-        GenericType _ Nothing ->
-            []
-
         Opaque _ args ->
-            List.concatMap getFilledGenericSlots args
-
-        Function args res ->
-            List.concatMap getFilledGenericSlots args ++ getFilledGenericSlots res
+            args
 
         TypeAlias _ _ arg ->
-            getFilledGenericSlots arg
-
-        AnonymousRecord _ rec ->
-            List.concatMap (Tuple.second >> getFilledGenericSlots) rec
+            getGenericSlots arg
+                |> List.map (\( n, tt ) -> GenericType n tt)
 
         CustomType _ _ ctors ->
-            List.concatMap (Tuple.second >> List.concatMap getFilledGenericSlots) ctors
+            List.concatMap (Tuple.second >> List.concatMap getGenericSlots) ctors
+                |> List.map (\( n, tt ) -> GenericType n tt)
+
+        _ ->
+            []
+
+
+getGenericSlots : ResolvedType -> List ( String, Maybe ResolvedType )
+getGenericSlots t =
+    case t of
+        GenericType n child ->
+            [ ( n, child ) ]
+
+        Opaque _ args ->
+            List.concatMap getGenericSlots args
+
+        Function args res ->
+            List.concatMap getGenericSlots args ++ getGenericSlots res
+
+        TypeAlias _ _ arg ->
+            getGenericSlots arg
+
+        AnonymousRecord _ rec ->
+            List.concatMap (Tuple.second >> getGenericSlots) rec
+
+        CustomType _ _ ctors ->
+            List.concatMap (Tuple.second >> List.concatMap getGenericSlots) ctors
 
         Tuple items ->
-            List.concatMap getFilledGenericSlots items
+            List.concatMap getGenericSlots items
 
 
 
@@ -619,3 +716,19 @@ computeVisibility currentModule exports =
                 _ ->
                     t
         )
+
+
+getRef : ResolvedType -> Maybe Reference
+getRef type_ =
+    case type_ of
+        Opaque ref _ ->
+            Just ref
+
+        TypeAlias ref _ _ ->
+            Just ref
+
+        CustomType ref _ _ ->
+            Just ref
+
+        _ ->
+            Nothing

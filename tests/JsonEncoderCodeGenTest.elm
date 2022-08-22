@@ -563,6 +563,43 @@ encodeResult err ok val =
         Ok arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok arg0 ) ]
 """
+        , codeGenTest "Picks up the definition of Result from dependency"
+            [ elmJson ]
+            []
+            [ """module A exposing (A, encode)
+import Json.Encode exposing (Value)
+
+type A
+  = A (Result String Int)
+ 
+
+encode : A val -> Value
+encode encodeVal a =
+   Debug.todo ""
+""" ]
+            """module A exposing (A, encode)
+import Json.Encode exposing (Value)
+
+type A
+  = A (Result String Int)
+ 
+
+encode : A val -> Value
+encode encodeVal a =
+    case a of
+        A arg0 ->
+            Json.Encode.object
+                [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int arg0 ) ]
+
+encodeResult : (error -> Value) -> (value -> Value) -> Result error value -> Value
+encodeResult error value =
+    case arg of
+        Result.Ok arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", value arg0 ) ]
+
+        Result.Err arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", error arg0 ) ]
+"""
         , codeGenTest "Generates an encoder for a subtype"
             [ elmJson ]
             []
@@ -827,14 +864,7 @@ type alias Foo =
 encode : Foo -> Value
 encode rec =
     Json.Encode.object
-        [ ( "maybe"
-          , case rec.maybe of
-                Just val ->
-                    Json.Encode.int val
-
-                Nothing ->
-                    Json.Encode.null
-          )
+        [ ( "maybe", encodeMaybe Json.Encode.int rec.maybe )
         , ( "list", Json.Encode.list Json.Encode.int rec.list )
         , ( "array", Json.Encode.array Json.Encode.int rec.array )
         , ( "set", Json.Encode.set Json.Encode.int rec.set )
@@ -847,13 +877,22 @@ encode rec =
           )
         , ( "triple"
           , let
-                ( a, b, c ) =
+                ( first, second, third ) =
                     rec.triple
             in
             Json.Encode.list
                 identity
-                [ Json.Encode.int a, Json.Encode.string b, Json.Encode.string (String.fromChar c) ]
+                [ Json.Encode.int first, Json.Encode.string second, Json.Encode.string (String.fromChar third) ]
           )
         ]
+
+encodeMaybe : (a -> Value) -> Maybe a -> Value
+encodeMaybe a =
+    case arg of
+        Just val ->
+            a val
+
+        Nothing ->
+            Json.Encode.null
 """
         ]

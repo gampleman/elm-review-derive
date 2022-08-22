@@ -967,10 +967,10 @@ randomBar =
 
 randomBaz : Random.Generator Baz
 randomBaz =
-    Random.map
-        Baz
-        (Random.uniform (Random.map Just (Random.lazy (\\() -> randomBar))) [ Random.constant Nothing ]
-            |> Random.andThen identity
-        )
+    Random.map Baz (randomMaybe (Random.lazy (\\() -> randomBar)))
+
+randomMaybe : Random.Generator a -> Random.Generator (Maybe a)
+randomMaybe a =
+    Random.uniform (Random.map Just a) [ Random.constant Nothing ] |> Random.andThen identity
 """
         ]
