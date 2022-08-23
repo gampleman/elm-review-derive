@@ -17,14 +17,7 @@ codeGen =
         "elm/json"
         (Function Target (Typed [ "Json", "Encode" ] "Value" []))
         (\name -> "encode" ++ name)
-        [ CodeGenerator.int (CG.fqFun [ "Json", "Encode" ] "int")
-        , CodeGenerator.string (CG.fqFun [ "Json", "Encode" ] "string")
-        , CodeGenerator.char (lambdaWrap "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
-        , CodeGenerator.float (CG.fqFun [ "Json", "Encode" ] "float")
-        , CodeGenerator.bool (CG.fqFun [ "Json", "Encode" ] "bool")
-        , CodeGenerator.list (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "list", arg ])
-        , CodeGenerator.array (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "array", arg ])
-        , CodeGenerator.set (\arg -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "set", arg ])
+        [ CodeGenerator.char (lambdaWrap "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
         , CodeGenerator.customDict
             (\( keyType, keyEncoder ) ( _, valEncoder ) ->
                 CG.apply
@@ -42,20 +35,6 @@ codeGen =
                             CG.chain keyEncoder [ CG.apply [ CG.fqFun [ "Json", "Encode" ] "encode", CG.int 0 ] ]
                     , valEncoder
                     ]
-            )
-        , CodeGenerator.maybe
-            (\encoder ->
-                lambdaWrap "arg"
-                    (\arg ->
-                        CG.caseExpr arg
-                            [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
-                              , CG.apply [ encoder, CG.val "val" ]
-                              )
-                            , ( CG.fqNamedPattern [] "Nothing" []
-                              , CG.fqVal [ "Json", "Encode" ] "null"
-                              )
-                            ]
-                    )
             )
         , CodeGenerator.customType
             (\ctors variants ->
@@ -134,14 +113,14 @@ codeGen =
                             [ fst, snd, thrd ] ->
                                 lambdaWrap "triple"
                                     (\triple ->
-                                        CG.letExpr [ CG.letDestructuring (CG.tuplePattern [ CG.varPattern "a", CG.varPattern "b", CG.varPattern "c" ]) triple ]
+                                        CG.letExpr [ CG.letDestructuring (CG.tuplePattern [ CG.varPattern "first", CG.varPattern "second", CG.varPattern "third" ]) triple ]
                                             (CG.apply
                                                 [ CG.fqFun [ "Json", "Encode" ] "list"
                                                 , CG.val "identity"
                                                 , CG.list
-                                                    [ CG.apply [ fst, CG.val "a" ]
-                                                    , CG.apply [ snd, CG.val "b" ]
-                                                    , CG.apply [ thrd, CG.val "c" ]
+                                                    [ CG.apply [ fst, CG.val "first" ]
+                                                    , CG.apply [ snd, CG.val "second" ]
+                                                    , CG.apply [ thrd, CG.val "third" ]
                                                     ]
                                                 ]
                                             )
@@ -155,6 +134,20 @@ codeGen =
                     --     Just (CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ])
                     _ ->
                         Nothing
+            )
+        , CodeGenerator.maybe
+            (\encoder ->
+                lambdaWrap "arg"
+                    (\arg ->
+                        CG.caseExpr arg
+                            [ ( CG.fqNamedPattern [] "Just" [ CG.varPattern "val" ]
+                              , CG.apply [ encoder, CG.val "val" ]
+                              )
+                            , ( CG.fqNamedPattern [] "Nothing" []
+                              , CG.fqVal [ "Json", "Encode" ] "null"
+                              )
+                            ]
+                    )
             )
         ]
 

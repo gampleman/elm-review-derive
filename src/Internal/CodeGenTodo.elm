@@ -15,6 +15,7 @@ import Internal.CodeGenerator as CodeGenerator exposing (ConfiguredCodeGenerator
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers as Helpers
 import Internal.ResolvedType as ResolvedType
+import Internal.TypePattern
 import List.Extra
 import ResolvedType exposing (ResolvedType)
 import Review.Fix
@@ -49,14 +50,14 @@ findMatchingPatternWithGenerics : List ConfiguredCodeGenerator -> TypeAnnotation
 findMatchingPatternWithGenerics codeGenerators annotation =
     case codeGenerators of
         h :: t ->
-            case h.searchPattern annotation of
+            case Internal.TypePattern.matches h.searchPattern annotation of
                 Just childType ->
                     Just ( h.id, childType, [] )
 
                 Nothing ->
                     case annotation of
                         TypeAnnotation.FunctionTypeAnnotation (Node _ inp) (Node _ out) ->
-                            case ( h.searchPattern inp, findMatchingPatternWithGenerics [ h ] out ) of
+                            case ( Internal.TypePattern.matches h.searchPattern inp, findMatchingPatternWithGenerics [ h ] out ) of
                                 ( Just (TypeAnnotation.GenericType varName), Just ( _, childType, otherAssignments ) ) ->
                                     if containsGenericType varName childType then
                                         Just ( h.id, childType, varName :: otherAssignments )
@@ -222,6 +223,7 @@ declarationVisitor context availableTypes declarationRange function =
                                         , moduleName = context.currentModule
                                         , genericArguments = assignments
                                         , privateTo = Nothing
+                                        , fromDependency = False
                                         }
                                     )
                         )

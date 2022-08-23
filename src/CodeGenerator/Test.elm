@@ -1,4 +1,7 @@
-module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, fakeDependency)
+module CodeGenerator.Test exposing
+    ( codeGenTest, codeGenTestFailsWith, fakeDependency
+    , FakeDependency
+    )
 
 {-| Testing code generators can be tricky, but very rewarding as it makes developing CodeGenerators much easier.
 
@@ -9,6 +12,10 @@ module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, fakeDepen
 import Array
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen
+import Elm.Constraint
+import Elm.License
+import Elm.Module
+import Elm.Package
 import Elm.Parser
 import Elm.Pretty
 import Elm.Processing
@@ -18,6 +25,8 @@ import Elm.Syntax.Declaration exposing (Declaration(..))
 import Elm.Syntax.Expression
 import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.Range exposing (Range)
+import Elm.Type
+import Elm.Version
 import Elm.Writer
 import Expect exposing (Expectation)
 import Json.Decode
@@ -30,7 +39,12 @@ import Review.Test.Dependencies
 import Test exposing (Test)
 
 
-codeGenTestHelper : String -> List Dependency -> List CodeGenerator -> List String -> ({ module_ : String, under : String } -> Review.Test.ReviewResult -> Expectation) -> Test
+type FakeDependency
+    = Dep Dependency
+    | FailedDep String
+
+
+codeGenTestHelper : String -> List FakeDependency -> List CodeGenerator -> List String -> ({ module_ : String, under : String } -> Review.Test.ReviewResult -> Expectation) -> Test
 codeGenTestHelper description dependencies codeGens modules fn =
     Test.test description <|
         \_ ->
@@ -38,12 +52,40 @@ codeGenTestHelper description dependencies codeGens modules fn =
                 inputModules =
                     List.map (String.replace "\u{000D}" "") modules
 
+                validDependencies =
+                    List.filterMap
+                        (\fakeDep ->
+                            case fakeDep of
+                                Dep dep ->
+                                    Just dep
+
+                                FailedDep _ ->
+                                    Nothing
+                        )
+                        dependencies
+
+                failedDeps =
+                    List.filterMap
+                        (\fakeDep ->
+                            case fakeDep of
+                                Dep _ ->
+                                    Nothing
+
+                                FailedDep reason ->
+                                    Just (" - " ++ reason)
+                        )
+                        dependencies
+
                 project =
-                    List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore dependencies
+                    List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore validDependencies
             in
             case findTodo inputModules of
                 Ok result ->
-                    fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoOrToString.rule codeGens) inputModules)
+                    if List.isEmpty failedDeps then
+                        fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoOrToString.rule codeGens) inputModules)
+
+                    else
+                        Expect.fail ("Found issues in the following dependencies: \n\n" ++ String.join "\n" failedDeps)
 
                 Err msg ->
                     Expect.fail msg
@@ -51,7 +93,7 @@ codeGenTestHelper description dependencies codeGens modules fn =
 
 {-| Like `codeGenTest`, but expects the code generator to not be able to generate code. The final string is the expected error message.
 -}
-codeGenTestFailsWith : String -> List Dependency -> List CodeGenerator -> List String -> String -> Test
+codeGenTestFailsWith : String -> List FakeDependency -> List CodeGenerator -> List String -> String -> Test
 codeGenTestFailsWith description dependencies codeGens modules expectedFailureDetails =
     codeGenTestHelper description
         dependencies
@@ -100,7 +142,7 @@ The arguments are:
 5.  The expected source code of the module containing the `Debug.todo` after running the code generator.
 
 -}
-codeGenTest : String -> List Dependency -> List CodeGenerator -> List String -> String -> Test
+codeGenTest : String -> List FakeDependency -> List CodeGenerator -> List String -> String -> Test
 codeGenTest description dependencies codeGens modules expected =
     codeGenTestHelper description
         dependencies
@@ -143,28 +185,105 @@ extractSubstring { start, end } file =
                         |> String.join "\n"
 
 
+listMaybe2MaybeList : List (Maybe a) -> Maybe (List a)
+listMaybe2MaybeList =
+    List.foldr (Maybe.map2 (::)) (Just [])
+
+
+elmConstraint : Elm.Constraint.Constraint
+elmConstraint =
+    let
+        c () =
+            case Elm.Constraint.fromString "0.19.0 <= v < 0.20.0" of
+                Just cons ->
+                    cons
+
+                Nothing ->
+                    c ()
+    in
+    c ()
+
+
+typeFromStr : String -> Maybe Elm.Type.Type
+typeFromStr str =
+    Json.Decode.decodeString Elm.Type.decoder ("\"" ++ str ++ "\"") |> Result.toMaybe
+
+
 {-| Creates a fake elm review dependency type. This should only be used with the other helpers in this module, as the information inside the returned type is mostly rubbish.
 -}
-fakeDependency : String -> Dependency
-fakeDependency name =
-    case Json.Decode.decodeString Elm.Project.decoder ("""{
-    "type": "package",
-    "name": """ ++ "\"" ++ name ++ "\"" ++ """,
-    "summary": "Extra functions for the core Random library",
-    "license": "BSD-3-Clause",
-    "version": "3.2.0",
-    "exposed-modules": [],
-    "elm-version": "0.19.0 <= v < 0.20.0",
-    "dependencies": {
-        "elm/core": "1.0.0 <= v < 2.0.0"
-    },
-    "test-dependencies": {}
-}""") of
-        Ok val ->
-            Review.Project.Dependency.create name val []
+fakeDependency :
+    { name : String
+    , dependencies : List String
+    , modules : List { name : String, values : List ( String, String ) }
+    }
+    -> FakeDependency
+fakeDependency data =
+    case
+        ( Elm.Package.fromString data.name
+        , listMaybe2MaybeList (List.map (.name >> Elm.Module.fromString) data.modules)
+        , listMaybe2MaybeList (List.map (\d -> Maybe.map2 Tuple.pair (Elm.Package.fromString d) (Elm.Constraint.fromString "1.0.0 <= v < 2.0.0")) data.dependencies)
+        )
+    of
+        ( Just name, Just moduleNames, Just constraints ) ->
+            case
+                List.map
+                    (\mod ->
+                        Maybe.map
+                            (\values ->
+                                { name = mod.name
+                                , comment = ""
+                                , unions = []
+                                , aliases = []
+                                , binops = []
+                                , values = values
+                                }
+                            )
+                            (List.map
+                                (\( vn, vts ) ->
+                                    Maybe.map
+                                        (\t ->
+                                            { name = vn
+                                            , comment = ""
+                                            , tipe = t
+                                            }
+                                        )
+                                        (typeFromStr vts)
+                                )
+                                mod.values
+                                |> listMaybe2MaybeList
+                            )
+                    )
+                    data.modules
+                    |> listMaybe2MaybeList
+            of
+                Just modules ->
+                    Dep
+                        (Review.Project.Dependency.create data.name
+                            (Elm.Project.Package
+                                { name = name
+                                , summary = "A package"
+                                , license = Elm.License.bsd3
+                                , version = Elm.Version.one
+                                , exposed = Elm.Project.ExposedList moduleNames
+                                , deps = constraints
+                                , testDeps = []
+                                , elm = elmConstraint
+                                }
+                            )
+                            modules
+                        )
 
-        Err e ->
-            Review.Test.Dependencies.elmCore
+                Nothing ->
+                    FailedDep ("Modules of " ++ data.name ++ " are not all valid")
+
+        ( Nothing, _, _ ) ->
+            FailedDep ("Name of " ++ data.name ++ " is not a valid elm package name")
+
+        ( _, Nothing, _ ) ->
+            FailedDep ("Dependencies of " ++ data.name ++ " are not all valid package names")
+
+        ( _, _, Nothing ) ->
+            FailedDep ("Name of modules in " ++ data.name ++ " is not a valid elm module names")
 
 
 findTodo : List String -> Result String { module_ : String, under : String }

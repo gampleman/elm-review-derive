@@ -41,20 +41,24 @@ all =
     describe "NoDebug.Log"
         [ test "should not report normal function calls" <|
             \() ->
-                testRule """
+                """
 a = foo n
 b = bar.foo n
 c = debug
 e = debug.log n
 d = debug.log n
             """
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectNoErrors
         , test "should not report Debug.todo or Debug.toString calls" <|
             \() ->
-                testRule """
+                """
 a = Debug.toString n
 b = Debug.todo ""
 """
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectNoErrors
         , test "should report Debug.log use" <|
             \() ->
@@ -204,54 +208,64 @@ b = Debug.log z
                         ]
         , test "should report Debug.log in a case value" <|
             \() ->
-                testRule """
+                """
 a = case Debug.log a b of
   _ -> []"""
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectErrors
                         [ Review.Test.error errorDetails
-                            |> whenFixed """
+                            |> whenFixed (String.replace "\u{000D}" "" """
 a = case b of
-  _ -> []"""
+  _ -> []""")
                         ]
         , test "should report Debug.log in a case body" <|
             \() ->
-                testRule """
+                """
 a = case a of
   _ -> Debug.log a b"""
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectErrors
                         [ Review.Test.error errorDetails
-                            |> whenFixed """
+                            |> whenFixed (String.replace "\u{000D}" "" """
 a = case a of
-  _ -> b"""
+  _ -> b""")
                         ]
         , test "should report Debug.log in let declaration section" <|
             \() ->
-                testRule """
+                """
 a = let b = Debug.log a c
     in b"""
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectErrors
                         [ Review.Test.error errorDetails
-                            |> whenFixed """
+                            |> whenFixed (String.replace "\u{000D}" "" """
 a = let b = c
-    in b"""
+    in b""")
                         ]
         , test "should report Debug.log in let body" <|
             \() ->
-                testRule """
+                """
 a = let b = c
     in Debug.log a b"""
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectErrors
                         [ Review.Test.error errorDetails
-                            |> whenFixed """
+                            |> whenFixed (String.replace "\u{000D}" "" """
 a = let b = c
-    in b"""
+    in b""")
                         ]
         , test "should not report calls from a module containing Debug but that is not Debug" <|
             \() ->
-                testRule """
+                """
 a = Foo.Debug.log 1
 b = Debug.Foo.log 1
             """
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectNoErrors
         , test "should not report the import of the Debug module" <|
             \() ->
@@ -259,10 +273,12 @@ b = Debug.Foo.log 1
                     |> Review.Test.expectNoErrors
         , test "should report the use of `log` when it has been explicitly imported" <|
             \() ->
-                testRule """
+                """
 import Debug exposing (log)
 a = log "" 1
 """
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = message
@@ -270,33 +286,38 @@ a = log "" 1
                             , under = "log"
                             }
                             |> Review.Test.atExactly { start = { row = 5, column = 5 }, end = { row = 5, column = 8 } }
-                            |> whenFixed """
+                            |> whenFixed (String.replace "\u{000D}" "" """
 import Debug exposing (log)
 a = 1
-"""
+""")
                         ]
         , test "should report the use of `log` when it has been implicitly imported" <|
             \() ->
-                testRule """
+                """
 import Debug exposing (..)
 a = log "" 1
 """
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectErrors
                         [ Review.Test.error
                             { message = message
                             , details = details
                             , under = "log"
                             }
-                            |> whenFixed """
+                            |> whenFixed
+                                (String.replace "\u{000D}" "" """
 import Debug exposing (..)
 a = 1
-"""
+""")
                         ]
         , test "should not report the use of `log` when it has not been imported" <|
             \() ->
-                testRule """
+                """
 import Debug exposing (todo)
 a = log "" 1
 """
+                    |> String.replace "\u{000D}" ""
+                    |> testRule
                     |> Review.Test.expectNoErrors
         ]

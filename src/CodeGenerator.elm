@@ -99,7 +99,7 @@ define id dependency searchPattern makeName definitions =
         { id = id
         , searchPattern = searchPattern
         , resolvers = []
-        , condition = Dependencies [ dependency ]
+        , dependency = dependency
         , makeName = makeName
         , lambdaBreaker = Nothing
         }

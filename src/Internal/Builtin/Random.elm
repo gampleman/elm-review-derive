@@ -37,10 +37,6 @@ codeGen =
         , CodeGenerator.int randomExtra.anyInt |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
         , CodeGenerator.string (random.uniform (CG.string "TODO: Define string options") (CG.list []))
         , CodeGenerator.list random.list
-        , CodeGenerator.maybe
-            (\justVariant ->
-                CG.pipe (random.uniform (random.map (CG.fun "Just") justVariant) (CG.list [ random.constant (CG.val "Nothing") ])) [ random.andThen (CG.val "identity") ]
-            )
         , CodeGenerator.pipeline random.constant (\arg -> CG.apply [ CG.fqFun [ "Random" ] "map2", CG.parens (CG.binOp CG.piper), arg ])
         , CodeGenerator.pipeline random.constant randomExtra.andMap |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
         , CodeGenerator.mapN 5 (\name ctor args -> CG.apply ([ CG.fqFun [ "Random" ] name, ctor ] ++ args))
@@ -89,5 +85,9 @@ codeGen =
         , CodeGenerator.lambdaBreaker
             (\expr ->
                 random.lazy (CG.lambda [ CG.unitPattern ] expr)
+            )
+        , CodeGenerator.maybe
+            (\justVariant ->
+                CG.pipe (random.uniform (random.map (CG.fun "Just") justVariant) (CG.list [ random.constant (CG.val "Nothing") ])) [ random.andThen (CG.val "identity") ]
             )
         ]
