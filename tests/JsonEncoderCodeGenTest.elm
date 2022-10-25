@@ -1,6 +1,7 @@
 module JsonEncoderCodeGenTest exposing (..)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest, codeGenTestFailsWith)
+import StandardModule
 import Test exposing (Test, describe)
 
 
@@ -883,6 +884,64 @@ encode rec =
             Json.Encode.list
                 identity
                 [ Json.Encode.int first, Json.Encode.string second, Json.Encode.string (String.fromChar third) ]
+          )
+        ]
+
+encodeMaybe : (a -> Value) -> Maybe a -> Value
+encodeMaybe a =
+    case arg of
+        Just val ->
+            a val
+
+        Nothing ->
+            Json.Encode.null
+"""
+        , codeGenTest "Standard"
+            [ elmJson ]
+            []
+            [ StandardModule.standard
+            , """module A exposing (..)
+import Standard exposing (..)
+import Json.Encode exposing (Value)
+
+encode : A Int -> Value
+encode =
+    Debug.todo ""
+            """
+            ]
+            """module A exposing (..)
+import Standard exposing (..)
+import Json.Encode exposing (Value)
+
+encode : A Int -> Value
+encode arg =
+    case arg of
+        Rec arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Rec" ), ( "0", encodeB arg0 ) ]
+
+        Gen arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Gen" ), ( "0", Json.Encode.int arg0 ) ]
+
+        Recursive arg0 ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Recursive" ), ( "0", encode arg0 ) ]
+            
+encodeB : B -> Value
+encodeB rec =
+    Json.Encode.object
+        [ ( "list", Json.Encode.list Json.Encode.int rec.list )
+        , ( "array", Json.Encode.array Json.Encode.string rec.array )
+        , ( "dict", Json.Encode.dict identity Json.Encode.float rec.dict )
+        , ( "tuple"
+          , Json.Encode.list
+                identity
+                [ case Tuple.first rec.tuple of
+                    Just val ->
+                        Json.Encode.string val
+
+                    Nothing ->
+                        Json.Encode.null
+                , Json.Encode.bool (Tuple.second rec.tuple)
+                ]
           )
         ]
 

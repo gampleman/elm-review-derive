@@ -210,6 +210,23 @@ typeFromStr str =
 
 
 {-| Creates a fake elm review dependency type. This should only be used with the other helpers in this module, as the information inside the returned type is mostly rubbish.
+
+How do you get this value without too much pain? I usually go to package.elm-lang.or, find the package I'm interested in, open the dev tools, in the Network tab find the `docs.json`,
+select Preview, right-click and "Store as global variable", then run the following snippet:
+
+    copy(
+        `fakeDependency \n    { name = ${JSON.stringify(
+            window.location.pathname.split("/").slice(2, 4).join("/")
+        )}\n    , dependencies = []\n    , modules =\n        [ ${temp1
+            .map(
+                (mod) =>
+                    `{ name = ${JSON.stringify(mod.name)}\n        , values =\n            [ ${mod.values
+                        .map((v) => `( ${JSON.stringify(v.name)}, ${JSON.stringify(v.type)})`)
+                        .join("\n            , ")}\n            ]\n        }`
+            )
+            .join("\n        , ")}\n    ]\n}`
+    );
+
 -}
 fakeDependency :
     { name : String

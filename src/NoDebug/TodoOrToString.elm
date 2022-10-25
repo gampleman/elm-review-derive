@@ -20,6 +20,7 @@ import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Range exposing (Range)
 import Internal.Builtin.Codec
 import Internal.Builtin.FromString
+import Internal.Builtin.JsonDecoder
 import Internal.Builtin.JsonEncoder
 import Internal.Builtin.ListAllVariants
 import Internal.Builtin.Random
@@ -124,6 +125,7 @@ rule generators =
             generators
                 ++ [ Internal.Builtin.Random.codeGen
                    , Internal.Builtin.JsonEncoder.codeGen
+                   , Internal.Builtin.JsonDecoder.codeGen
                    , Internal.Builtin.Codec.codeGen
                    , Internal.Builtin.ListAllVariants.codeGen
                    , Internal.Builtin.ToString.codeGen
