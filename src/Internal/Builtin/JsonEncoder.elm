@@ -2,6 +2,7 @@ module Internal.Builtin.JsonEncoder exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
+import Internal.Helpers exposing (lambda1)
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -17,7 +18,7 @@ codeGen =
         "elm/json"
         (Function Target (Typed [ "Json", "Encode" ] "Value" []))
         (\name -> "encode" ++ name)
-        [ CodeGenerator.char (lambdaWrap "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
+        [ CodeGenerator.char (lambda1 "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
         , CodeGenerator.customDict
             (\( keyType, keyEncoder ) ( _, valEncoder ) ->
                 CG.apply
@@ -38,30 +39,32 @@ codeGen =
             )
         , CodeGenerator.customType
             (\ctors variants ->
-                CG.lambda [ CG.varPattern "arg" ]
-                    (List.map2
-                        (\( ref, args ) ( _, expr ) ->
-                            ( CG.fqNamedPattern ref.modulePath ref.name (thingsToPatterns args)
-                            , case args of
-                                [] ->
-                                    CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ]
+                lambdaWrap "arg"
+                    (\arg ->
+                        List.map2
+                            (\( ref, args ) ( _, expr ) ->
+                                ( CG.fqNamedPattern ref.modulePath ref.name (thingsToPatterns args)
+                                , case args of
+                                    [] ->
+                                        CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ]
 
-                                _ ->
-                                    CG.apply (expr :: thingsToValues args)
+                                    _ ->
+                                        CG.apply (expr :: thingsToValues args)
+                                )
                             )
-                        )
-                        ctors
-                        variants
-                        |> CG.caseExpr (CG.val "arg")
+                            ctors
+                            variants
+                            |> CG.caseExpr arg
                     )
             )
         , CodeGenerator.combiner
             (\t _ exprs ->
                 case t of
                     ResolvedType.AnonymousRecord _ fields ->
-                        CG.lambda [ CG.varPattern "rec" ]
-                            (CG.apply
-                                [ CG.fqFun [ "Json", "Encode" ] "object", CG.list (List.map2 (\( field, _ ) expr -> CG.tuple [ CG.string field, CG.apply [ expr, CG.access (CG.val "rec") field ] ]) fields exprs) ]
+                        lambda1 "rec"
+                            (\rec ->
+                                CG.apply
+                                    [ CG.fqFun [ "Json", "Encode" ] "object", CG.list (List.map2 (\( field, _ ) expr -> CG.tuple [ CG.string field, CG.apply [ expr, CG.access rec field ] ]) fields exprs) ]
                             )
                             |> Just
 
@@ -97,7 +100,7 @@ codeGen =
                     ResolvedType.Tuple _ ->
                         case exprs of
                             [ fst, snd ] ->
-                                lambdaWrap "tuple"
+                                lambda1 "tuple"
                                     (\tuple ->
                                         CG.apply
                                             [ CG.fqFun [ "Json", "Encode" ] "list"
@@ -111,7 +114,7 @@ codeGen =
                                     |> Just
 
                             [ fst, snd, thrd ] ->
-                                lambdaWrap "triple"
+                                lambda1 "triple"
                                     (\triple ->
                                         CG.letExpr [ CG.letDestructuring (CG.tuplePattern [ CG.varPattern "first", CG.varPattern "second", CG.varPattern "third" ]) triple ]
                                             (CG.apply

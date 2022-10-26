@@ -17,6 +17,6 @@ type alias B =
     , array : Array String
     , dict : Dict String Float
     , tuple : (Maybe String, Bool) 
-    , anon: {a : Int, b : Int}
+    , anon : {a : Int, b : Int}
     }
     """

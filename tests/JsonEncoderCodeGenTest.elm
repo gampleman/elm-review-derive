@@ -934,15 +934,9 @@ encodeB rec =
         , ( "tuple"
           , Json.Encode.list
                 identity
-                [ case Tuple.first rec.tuple of
-                    Just val ->
-                        Json.Encode.string val
-
-                    Nothing ->
-                        Json.Encode.null
-                , Json.Encode.bool (Tuple.second rec.tuple)
-                ]
+                [ encodeMaybe Json.Encode.string (Tuple.first rec.tuple), Json.Encode.bool (Tuple.second rec.tuple) ]
           )
+        , ( "anon", Json.Encode.object [ ( "a", Json.Encode.int rec.anon.a ), ( "b", Json.Encode.int rec.anon.b ) ] )
         ]
 
 encodeMaybe : (a -> Value) -> Maybe a -> Value
