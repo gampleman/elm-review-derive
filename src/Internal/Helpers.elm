@@ -1,4 +1,4 @@
-module Internal.Helpers exposing (applyBindings, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, lambda1, node, rangeContains, traverseExpression, writeDeclaration, writeExpression)
+module Internal.Helpers exposing (applyBindings, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, lambda1, node, rangeContains, toValueCase, traverseExpression, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Dict
@@ -151,6 +151,13 @@ importsFix currentModule existingImports importStartRow imports =
             |> (\a -> a ++ "\n")
             |> Review.Fix.insertAt { row = importStartRow, column = 1 }
             |> Just
+
+
+toValueCase : String -> String
+toValueCase v =
+    String.uncons v
+        |> Maybe.map (\( char, res ) -> String.cons (Char.toLocaleLower char) res)
+        |> Maybe.withDefault v
 
 
 
