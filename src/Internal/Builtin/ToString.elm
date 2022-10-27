@@ -17,7 +17,12 @@ codeGen =
                 case t of
                     ResolvedType.CustomType _ _ ctors ->
                         if List.all (\( _, args ) -> List.isEmpty args) ctors then
-                            Just (CG.list (List.map (\( ctor, _ ) -> CG.fqVal ctor.modulePath ctor.name) ctors))
+                            Just
+                                (CG.lambda [ CG.varPattern "arg" ]
+                                    (CG.caseExpr (CG.val "arg")
+                                        (List.map (\( ctor, _ ) -> ( CG.fqNamedPattern ctor.modulePath ctor.name [], CG.string ctor.name )) ctors)
+                                    )
+                                )
 
                         else
                             Nothing
