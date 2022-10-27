@@ -1,6 +1,8 @@
-module Internal.Helpers exposing (find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, node, rangeContains, traverseExpression, writeDeclaration, writeExpression)
+module Internal.Helpers exposing (applyBindings, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, lambda1, node, rangeContains, toValueCase, traverseExpression, writeDeclaration, writeExpression)
 
 import AssocSet as Set exposing (Set)
+import Dict
+import Elm.CodeGen as CG
 import Elm.Pretty
 import Elm.Syntax.Exposing exposing (Exposing(..), TopLevelExpose(..))
 import Elm.Syntax.Expression as Expression exposing (Expression(..), Function, LetDeclaration(..))
@@ -33,6 +35,53 @@ node =
 rangeContains : Range -> Range -> Bool
 rangeContains inner outer =
     Elm.Syntax.Range.compareLocations inner.start outer.start /= LT && Elm.Syntax.Range.compareLocations inner.end outer.end /= GT
+
+
+{-| This is a really dumb little helper that prevents variable shadowing in nested lambdas.
+
+It would be nice to have a proper solution that generates nice variable names like arg0, arg1, arg2, etc. and only when necessary.
+
+But for now this will do.
+
+-}
+lambda1 : String -> (Expression -> Expression) -> Expression
+lambda1 prefix exprBuilder =
+    let
+        inner =
+            exprBuilder (CG.val prefix)
+
+        -- This is real dumb, but it should solve the problem of overlapping scopes, since outer scopes should be longer then inner scopes
+        simpleHash =
+            writeExpression inner |> String.length |> String.fromInt
+
+        name =
+            prefix ++ simpleHash
+    in
+    CG.lambda [ CG.varPattern name ]
+        (applyBindings (Dict.singleton prefix (CG.val name)) inner)
+
+
+applyBindings : Dict.Dict String Expression -> Expression -> Expression
+applyBindings bindings =
+    traverseExpression
+        (\subexpr foo ->
+            case subexpr of
+                Expression.FunctionOrValue [] name ->
+                    case Dict.get name bindings of
+                        Just ((Expression.Application _) as r) ->
+                            ( CG.parens r, foo )
+
+                        Just r ->
+                            ( r, foo )
+
+                        Nothing ->
+                            ( subexpr, foo )
+
+                _ ->
+                    ( subexpr, foo )
+        )
+        ()
+        >> Tuple.first
 
 
 {-| Find the first element that satisfies a predicate and return
@@ -102,6 +151,13 @@ importsFix currentModule existingImports importStartRow imports =
             |> (\a -> a ++ "\n")
             |> Review.Fix.insertAt { row = importStartRow, column = 1 }
             |> Just
+
+
+toValueCase : String -> String
+toValueCase v =
+    String.uncons v
+        |> Maybe.map (\( char, res ) -> String.cons (Char.toLocaleLower char) res)
+        |> Maybe.withDefault v
 
 
 

@@ -324,7 +324,7 @@ makeExternalDeclaration isTopLevel codeGen ref generics defExpr =
     if isTopLevel then
         Result.map
             (\( expr, defs, bindings ) ->
-                ( applyBindings
+                ( Helpers.applyBindings
                     (Dict.fromList bindings)
                     expr
                 , defs
@@ -372,7 +372,7 @@ makeExternalDeclaration isTopLevel codeGen ref generics defExpr =
                             , arguments = List.map (\r -> Helpers.node (CG.varPattern r)) generics
                             , expression =
                                 Helpers.node
-                                    (applyBindings
+                                    (Helpers.applyBindings
                                         (List.filterMap
                                             (\r ->
                                                 case Dict.get r binds of
@@ -474,29 +474,6 @@ transmogrify input =
             Just (Err err)
 
 
-applyBindings : Dict.Dict String Expression -> Expression -> Expression
-applyBindings bindings =
-    Helpers.traverseExpression
-        (\subexpr foo ->
-            case subexpr of
-                Expression.FunctionOrValue [] name ->
-                    case Dict.get name bindings of
-                        Just ((Expression.Application _) as r) ->
-                            ( CG.parens r, foo )
-
-                        Just r ->
-                            ( r, foo )
-
-                        Nothing ->
-                            ( subexpr, foo )
-
-                _ ->
-                    ( subexpr, foo )
-        )
-        ()
-        >> Tuple.first
-
-
 {-| This simplifies expressions to make them easier on the eyes, but still super simple to program:
 
 1.  Transforms `((\foo -> foo + 1) bar)` to `(bar + 1)`
@@ -552,7 +529,7 @@ postprocessExpression expression =
                                     |> List.filterMap identity
                                     |> Dict.fromList
                         in
-                        applyBindings bindings (Node.value lambda.expression)
+                        Helpers.applyBindings bindings (Node.value lambda.expression)
 
                     else
                         expr

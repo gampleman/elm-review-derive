@@ -2,6 +2,7 @@ module Internal.Builtin.Codec exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
+import Internal.Helpers exposing (toValueCase)
 import ResolvedType
 import TypePattern exposing (TypePattern(..))
 
@@ -12,13 +13,6 @@ val =
 
 fn1 name arg =
     CG.apply [ CG.fqVal [ "Serialize" ] name, arg ]
-
-
-toValueCase : String -> String
-toValueCase v =
-    String.uncons v
-        |> Maybe.map (\( char, res ) -> String.cons (Char.toLocaleLower char) res)
-        |> Maybe.withDefault v
 
 
 codeGen : CodeGenerator
