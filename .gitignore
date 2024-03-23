@@ -3,3 +3,5 @@
 /node_modules
 /review/elm-stuff
 /preview/elm-stuff
+/tests/E2E.elm 
+/tests/Standard.elm
