@@ -924,7 +924,7 @@ encode arg =
 
         Recursive arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "Recursive" ), ( "0", encode arg0 ) ]
-            
+
 encodeB : B -> Value
 encodeB rec =
     Json.Encode.object
