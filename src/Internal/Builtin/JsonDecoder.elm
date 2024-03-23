@@ -20,7 +20,7 @@ codeGen =
         [ CodeGenerator.customType
             (\_ args ->
                 CG.pipe
-                    (CG.apply [ json_decode "field", CG.apply [ json_decode "string", CG.string "tag" ] ])
+                    (CG.apply [ json_decode "field", CG.string "tag", CG.apply [ json_decode "string" ] ])
                     [ CG.apply [ json_decode "andThen", CG.lambda [ CG.varPattern "ctor" ] (CG.caseExpr (CG.val "ctor") (List.map (\( name, expr ) -> ( CG.stringPattern name, expr )) args ++ [ ( CG.allPattern, CG.apply [ json_decode "fail", CG.string "Unrecognized constructor" ] ) ])) ] ]
             )
         , CodeGenerator.map (\comb arg -> CG.apply [ json_decode "map", comb, arg ])
@@ -46,13 +46,15 @@ codeGen =
                                     |> Just
 
                     ResolvedType.Tuple _ ->
-                        makeMap ctor (List.indexedMap (\i expr -> CG.apply [ json_decode "at", CG.int i, expr ]) exprs)
+                        makeMap ctor (List.indexedMap (\i expr -> CG.apply [ json_decode "index", CG.int i, expr ]) exprs)
                             |> Just
 
                     _ ->
                         Nothing
             )
-        , CodeGenerator.maybe (\expr -> CG.apply [ json_decode "optional", expr ])
+        , CodeGenerator.use "Json.Decode.maybe"
+
+        -- , CodeGenerator.maybe (\expr -> CG.apply [ json_decode "maybe", expr ])
         ]
 
 

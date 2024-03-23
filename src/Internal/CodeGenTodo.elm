@@ -336,11 +336,15 @@ createFixes projectContext codeGen imports currentModule todo =
                         |> CodeGenerator.fixFunctionDeclaration applicableArgs
                         |> Helpers.writeDeclaration
                     )
-                    :: List.indexedMap
-                        (\index decl ->
-                            Review.Fix.insertAt { column = 0, row = 99999 - index } decl
-                        )
-                        (List.Extra.unique declarations)
+                    :: (case List.Extra.unique declarations of
+                            [] ->
+                                []
+
+                            decls ->
+                                [ Review.Fix.insertAt { column = 0, row = todo.range.end.row + 1 }
+                                    ("\n" ++ String.join "\n" decls)
+                                ]
+                       )
                     ++ (case
                             Helpers.importsFix
                                 currentModule

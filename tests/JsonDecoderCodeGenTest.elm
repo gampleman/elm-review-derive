@@ -73,7 +73,7 @@ import Json.Decode exposing (Decoder)
 
 decode : Decoder (A Int)
 decode =
-    Json.Decode.field (Json.Decode.string "tag")
+    Json.Decode.field "tag" Json.Decode.string
         |> Json.Decode.andThen
             (\\ctor ->
                 case ctor of
@@ -101,8 +101,8 @@ decodeB =
             "tuple"
             (Json.Decode.map2
                 Tuple.pair
-                (Json.Decode.at 0 (decodeMaybe Json.Decode.string))
-                (Json.Decode.at 1 Json.Decode.bool)
+                (Json.Decode.index 0 (Json.Decode.maybe Json.Decode.string))
+                (Json.Decode.index 1 Json.Decode.bool)
             )
         )
         (Json.Decode.field
@@ -113,9 +113,5 @@ decodeB =
                 (Json.Decode.field "b" Json.Decode.int)
             )
         )
-
-decodeMaybe : Decoder a -> Decoder (Maybe a)
-decodeMaybe a =
-    Json.Decode.optional a
 """
         ]

@@ -593,7 +593,7 @@ encode encodeVal a =
                 [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int arg0 ) ]
 
 encodeResult : (error -> Value) -> (value -> Value) -> Result error value -> Value
-encodeResult error value =
+encodeResult error value arg =
     case arg of
         Result.Ok arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", value arg0 ) ]
@@ -888,7 +888,7 @@ encode rec =
         ]
 
 encodeMaybe : (a -> Value) -> Maybe a -> Value
-encodeMaybe a =
+encodeMaybe a arg =
     case arg of
         Just val ->
             a val
@@ -924,7 +924,7 @@ encode arg =
 
         Recursive arg0 ->
             Json.Encode.object [ ( "tag", Json.Encode.string "Recursive" ), ( "0", encode arg0 ) ]
-            
+
 encodeB : B -> Value
 encodeB rec =
     Json.Encode.object
@@ -940,7 +940,7 @@ encodeB rec =
         ]
 
 encodeMaybe : (a -> Value) -> Maybe a -> Value
-encodeMaybe a =
+encodeMaybe a arg =
     case arg of
         Just val ->
             a val

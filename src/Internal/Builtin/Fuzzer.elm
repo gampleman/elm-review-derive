@@ -24,7 +24,7 @@ codeGen =
         , CodeGenerator.map (\a b -> CG.apply [ fuzz "map", a, b ])
         , CodeGenerator.string (fuzz "string")
         , CodeGenerator.dict (\key val -> CG.apply [ fuzz "map", CG.fqFun [ "Dict" ] "fromList", CG.apply [ fuzz "list", CG.apply [ fuzz "pair", key, val ] ] ])
-        , CodeGenerator.float (fuzz "float")
+        , CodeGenerator.float (fuzz "niceFloat")
         , CodeGenerator.tuple (\a b -> CG.apply [ fuzz "pair", a, b ])
         , CodeGenerator.triple (\a b c -> CG.apply [ fuzz "triple", a, b, c ])
         , CodeGenerator.char (fuzz "char")

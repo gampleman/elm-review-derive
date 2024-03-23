@@ -24,6 +24,7 @@ type CodeGenerator
         , dependency : String
         , makeName : String -> String
         , lambdaBreaker : Maybe { condition : Condition, implementation : Expression -> Expression }
+        , blessedImplementations : List Reference
         }
     | Amendment String (List Resolver)
 
@@ -80,6 +81,7 @@ type alias ConfiguredCodeGenerator =
     , resolvers : List ResolverImpl
     , makeName : String -> String
     , lambdaBreaker : Expression -> Expression
+    , blessedImplementations : List Reference
     }
 
 
@@ -110,6 +112,7 @@ configureCodeGenerators dependencies codeGens =
                                     )
                                     gen.lambdaBreaker
                                     |> Maybe.withDefault identity
+                          , blessedImplementations = gen.blessedImplementations
                           }
                             :: resolved
                         )
@@ -631,6 +634,9 @@ fixFunctionDeclaration applicableArgs func =
                                     (List.reverse applicableArgs)
                                     |> List.filterMap identity
                                     |> Dict.fromList
+
+                            leftoverArgs =
+                                List.drop (List.length applicableArgs) (List.reverse lambda.args)
                         in
                         ( Helpers.traverseExpression
                             (\expr oo ->
@@ -650,7 +656,7 @@ fixFunctionDeclaration applicableArgs func =
                             (Node.value lambda.expression)
                             |> Tuple.first
                             |> Helpers.node
-                        , declaration.arguments
+                        , declaration.arguments ++ leftoverArgs
                         )
 
                     else

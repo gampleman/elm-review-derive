@@ -7,6 +7,7 @@ import Elm.Project
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Type as T exposing (Type)
 import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
+import Internal.Helpers as Helpers
 import List.Extra
 import ResolvedType as RT exposing (ResolvedType)
 import Review.Project.Dependency as Dependency exposing (Dependency)
@@ -24,6 +25,11 @@ findProviders codeGens deps =
                         let
                             qualifyingCodeGens =
                                 List.filter (\provider -> (Elm.Package.toString package.name == provider.dependency) || List.member provider.dependency (List.map (Tuple.first >> Elm.Package.toString) package.deps)) codeGens
+
+                            qualifyingCodeGensDict =
+                                qualifyingCodeGens
+                                    |> List.map (\cg -> ( cg.id, cg ))
+                                    |> Dict.fromList
                         in
                         List.concatMap
                             (\mod ->
@@ -45,7 +51,7 @@ findProviders codeGens deps =
                                                 Nothing
                                     )
                                     mod.values
-                                    |> heuristicRejectIfMultiplePatternsForSameType
+                                    |> heuristicRejectIfMultiplePatternsForSameType qualifyingCodeGensDict
                             )
                             (Dependency.modules dep)
 
@@ -90,8 +96,8 @@ findTypes deps =
 
 {-| This is an opinionated heuristic. Generally if a module provides more than one implementation for a type, than that's a good hint that there are multiple nonequivalent ways of doing it and it probably requires programmer discretion.
 -}
-heuristicRejectIfMultiplePatternsForSameType : List ExistingFunctionProvider -> List ExistingFunctionProvider
-heuristicRejectIfMultiplePatternsForSameType providers =
+heuristicRejectIfMultiplePatternsForSameType : Dict String ConfiguredCodeGenerator -> List ExistingFunctionProvider -> List ExistingFunctionProvider
+heuristicRejectIfMultiplePatternsForSameType codeGens providers =
     List.Extra.gatherEqualsBy (\v -> ( v.childType, v.codeGenId )) providers
         |> List.filterMap
             (\( provider, rest ) ->
@@ -99,7 +105,12 @@ heuristicRejectIfMultiplePatternsForSameType providers =
                     Just provider
 
                 else
-                    Nothing
+                    Dict.get provider.codeGenId codeGens
+                        |> Maybe.andThen
+                            (\codeGen ->
+                                Helpers.find (\ref -> ref.modulePath == provider.moduleName && ref.name == provider.functionName) codeGen.blessedImplementations
+                                    |> Maybe.map (always provider)
+                            )
             )
 
 
