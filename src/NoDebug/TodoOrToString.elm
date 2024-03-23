@@ -145,6 +145,7 @@ rule generators =
         |> Rule.withElmJsonProjectVisitor elmJsonVisitor
         |> Rule.withDependenciesProjectVisitor (initializeCodeGensAndScanForDependencyProviders codeGens)
         |> Rule.withFinalProjectEvaluation finalProjectEvaluation
+        |> Rule.providesFixesForProjectRule
         |> Rule.fromProjectRuleSchema
 
 

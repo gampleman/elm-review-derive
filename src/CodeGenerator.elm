@@ -1,6 +1,7 @@
 module CodeGenerator exposing
     ( CodeGenerator, define, amend
     , Definition, ifUserHasDependency
+    , use
     , bool, int, float, string, char, list, array, set, dict, maybe, customDict
     , unit, tuple, triple
     , succeed, map, mapN, pipeline, combiner
@@ -20,6 +21,23 @@ By principled we mean that the generated code will for the foremost follow compo
 ### Defining code generators
 
 @docs Definition, ifUserHasDependency
+
+
+### Using existing functions
+
+The code generator will find matching functions in the users code and dependencies. It will divided them into multiple levels and prioritise like this:
+
+1.  Values defined in the current file
+2.  Values defined in other project modules that the current file imports.
+3.  Values defined in dependency modules that the current file imports.
+4.  Values defined in dependencies.
+5.  Values defined in other project modules.
+6.  Values hard-coded in the code generator definition.
+
+However, it will reject functions where multiple matching functions
+exists at the same level.
+
+@docs use
 
 
 ### Primitives
@@ -51,7 +69,7 @@ By principled we mean that the generated code will for the foremost follow compo
 import Elm.CodeGen as CG
 import Elm.Syntax.Expression exposing (Expression)
 import Internal.CodeGenerator exposing (CodeGenerator(..), Condition(..), Resolver, ResolverImpl(..))
-import ResolvedType exposing (ResolvedType)
+import ResolvedType exposing (Reference, ResolvedType)
 import TypePattern exposing (TypePattern)
 
 
@@ -95,6 +113,9 @@ define id dependency searchPattern makeName definitions =
 
                 LambdaBreaker breaker ->
                     { thing | lambdaBreaker = Just breaker }
+
+                BlessedImplementation ref ->
+                    { thing | blessedImplementations = ref :: thing.blessedImplementations }
         )
         { id = id
         , searchPattern = searchPattern
@@ -102,6 +123,7 @@ define id dependency searchPattern makeName definitions =
         , dependency = dependency
         , makeName = makeName
         , lambdaBreaker = Nothing
+        , blessedImplementations = []
         }
         definitions
         |> Generic
@@ -123,8 +145,27 @@ amend id definition =
 
                     LambdaBreaker _ ->
                         Nothing
+
+                    BlessedImplementation _ ->
+                        -- we should fix this
+                        -- As this would be a fairly ideal usecase for amend
+                        Nothing
             )
             definition
+        )
+
+
+{-| If there are multiple existing functions at the same level, this allows you to bless one of these to be used as the default implementation. Takes a fully qualified name.
+-}
+use : String -> Definition
+use qualName =
+    BlessedImplementation
+        (case List.reverse (String.split "." qualName) of
+            name :: revList ->
+                { modulePath = List.reverse revList, name = name }
+
+            [] ->
+                { modulePath = [], name = qualName }
         )
 
 
@@ -134,6 +175,7 @@ Fundamentally you can think of all the definitions put together as forming a rat
 type Definition
     = Definition Resolver
     | LambdaBreaker { condition : Condition, implementation : Expression -> Expression }
+    | BlessedImplementation Reference
 
 
 {-| Apply this definition conditionally if the user has this specific dependency installed (can be chained). Intended for things like json-pipeline or random-extra.
@@ -164,6 +206,9 @@ ifUserHasDependency dependency definition =
                             Dependencies existing ->
                                 Dependencies (dependency :: existing)
                 }
+
+        BlessedImplementation _ ->
+            definition
 
 
 simpleDef : ResolverImpl -> Definition

@@ -106,7 +106,7 @@ bFuzzer =
         B
         (Fuzz.list Fuzz.int)
         (Fuzz.array Fuzz.string)
-        (Fuzz.map Dict.fromList (Fuzz.list (Fuzz.pair Fuzz.string Fuzz.float)))
+        (Fuzz.map Dict.fromList (Fuzz.list (Fuzz.pair Fuzz.string Fuzz.niceFloat)))
         (Fuzz.pair (Fuzz.maybe Fuzz.string) Fuzz.bool)
         (Fuzz.map2 (\\a b -> { a = a, b = b }) Fuzz.int Fuzz.int)
 """
