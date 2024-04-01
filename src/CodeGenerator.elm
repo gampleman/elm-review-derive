@@ -1,5 +1,5 @@
 module CodeGenerator exposing
-    ( CodeGenerator, define, amend
+    ( CodeGenerator, define
     , Definition, ifUserHasDependency
     , use
     , bool, int, float, string, char, list, array, set, dict, maybe, customDict
@@ -15,7 +15,7 @@ By type oriented we mean generators that are driven by a type definition provide
 
 By principled we mean that the generated code will for the foremost follow compositional patterns to be able to express (almost) any type.
 
-@docs CodeGenerator, define, amend
+@docs CodeGenerator, define
 
 
 ### Defining code generators
@@ -124,35 +124,11 @@ define id dependency searchPattern makeName definitions =
         , makeName = makeName
         , lambdaBreaker = Nothing
         , blessedImplementations = []
+        , inputValue = ()
+        , inputCombiner = always ()
         }
         definitions
-        |> Generic
-
-
-{-| Don't like how one of the built-in or third-party generators generates code?
-Code generation can be a little opinionated after all. With this function you can override pieces of another code
-generators behavior. You'll need to find out the target generators ID, then you can pass in the new definitions that will
-take precedence over the existing ones.
--}
-amend : String -> List Definition -> CodeGenerator
-amend id definition =
-    Amendment id
-        (List.filterMap
-            (\def ->
-                case def of
-                    Definition resolver ->
-                        Just resolver
-
-                    LambdaBreaker _ ->
-                        Nothing
-
-                    BlessedImplementation _ ->
-                        -- we should fix this
-                        -- As this would be a fairly ideal usecase for amend
-                        Nothing
-            )
-            definition
-        )
+        |> Internal.CodeGenerator.assemble
 
 
 {-| If there are multiple existing functions at the same level, this allows you to bless one of these to be used as the default implementation. Takes a fully qualified name.

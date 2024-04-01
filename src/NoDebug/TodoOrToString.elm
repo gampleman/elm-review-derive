@@ -19,6 +19,7 @@ import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Range exposing (Range)
 import Internal.Builtin.Codec
+import Internal.Builtin.CsvDecoder
 import Internal.Builtin.FromString
 import Internal.Builtin.Fuzzer
 import Internal.Builtin.JsonDecoder
@@ -132,6 +133,7 @@ rule generators =
                    , Internal.Builtin.ListAllVariants.codeGen
                    , Internal.Builtin.ToString.codeGen
                    , Internal.Builtin.FromString.codeGen
+                   , Internal.Builtin.CsvDecoder.codeGen
                    ]
     in
     Rule.newProjectRuleSchema "CodeGen" initialProjectContext

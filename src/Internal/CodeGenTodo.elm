@@ -268,9 +268,8 @@ createFixes projectContext codeGen imports currentModule todo =
         childType =
             ResolvedType.computeVisibility currentModule projectContext.exports todo.childType
     in
-    CodeGenerator.generate True
-        { codeGen = codeGen
-        , existingImports = imports.existingImports
+    codeGen.generate
+        { existingImports = imports.existingImports
         , currentModule = currentModule
         , existingFunctionProviders =
             projectContext.existingFunctionProviders
@@ -291,7 +290,7 @@ createFixes projectContext codeGen imports currentModule todo =
         )
         childType
         |> Result.map
-            (\( expr, declarations_, _ ) ->
+            (\( expr, declarations_ ) ->
                 let
                     ( expression, newImports_ ) =
                         Helpers.fixNamesAndImportsInExpression (CodeGenerator.postprocessExpression expr) currentModule imports.existingImports
