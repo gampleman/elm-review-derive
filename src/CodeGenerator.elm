@@ -10,7 +10,7 @@ module CodeGenerator exposing
     , defineWithComputation, combinerWithInput, customTypeWithInput
     )
 
-{-| This module let's you define (or change) type-oriented principled code generators.
+{-| This module let's you define type-oriented principled code generators.
 
 By type oriented we mean generators that are driven by a type definition provided by the user.
 
@@ -88,25 +88,10 @@ type alias CodeGenerator =
 {-| Create a code generator. This requires the following pieces:
 
   - a unique id. This id can be used to extend the generator later.
-  - a dependency name which specifies what this generator deals with. This generator will only be active if the user has the dependency installed.
-  - a search function that is used to figure out which type the function should work on.
+  - a dependency name which specifies what this generator deals with. This generator will only be active if the user has that dependency installed.
+  - a [`TypePattern`](TypePattern) that is used to figure out which type the function should work on.
   - a function that generates names if the generator needs to make an auxiliary definition
   - a list of Definitions that determine how code is actually generated. Note that later definitions will override previous ones.
-
-The search function should return `Nothing` if the type annotation is not of interest. It should return a `Just childTypeAnnotation` if this generator wants to handle this type.
-
-For example, if we were to build a generator for `Random.Generator someType` values (i.e. `Typed (Node _ ( [ "Random" ], "Generator" )) [ Node _ someType ]` in elm-syntax parlance), then this search function should return `Just someType`:
-
-    searchFunction : TypeAnnotation -> Maybe TypeAnnotation
-    searchFunction annotation =
-        case annotation of
-            Typed (Node _ ( [ "Random" ], "Generator" )) [ Node _ child ] ->
-                Just child
-
-            _ ->
-                Nothing
-
-Also note that you will always get module names normalized, i.e. you will always see `( [ "Random" ], "Generator" )` even if the user has `import Random as Foo exposing (Generator)`, so no need to worry about that.
 
 -}
 define :
@@ -127,7 +112,8 @@ define inp =
         }
 
 
-{-| The basic `define` makes every function independent. However, sometime context matters. This version allows you to do that.
+{-| Like `define`, but this allows you to compute as you progress down the tree of types. Also note that `makeName` now takes a `Maybe`.
+If you pass `Nothing`, than the generator will not create any auxiliary definitions, but will rather generate everything inline.
 -}
 defineWithComputation :
     { id : String
@@ -488,7 +474,7 @@ combiner fn =
         |> simpleDef
 
 
-{-| Like combiner, but allows you to control how input flows.
+{-| Like combiner, but allows you to control how input flows to the children and also receives input from its parent.
 -}
 combinerWithInput : (a -> ResolvedType -> List ResolvedType -> List a) -> (a -> ResolvedType -> Expression -> List Expression -> Maybe Expression) -> Definition a
 combinerWithInput distributor fn =
@@ -510,10 +496,7 @@ customType fn =
     CustomTypeResolver (\inp ctors -> List.map (always inp) ctors) (always fn) |> simpleDef
 
 
-{-| Deal with custom types. You will get a list of `( constructorName, expressionThatGeneratesTheTypeWithThatConstructor )`.
-
-The challenge is to work out which of the branches should be chosen. You can solve that with a `andThen`, or the library might have a different mechanism for disjunctions.
-
+{-| Like customType, but allows you to control how input flows to the children and also receives input from its parent.
 -}
 customTypeWithInput : (a -> List ( Reference, List ResolvedType ) -> List a) -> (a -> List ( ResolvedType.Reference, List ResolvedType ) -> List ( String, Expression ) -> Expression) -> Definition a
 customTypeWithInput distributor fn =
