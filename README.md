@@ -34,6 +34,11 @@ This rule isn't limited to generating toString functions for custom types though
 **Required package:** [MartinSStewart/elm-serialize]  
 **Type features supported:** All\*
 
+### `Csv.Decode.Decoder MyType`
+
+**Required package:** [BrianHicks/elm-csv]  
+**Type features supported:** Supports (non-recursive) custom types and type aliases as well as most primitives. Doesn't support collection types.
+
 ### `String -> Maybe MyType`
 
 **Required package:** [elm/core]  
@@ -77,6 +82,7 @@ unless there is a `Decoder Color` available in the project or dependencies).
 \*\* By Enum we mean a custom type where none of the constructors take any arguments. (i.e. `type Semaphore = Red | Yellow | Green`).
 
 [MartinSStewart/elm-serialize]: https://package.elm-lang.org/packages/MartinSStewart/elm-serialize/latest/
+[BrianHicks/elm-csv]: https://package.elm-lang.org/packages/BrianHicks/elm-csv/latest/
 [elm/core]: https://package.elm-lang.org/packages/elm/core/latest/
 [elm-explorations/test]: https://package.elm-lang.org/packages/elm-explorations/test/latest/
 [elm/json]: https://package.elm-lang.org/packages/elm/json/latest/
