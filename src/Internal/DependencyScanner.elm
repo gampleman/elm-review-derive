@@ -1,17 +1,14 @@
 module Internal.DependencyScanner exposing (findProviders, findTypes)
 
 import Dict exposing (Dict)
-import Elm.Module
 import Elm.Package
 import Elm.Project
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Type as T exposing (Type)
 import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
-import Internal.Helpers as Helpers
 import List.Extra
 import ResolvedType as RT exposing (ResolvedType)
 import Review.Project.Dependency as Dependency exposing (Dependency)
-import Set
 import TypePattern as TP exposing (TypePattern)
 
 
@@ -108,7 +105,7 @@ heuristicRejectIfMultiplePatternsForSameType codeGens providers =
                     Dict.get provider.codeGenId codeGens
                         |> Maybe.andThen
                             (\codeGen ->
-                                Helpers.find (\ref -> ref.modulePath == provider.moduleName && ref.name == provider.functionName) codeGen.blessedImplementations
+                                List.Extra.find (\ref -> ref.modulePath == provider.moduleName && ref.name == provider.functionName) codeGen.blessedImplementations
                                     |> Maybe.map (always provider)
                             )
             )

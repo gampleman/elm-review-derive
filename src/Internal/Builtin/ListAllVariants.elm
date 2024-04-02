@@ -8,10 +8,12 @@ import TypePattern exposing (TypePattern(..))
 
 codeGen : CodeGenerator
 codeGen =
-    CodeGenerator.define "elm/core/ListAllGenerics"
-        "elm/core"
-        (Typed [ "List" ] "List" [ Target ])
-        (\name -> "all" ++ name)
+    CodeGenerator.define
+        { id = "elm/core/ListAllGenerics"
+        , dependency = "elm/core"
+        , typePattern = Typed [ "List" ] "List" [ Target ]
+        , makeName = \name -> "all" ++ name
+        }
         [ CodeGenerator.custom
             (\t ->
                 case t of

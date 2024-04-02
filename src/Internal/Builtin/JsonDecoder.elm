@@ -13,10 +13,12 @@ json_decode =
 
 codeGen : CodeGenerator
 codeGen =
-    CodeGenerator.define "elm/json/Json.Decode.Decoder"
-        "elm/json"
-        (Typed [ "Json", "Decode" ] "Decoder" [ Target ])
-        (\name -> "decode" ++ name)
+    CodeGenerator.define
+        { id = "elm/json/Json.Decode.Decoder"
+        , dependency = "elm/json"
+        , typePattern = Typed [ "Json", "Decode" ] "Decoder" [ Target ]
+        , makeName = \name -> "decode" ++ name
+        }
         [ CodeGenerator.customType
             (\_ args ->
                 CG.pipe

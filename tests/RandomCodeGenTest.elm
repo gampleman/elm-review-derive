@@ -1,7 +1,6 @@
 module RandomCodeGenTest exposing (..)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest, codeGenTestFailsWith)
-import Review.Project exposing (dependencies)
 import Test exposing (Test, describe)
 
 

@@ -1,4 +1,4 @@
-module Internal.Helpers exposing (applyBindings, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, lambda1, node, rangeContains, toValueCase, traverseExpression, writeDeclaration, writeExpression)
+module Internal.Helpers exposing (applyBindings, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, lambda1, node, rangeContains, toValueCase, traverseExpression, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Dict
@@ -15,11 +15,6 @@ import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation(..))
 import Internal.ExistingImport exposing (ExistingImport)
 import Pretty
 import Review.Fix
-
-
-writeDeclaration : Function -> String
-writeDeclaration =
-    Elm.Pretty.prettyFun >> Pretty.pretty 120
 
 
 writeExpression : Expression -> String
@@ -61,6 +56,24 @@ lambda1 prefix exprBuilder =
         (applyBindings (Dict.singleton prefix (CG.val name)) inner)
 
 
+{-| Given an Expression and a dictionary of `names` to `Expression`, it modifies the expression such that
+any encountered variable macthing one of the `names` is replaced by the corresponding `Expression`.
+
+One of the gifts of referential transparency!
+
+Given
+
+    a * a
+
+and
+
+    a : (1 + 1)
+
+produces
+
+    (1 + 1) * (1 + 1)
+
+-}
 applyBindings : Dict.Dict String Expression -> Expression -> Expression
 applyBindings bindings =
     traverseExpression
@@ -82,43 +95,6 @@ applyBindings bindings =
         )
         ()
         >> Tuple.first
-
-
-{-| Find the first element that satisfies a predicate and return
-Just that element. If none match, return Nothing.
-find (\\num -> num > 5) [ 2, 4, 6, 8 ]
---> Just 6
-
-Borrowed from elm-community/list-extra
-
--}
-find : (a -> Bool) -> List a -> Maybe a
-find predicate list =
-    case list of
-        [] ->
-            Nothing
-
-        first :: rest ->
-            if predicate first then
-                Just first
-
-            else
-                find predicate rest
-
-
-findMap : (a -> Maybe b) -> List a -> Maybe b
-findMap fn list =
-    case list of
-        [] ->
-            Nothing
-
-        first :: rest ->
-            case fn first of
-                Just val ->
-                    Just val
-
-                Nothing ->
-                    findMap fn rest
 
 
 hasDebugTodo : { a | expression : Node Expression } -> Bool

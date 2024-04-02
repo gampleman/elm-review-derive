@@ -1,6 +1,6 @@
 module FuzzerCodeGenTest exposing (suite)
 
-import CodeGenerator.Test exposing (FakeDependency, codeGenTest, codeGenTestFailsWith)
+import CodeGenerator.Test exposing (FakeDependency, codeGenTest)
 import StandardModule
 import Test exposing (Test, describe)
 

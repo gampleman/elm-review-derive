@@ -11,9 +11,10 @@ import Elm.Syntax.Pattern exposing (Pattern)
 import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
-import Internal.CodeGenerator as CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
+import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers as Helpers
+import Internal.Postprocess as Postprocess
 import Internal.ResolvedType as ResolvedType
 import Internal.TypePattern
 import List.Extra
@@ -233,7 +234,7 @@ declarationVisitor context availableTypes declarationRange function =
 
 todoErrors : ProjectContext a -> ModuleName -> CodeGenTodo -> Maybe (Rule.Error { useErrorForModule : () })
 todoErrors projectContext currentModule todo =
-    case ( Helpers.find (\codeGen -> codeGen.id == todo.codeGenId) projectContext.codeGens, AssocList.get currentModule projectContext.moduleKeys, AssocList.get currentModule projectContext.imports ) of
+    case ( List.Extra.find (\codeGen -> codeGen.id == todo.codeGenId) projectContext.codeGens, AssocList.get currentModule projectContext.moduleKeys, AssocList.get currentModule projectContext.imports ) of
         ( Just codeGen, Just moduleKey, Just imports ) ->
             case createFixes projectContext codeGen imports currentModule todo of
                 Ok fixes ->
@@ -293,7 +294,7 @@ createFixes projectContext codeGen imports currentModule todo =
             (\( expr, declarations_ ) ->
                 let
                     ( expression, newImports_ ) =
-                        Helpers.fixNamesAndImportsInExpression (CodeGenerator.postprocessExpression expr) currentModule imports.existingImports
+                        Helpers.fixNamesAndImportsInExpression (Postprocess.expression expr) currentModule imports.existingImports
 
                     ( declarations, newImports ) =
                         List.foldr
@@ -302,7 +303,7 @@ createFixes projectContext codeGen imports currentModule todo =
                                     ( newDecl, foundImports ) =
                                         Helpers.fixNamesAndImportsInFunctionDeclaration decl currentModule imports.existingImports
                                 in
-                                ( (Helpers.writeDeclaration (CodeGenerator.fixFunctionDeclaration [] newDecl) ++ "\n") :: soFar, foundImports ++ imports_ )
+                                ( (Postprocess.writeFunctionDeclaration [] newDecl ++ "\n") :: soFar, foundImports ++ imports_ )
                             )
                             ( [], newImports_ )
                             declarations_
@@ -332,8 +333,7 @@ createFixes projectContext codeGen imports currentModule todo =
                             , expression = Helpers.node expression
                             }
                      }
-                        |> CodeGenerator.fixFunctionDeclaration applicableArgs
-                        |> Helpers.writeDeclaration
+                        |> Postprocess.writeFunctionDeclaration applicableArgs
                     )
                     :: (case List.Extra.unique declarations of
                             [] ->

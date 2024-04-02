@@ -1,11 +1,11 @@
-module Internal.CodeGenerationResult exposing (CodeGenerationResult, appendBindingsAndDefsFrom, applyBindings, combine, combineMaybe, projectResult, succeed)
+module Internal.CodeGenerationResult exposing (CodeGenerationResult, applyBindings, combine, combineMaybe, projectResult, succeed)
 
 import Dict
 import Elm.Syntax.Expression exposing (Expression, Function)
 import Internal.Helpers as Helpers
 
 
-type alias CodeGenerationResult b =
+type alias CodeGenerationResult =
     Result
         -- Error msg
         String
@@ -16,11 +16,10 @@ type alias CodeGenerationResult b =
 
         -- Bindings resulting from generics
         , bindings : List ( String, Expression )
-        , computedValue : b
         }
 
 
-combineHelp : List (CodeGenerationResult b) -> Result String { expressions : List Expression, auxiliaryDefinitions : List Function, bindings : List ( String, Expression ), computedValues : List b }
+combineHelp : List CodeGenerationResult -> Result String { expressions : List Expression, auxiliaryDefinitions : List Function, bindings : List ( String, Expression ) }
 combineHelp =
     List.foldr
         (Result.map2
@@ -28,7 +27,6 @@ combineHelp =
                 { expressions = item.expression :: accum.expressions
                 , auxiliaryDefinitions = item.auxiliaryDefinitions ++ accum.auxiliaryDefinitions
                 , bindings = item.bindings ++ accum.bindings
-                , computedValues = item.computedValue :: accum.computedValues
                 }
             )
         )
@@ -36,26 +34,24 @@ combineHelp =
             { expressions = []
             , auxiliaryDefinitions = []
             , bindings = []
-            , computedValues = []
             }
         )
 
 
-combine : (List Expression -> Expression) -> (List b -> b) -> List (CodeGenerationResult b) -> CodeGenerationResult b
-combine fn combiner list =
+combine : (List Expression -> Expression) -> List CodeGenerationResult -> CodeGenerationResult
+combine fn list =
     combineHelp list
         |> Result.map
             (\accu ->
                 { expression = fn accu.expressions
                 , auxiliaryDefinitions = accu.auxiliaryDefinitions
                 , bindings = accu.bindings
-                , computedValue = combiner accu.computedValues
                 }
             )
 
 
-combineMaybe : (List Expression -> Maybe Expression) -> (List b -> b) -> List (CodeGenerationResult b) -> Maybe (CodeGenerationResult b)
-combineMaybe fn combiner list =
+combineMaybe : (List Expression -> Maybe Expression) -> List CodeGenerationResult -> Maybe CodeGenerationResult
+combineMaybe fn list =
     case combineHelp list of
         Ok accu ->
             Maybe.map
@@ -64,7 +60,6 @@ combineMaybe fn combiner list =
                         { expression = expr
                         , auxiliaryDefinitions = accu.auxiliaryDefinitions
                         , bindings = accu.bindings
-                        , computedValue = combiner accu.computedValues
                         }
                 )
                 (fn accu.expressions)
@@ -73,33 +68,21 @@ combineMaybe fn combiner list =
             Just (Err err)
 
 
-appendBindingsAndDefsFrom : CodeGenerationResult b -> CodeGenerationResult b -> CodeGenerationResult b
-appendBindingsAndDefsFrom =
-    Result.map2
-        (\source target ->
-            { target
-                | auxiliaryDefinitions = source.auxiliaryDefinitions ++ target.auxiliaryDefinitions
-                , bindings = source.bindings ++ target.bindings
-            }
-        )
-
-
-succeed : b -> Expression -> CodeGenerationResult b
-succeed val expr =
+succeed : Expression -> CodeGenerationResult
+succeed expr =
     Ok
         { expression = expr
         , auxiliaryDefinitions = []
         , bindings = []
-        , computedValue = val
         }
 
 
-projectResult : CodeGenerationResult a -> Result String ( Expression, List Function )
+projectResult : CodeGenerationResult -> Result String ( Expression, List Function )
 projectResult =
     Result.map (\res -> ( res.expression, res.auxiliaryDefinitions ))
 
 
-applyBindings : CodeGenerationResult a -> CodeGenerationResult a
+applyBindings : CodeGenerationResult -> CodeGenerationResult
 applyBindings =
     Result.map
         (\res ->

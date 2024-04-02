@@ -17,10 +17,12 @@ fn1 name arg =
 
 codeGen : CodeGenerator
 codeGen =
-    CodeGenerator.define "MartinSStewart/elm-serialize/Codec"
-        "MartinSStewart/elm-serialize"
-        (Typed [ "Serialize" ] "Codec" [ GenericType "e", Target ])
-        (\name -> toValueCase name ++ "Codec")
+    CodeGenerator.define
+        { id = "MartinSStewart/elm-serialize/Codec"
+        , dependency = "MartinSStewart/elm-serialize"
+        , typePattern = Typed [ "Serialize" ] "Codec" [ GenericType "e", Target ]
+        , makeName = \name -> toValueCase name ++ "Codec"
+        }
         [ CodeGenerator.int (val "int")
         , CodeGenerator.float (val "float")
         , CodeGenerator.string (val "string")

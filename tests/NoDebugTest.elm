@@ -1,6 +1,6 @@
 module NoDebugTest exposing (all)
 
-import NoDebug.TodoOrToString
+import NoDebug.TodoItForMe
 import Review.Test exposing (ReviewResult)
 import Review.Test.Dependencies
 import Test exposing (Test, describe, test)
@@ -10,7 +10,7 @@ testRule : String -> ReviewResult
 testRule string =
     "module A exposing (..)\n\n"
         ++ string
-        |> Review.Test.runWithProjectData Review.Test.Dependencies.projectWithElmCore (NoDebug.TodoOrToString.rule [])
+        |> Review.Test.runWithProjectData Review.Test.Dependencies.projectWithElmCore (NoDebug.TodoItForMe.rule [])
 
 
 todoMessage : String
@@ -24,20 +24,9 @@ todoDetails =
     ]
 
 
-toStringMessage : String
-toStringMessage =
-    "Remove the use of `Debug.toString` before shipping to production"
-
-
-toStringDetails : List String
-toStringDetails =
-    [ "`Debug.toString` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
-    ]
-
-
 all : Test
 all =
-    describe "NoDebug.TodoOrToString"
+    describe "NoDebug.TodoItForMe"
         [ test "should not report normal function calls" <|
             \() ->
                 testRule """
@@ -64,16 +53,6 @@ a = Debug.log n
                             { message = todoMessage
                             , details = todoDetails
                             , under = "Debug.todo"
-                            }
-                        ]
-        , test "should report Debug.toString use" <|
-            \() ->
-                testRule "a = Debug.toString"
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = toStringMessage
-                            , details = toStringDetails
-                            , under = "Debug.toString"
                             }
                         ]
         , test "should not report calls from a module containing Debug but that is not Debug" <|
@@ -121,40 +100,6 @@ a = todo "" 1
                 testRule """
 import Debug exposing (log)
 a = todo "" 1
-"""
-                    |> Review.Test.expectNoErrors
-        , test "should report the use of `toString` when `toString` has been explicitly imported" <|
-            \() ->
-                testRule """
-import Debug exposing (toString)
-a = toString ""
-"""
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = toStringMessage
-                            , details = toStringDetails
-                            , under = "toString"
-                            }
-                            |> Review.Test.atExactly { start = { row = 5, column = 5 }, end = { row = 5, column = 13 } }
-                        ]
-        , test "should report the use of `toString` when `toString` has been implicitly imported" <|
-            \() ->
-                testRule """
-import Debug exposing (..)
-a = toString "" 1
-"""
-                    |> Review.Test.expectErrors
-                        [ Review.Test.error
-                            { message = toStringMessage
-                            , details = toStringDetails
-                            , under = "toString"
-                            }
-                        ]
-        , test "should not report the use of `toString` when it has not been imported" <|
-            \() ->
-                testRule """
-import Debug exposing (log)
-a = toString "" 1
 """
                     |> Review.Test.expectNoErrors
         ]

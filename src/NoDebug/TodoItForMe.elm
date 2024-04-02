@@ -1,4 +1,4 @@
-module NoDebug.TodoOrToString exposing (rule)
+module NoDebug.TodoItForMe exposing (rule)
 
 {-|
 
@@ -10,7 +10,7 @@ import AssocList exposing (Dict)
 import AssocSet
 import Dict
 import Elm.Project
-import Elm.Syntax.Declaration as Declaration exposing (Declaration)
+import Elm.Syntax.Declaration exposing (Declaration)
 import Elm.Syntax.Exposing
 import Elm.Syntax.Expression as Expression exposing (Expression)
 import Elm.Syntax.Import exposing (Import)
@@ -33,16 +33,17 @@ import Internal.DependencyScanner
 import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers
 import Internal.ResolvedType as ResolvedType
+import List.Extra
 import ResolvedType exposing (ResolvedType)
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 import Review.Project.Dependency exposing (Dependency)
 import Review.Rule as Rule exposing (Error, ModuleKey, Rule)
 
 
-{-| Forbid the use of [`Debug.todo`] and [`Debug.toString`].
+{-| Forbid the use of [`Debug.todo`].
 
     config =
-        [ NoDebug.TodoOrToString.rule []
+        [ NoDebug.TodoItForMe.rule []
         ]
 
 The reason why there is a is separate rule for handling [`Debug.log`] and one for
@@ -315,7 +316,7 @@ fromModuleToProject moduleKey metadata moduleContext =
                 (\t ->
                     case t of
                         ResolvedType.CustomType ref _ _ ->
-                            Maybe.map (always ( moduleName, t )) (Internal.Helpers.find (\( exp, open ) -> ref.name == exp && open) moduleContext.exports)
+                            Maybe.map (always ( moduleName, t )) (List.Extra.find (\( exp, open ) -> ref.name == exp && open) moduleContext.exports)
 
                         _ ->
                             Just ( moduleName, t )
@@ -410,24 +411,7 @@ expressionVisitor : Node Expression -> ModuleContext -> ( List (Error {}), Modul
 expressionVisitor node context =
     case Node.value node of
         Expression.FunctionOrValue _ name ->
-            if name == "toString" then
-                case ModuleNameLookupTable.moduleNameFor context.lookupTable node of
-                    Just [ "Debug" ] ->
-                        ( [ Rule.error
-                                { message = "Remove the use of `Debug.toString` before shipping to production"
-                                , details =
-                                    [ "`Debug.toString` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
-                                    ]
-                                }
-                                (Node.range node)
-                          ]
-                        , context
-                        )
-
-                    _ ->
-                        ( [], context )
-
-            else if name == "todo" then
+            if name == "todo" then
                 case ModuleNameLookupTable.moduleNameFor context.lookupTable node of
                     Just [ "Debug" ] ->
                         ( []

@@ -18,6 +18,12 @@ However, patterns can also be run in reverse, i.e. these can also be used to gen
 
 The most important constructor here is `Target`, which denotes the type that will drive the code generation process.
 
+`Typed modulePath name arguments` represents a type application, like `Random.Generator target` could be `Typed ["Random"] "Generator" [ Target ]`.
+
+`Function` represents a `->` in a type. These are right-associative so `a -> b -> c` would be `Function (GenericType "a") (Function (GenericType "b") (GenericType "c"))`.
+
+`GenericType` takes a variable name. This name doesn't need to match the name of a type (so `Typed [] "List" (GenericType "A")` **will match** `List x`), but **do** need to match each other. So `Function (GenericType "a") (GenericType "a")` will match `x -> x` but will not match `x -> y`.
+
 -}
 type TypePattern
     = Target
