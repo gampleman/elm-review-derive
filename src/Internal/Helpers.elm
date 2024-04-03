@@ -1,25 +1,18 @@
-module Internal.Helpers exposing (applyBindings, find, findMap, fixNamesAndImportsInExpression, fixNamesAndImportsInFunctionDeclaration, hasDebugTodo, importsFix, lambda1, node, rangeContains, toValueCase, traverseExpression, writeDeclaration, writeExpression)
+module Internal.Helpers exposing (applyBindings, hasDebugTodo, importsFix, lambda1, node, rangeContains, traverseExpression, traversePattern, traverseTypeAnnotation, writeExpression)
 
 import AssocSet as Set exposing (Set)
 import Dict
 import Elm.CodeGen as CG
 import Elm.Pretty
-import Elm.Syntax.Exposing exposing (Exposing(..), TopLevelExpose(..))
-import Elm.Syntax.Expression as Expression exposing (Expression(..), Function, LetDeclaration(..))
+import Elm.Syntax.Expression as Expression exposing (Expression(..), LetDeclaration(..))
 import Elm.Syntax.ModuleName exposing (ModuleName)
-import Elm.Syntax.Node as Node exposing (Node(..))
+import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
-import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation(..))
 import Internal.ExistingImport exposing (ExistingImport)
 import Pretty
 import Review.Fix
-
-
-writeDeclaration : Function -> String
-writeDeclaration =
-    Elm.Pretty.prettyFun >> Pretty.pretty 120
 
 
 writeExpression : Expression -> String
@@ -61,6 +54,24 @@ lambda1 prefix exprBuilder =
         (applyBindings (Dict.singleton prefix (CG.val name)) inner)
 
 
+{-| Given an Expression and a dictionary of `names` to `Expression`, it modifies the expression such that
+any encountered variable macthing one of the `names` is replaced by the corresponding `Expression`.
+
+One of the gifts of referential transparency!
+
+Given
+
+    a * a
+
+and
+
+    a : (1 + 1)
+
+produces
+
+    (1 + 1) * (1 + 1)
+
+-}
 applyBindings : Dict.Dict String Expression -> Expression -> Expression
 applyBindings bindings =
     traverseExpression
@@ -82,43 +93,6 @@ applyBindings bindings =
         )
         ()
         >> Tuple.first
-
-
-{-| Find the first element that satisfies a predicate and return
-Just that element. If none match, return Nothing.
-find (\\num -> num > 5) [ 2, 4, 6, 8 ]
---> Just 6
-
-Borrowed from elm-community/list-extra
-
--}
-find : (a -> Bool) -> List a -> Maybe a
-find predicate list =
-    case list of
-        [] ->
-            Nothing
-
-        first :: rest ->
-            if predicate first then
-                Just first
-
-            else
-                find predicate rest
-
-
-findMap : (a -> Maybe b) -> List a -> Maybe b
-findMap fn list =
-    case list of
-        [] ->
-            Nothing
-
-        first :: rest ->
-            case fn first of
-                Just val ->
-                    Just val
-
-                Nothing ->
-                    findMap fn rest
 
 
 hasDebugTodo : { a | expression : Node Expression } -> Bool
@@ -151,13 +125,6 @@ importsFix currentModule existingImports importStartRow imports =
             |> (\a -> a ++ "\n")
             |> Review.Fix.insertAt { row = importStartRow, column = 1 }
             |> Just
-
-
-toValueCase : String -> String
-toValueCase v =
-    String.uncons v
-        |> Maybe.map (\( char, res ) -> String.cons (Char.toLocaleLower char) res)
-        |> Maybe.withDefault v
 
 
 
@@ -432,174 +399,3 @@ traversePattern fn initial pattern =
 
         _ ->
             ( newPattern, accumulator )
-
-
-fixNamesAndImportsInExpression : Expression -> List String -> List ExistingImport -> ( Expression, List (List String) )
-fixNamesAndImportsInExpression expression currentModule imports =
-    traverseExpression
-        (\expr newImports ->
-            case expr of
-                FunctionOrValue moduleName name ->
-                    case findImport False moduleName name currentModule imports of
-                        Just modPath ->
-                            ( FunctionOrValue modPath name, newImports )
-
-                        Nothing ->
-                            ( expr, moduleName :: newImports )
-
-                CaseExpression ce ->
-                    let
-                        ( cases, accu1 ) =
-                            List.foldr
-                                (\( Node pr pattern, ex ) ( soFar, accu ) ->
-                                    let
-                                        ( newPattern, newImps ) =
-                                            fixNamesAndImportsInPattern pattern currentModule imports
-                                    in
-                                    ( ( Node pr newPattern, ex ) :: soFar, newImps ++ accu )
-                                )
-                                ( [], [] )
-                                ce.cases
-                    in
-                    ( CaseExpression { ce | cases = cases }, accu1 )
-
-                LambdaExpression lambdaExpr ->
-                    let
-                        ( args, accu1 ) =
-                            List.foldr
-                                (\(Node pr pattern) ( soFar, accu ) ->
-                                    let
-                                        ( newPattern, newImps ) =
-                                            fixNamesAndImportsInPattern pattern currentModule imports
-                                    in
-                                    ( Node pr newPattern :: soFar, newImps ++ accu )
-                                )
-                                ( [], [] )
-                                lambdaExpr.args
-                    in
-                    ( LambdaExpression { lambdaExpr | args = args }, accu1 )
-
-                _ ->
-                    ( expr, newImports )
-        )
-        []
-        expression
-
-
-fixNamesAndImportsInSignature : Signature -> List String -> List ExistingImport -> ( Signature, List (List String) )
-fixNamesAndImportsInSignature signature currentModule imports =
-    traverseTypeAnnotation
-        (\annotation newImports ->
-            case annotation of
-                Typed (Node refR ( moduleName, name )) args ->
-                    case findImport True moduleName name currentModule imports of
-                        Just modPath ->
-                            ( Typed (Node refR ( modPath, name )) args, newImports )
-
-                        Nothing ->
-                            ( annotation, moduleName :: newImports )
-
-                _ ->
-                    ( annotation, newImports )
-        )
-        []
-        (Node.value signature.typeAnnotation)
-        |> Tuple.mapFirst (\anno -> { signature | typeAnnotation = node anno })
-
-
-fixNamesAndImportsInPattern : Pattern -> List String -> List ExistingImport -> ( Pattern, List (List String) )
-fixNamesAndImportsInPattern pattern currentModule imports =
-    traversePattern
-        (\pttrn newImports ->
-            case pttrn of
-                NamedPattern ref args ->
-                    case findImport False ref.moduleName ref.name currentModule imports of
-                        Just modPath ->
-                            ( NamedPattern { ref | moduleName = modPath } args, newImports )
-
-                        Nothing ->
-                            ( pttrn, ref.moduleName :: newImports )
-
-                _ ->
-                    ( pttrn, newImports )
-        )
-        []
-        pattern
-
-
-fixNamesAndImportsInFunctionDeclaration : Function -> List String -> List ExistingImport -> ( Function, List (List String) )
-fixNamesAndImportsInFunctionDeclaration fun currentModule imports =
-    let
-        impl =
-            Node.value fun.declaration
-
-        ( newExpression, expressionImports ) =
-            fixNamesAndImportsInExpression (Node.value impl.expression) currentModule imports
-
-        ( newSignature, signatureImports ) =
-            Maybe.map (\sign -> fixNamesAndImportsInSignature (Node.value sign) currentModule imports |> Tuple.mapFirst (node >> Just)) fun.signature |> Maybe.withDefault ( Nothing, [] )
-
-        ( newArguments, argumentsImports ) =
-            List.foldr
-                (\(Node argr arg) ( soFar, imps ) ->
-                    let
-                        ( newArg, newImps ) =
-                            fixNamesAndImportsInPattern arg currentModule imports
-                    in
-                    ( Node argr newArg :: soFar, newImps ++ imps )
-                )
-                ( [], [] )
-                impl.arguments
-    in
-    ( { fun | declaration = node { impl | expression = node newExpression, arguments = newArguments }, signature = newSignature }, expressionImports ++ signatureImports ++ argumentsImports )
-
-
-findImport : Bool -> List String -> String -> List String -> List ExistingImport -> Maybe (List String)
-findImport isType moduleName name currentModule imports =
-    if moduleName == currentModule || moduleName == [] then
-        Just []
-
-    else
-        let
-            helper imps =
-                case imps of
-                    [] ->
-                        Nothing
-
-                    h :: t ->
-                        if moduleName == h.moduleName then
-                            if exposes isType name h.exposingList then
-                                Just []
-
-                            else
-                                h.moduleAlias |> Maybe.map List.singleton |> Maybe.withDefault moduleName |> Just
-
-                        else
-                            helper t
-        in
-        helper (imports ++ Internal.ExistingImport.defaults)
-
-
-exposes : Bool -> String -> Exposing -> Bool
-exposes isType s exposure =
-    case exposure of
-        All _ ->
-            True
-
-        Explicit l ->
-            List.any
-                (\(Node _ value) ->
-                    case value of
-                        FunctionExpose fun ->
-                            not isType && fun == s
-
-                        TypeExpose { name } ->
-                            isType && name == s
-
-                        TypeOrAliasExpose name ->
-                            isType && name == s
-
-                        _ ->
-                            False
-                )
-                l

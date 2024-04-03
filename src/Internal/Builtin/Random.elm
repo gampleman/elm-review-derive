@@ -29,10 +29,12 @@ randomExtra =
 
 codeGen : CodeGenerator
 codeGen =
-    CodeGenerator.define "elm/random/Random.Generator"
-        "elm/random"
-        (Typed [ "Random" ] "Generator" [ Target ])
-        (\name -> "random" ++ name)
+    CodeGenerator.define
+        { id = "elm/random/Random.Generator"
+        , dependency = "elm/random"
+        , typePattern = Typed [ "Random" ] "Generator" [ Target ]
+        , makeName = \name -> "random" ++ name
+        }
         [ CodeGenerator.int (random.int random.minInt random.maxInt)
         , CodeGenerator.int randomExtra.anyInt |> CodeGenerator.ifUserHasDependency "elm-community/random-extra"
         , CodeGenerator.string (random.uniform (CG.string "TODO: Define string options") (CG.list []))

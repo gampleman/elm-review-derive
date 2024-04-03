@@ -1,23 +1,18 @@
-module CodeGenerator.Test exposing
-    ( codeGenTest, codeGenTestFailsWith, fakeDependency
-    , FakeDependency
-    )
+module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, fakeDependency, FakeDependency)
 
 {-| Testing code generators can be tricky, but very rewarding as it makes developing CodeGenerators much easier.
 
-@docs codeGenTest, codeGenTestFailsWith, fakeDependency
+@docs codeGenTest, codeGenTestFailsWith, fakeDependency, FakeDependency
 
 -}
 
 import Array
 import CodeGenerator exposing (CodeGenerator)
-import Elm.CodeGen
 import Elm.Constraint
 import Elm.License
 import Elm.Module
 import Elm.Package
 import Elm.Parser
-import Elm.Pretty
 import Elm.Processing
 import Elm.Project
 import Elm.RawFile
@@ -27,11 +22,9 @@ import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.Range exposing (Range)
 import Elm.Type
 import Elm.Version
-import Elm.Writer
 import Expect exposing (Expectation)
 import Json.Decode
-import NoDebug.TodoOrToString
-import Pretty
+import NoDebug.TodoItForMe
 import Review.Project
 import Review.Project.Dependency exposing (Dependency)
 import Review.Test
@@ -39,6 +32,7 @@ import Review.Test.Dependencies
 import Test exposing (Test)
 
 
+{-| -}
 type FakeDependency
     = Dep Dependency
     | FailedDep String
@@ -82,7 +76,7 @@ codeGenTestHelper description dependencies codeGens modules fn =
             case findTodo inputModules of
                 Ok result ->
                     if List.isEmpty failedDeps then
-                        fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoOrToString.rule codeGens) inputModules)
+                        fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoItForMe.rule codeGens) inputModules)
 
                     else
                         Expect.fail ("Found issues in the following dependencies: \n\n" ++ String.join "\n" failedDeps)

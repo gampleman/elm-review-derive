@@ -1,4 +1,4 @@
-module Internal.ResolvedType exposing (computeVisibility, findGenericAssignments, fromDeclaration, fromTypeSignature, getArgs, getRef, lookupDefinition, matchType, refToExpr, resolveLocalReferences)
+module Internal.ResolvedType exposing (computeVisibility, findGenericAssignments, fromDeclaration, fromTypeSignature, getArgs, getRef, matchType, refToExpr, resolveLocalReferences)
 
 import AssocList
 import Dict
@@ -9,7 +9,7 @@ import Elm.Syntax.Expression exposing (Expression)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
-import Internal.Helpers as Helpers
+import List.Extra
 import ResolvedType exposing (Reference, ResolvedType(..))
 import Review.ModuleNameLookupTable as ModuleNameLookupTable exposing (ModuleNameLookupTable)
 
@@ -20,7 +20,7 @@ refToExpr currentModule imports ref =
         Elm.CodeGen.fun ref.name
 
     else
-        case Helpers.find (\import_ -> import_.moduleName == ref.modulePath) imports of
+        case List.Extra.find (\import_ -> import_.moduleName == ref.modulePath) imports of
             Just { moduleAlias, exposingList } ->
                 if isExposed exposingList ref.name then
                     Elm.CodeGen.fun ref.name
@@ -276,7 +276,7 @@ matchType full possiblyRef =
                         gens2
                     )
 
-        ( CustomType ref1 gens1 ctors1, CustomType ref2 gens2 ctors2 ) ->
+        ( CustomType ref1 gens1 _, CustomType ref2 gens2 _ ) ->
             if full == possiblyRef then
                 True
 
@@ -320,7 +320,7 @@ findGenericAssignments full possiblyRef =
         ( CustomType _ gens1 _, Opaque _ gens2 ) ->
             List.map2 Tuple.pair gens1 gens2 |> Dict.fromList
 
-        ( Opaque _ gens1, CustomType _ names ctors ) ->
+        ( Opaque _ gens1, CustomType _ names _ ) ->
             let
                 bindings =
                     List.map2 Tuple.pair names gens1
@@ -343,7 +343,7 @@ findGenericAssignments full possiblyRef =
                     )
                 |> Dict.fromList
 
-        ( CustomType ref1 gens1 ctors1, CustomType ref2 gens2 ctors2 ) ->
+        ( CustomType _ gens1 _, CustomType _ gens2 _ ) ->
             let
                 bindings =
                     List.map2 Tuple.pair gens2 gens1
@@ -362,7 +362,7 @@ findGenericAssignments full possiblyRef =
                     )
                 |> Dict.fromList
 
-        ( TypeAlias _ gens1 _, TypeAlias ref2 gens2 struct ) ->
+        ( TypeAlias _ gens1 _, TypeAlias _ gens2 struct ) ->
             let
                 bindings =
                     List.map2 Tuple.pair gens1 gens2 |> Dict.fromList

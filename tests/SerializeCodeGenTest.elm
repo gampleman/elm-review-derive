@@ -1,7 +1,6 @@
 module SerializeCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest)
-import Review.Project.Dependency exposing (Dependency)
 import Test exposing (..)
 
 

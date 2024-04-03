@@ -14,10 +14,12 @@ lambdaWrap name fn =
 
 codeGen : CodeGenerator
 codeGen =
-    CodeGenerator.define "elm/json/Json.Encode.Value"
-        "elm/json"
-        (Function Target (Typed [ "Json", "Encode" ] "Value" []))
-        (\name -> "encode" ++ name)
+    CodeGenerator.define
+        { id = "elm/json/Json.Encode.Value"
+        , dependency = "elm/json"
+        , typePattern = Function Target (Typed [ "Json", "Encode" ] "Value" [])
+        , makeName = \name -> "encode" ++ name
+        }
         [ CodeGenerator.char (lambda1 "char" (\char -> CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.apply [ CG.fqFun [ "String" ] "fromChar", char ] ]))
         , CodeGenerator.customDict
             (\( keyType, keyEncoder ) ( _, valEncoder ) ->

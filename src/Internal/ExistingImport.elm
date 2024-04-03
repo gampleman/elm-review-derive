@@ -1,4 +1,4 @@
-module Internal.ExistingImport exposing (ExistingImport, defaults, isExposed)
+module Internal.ExistingImport exposing (ExistingImport, defaults)
 
 import Elm.Syntax.Exposing exposing (Exposing(..), TopLevelExpose(..))
 import Elm.Syntax.ModuleName exposing (ModuleName)
@@ -8,31 +8,6 @@ import Elm.Syntax.Range
 
 type alias ExistingImport =
     { moduleName : ModuleName, moduleAlias : Maybe String, exposingList : Exposing }
-
-
-isExposed : Exposing -> String -> Bool
-isExposed exposing_ functionOrValue =
-    case exposing_ of
-        Elm.Syntax.Exposing.All _ ->
-            True
-
-        Elm.Syntax.Exposing.Explicit exposings ->
-            List.any
-                (\(Node _ a) ->
-                    case a of
-                        Elm.Syntax.Exposing.InfixExpose _ ->
-                            False
-
-                        Elm.Syntax.Exposing.FunctionExpose function ->
-                            functionOrValue == function
-
-                        Elm.Syntax.Exposing.TypeOrAliasExpose typeOrAlias ->
-                            functionOrValue == typeOrAlias
-
-                        Elm.Syntax.Exposing.TypeExpose typeExpose ->
-                            functionOrValue == typeExpose.name
-                )
-                exposings
 
 
 node =
