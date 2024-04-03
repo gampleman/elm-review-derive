@@ -2,7 +2,7 @@ module Internal.Builtin.Fuzzer exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Internal.Helpers exposing (toValueCase)
+import String.Extra
 import TypePattern exposing (TypePattern(..))
 
 
@@ -17,7 +17,7 @@ codeGen =
         { id = "elm-explorations/test/Fuzz.Fuzzer"
         , dependency = "elm-explorations/test"
         , typePattern = Typed [ "Fuzz" ] "Fuzzer" [ Target ]
-        , makeName = \name -> toValueCase name ++ "Fuzzer"
+        , makeName = \name -> String.Extra.decapitalize name ++ "Fuzzer"
         }
         [ CodeGenerator.customType (\_ exps -> CG.apply [ fuzz "oneOf", CG.list (List.map Tuple.second exps) ])
         , CodeGenerator.pipeline (\c -> CG.apply [ fuzz "constant", c ]) (\m -> CG.apply [ fuzz "andMap", m ])

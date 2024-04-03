@@ -70,7 +70,7 @@ codeGen =
                             )
                             |> Just
 
-                    ResolvedType.Opaque { name } args ->
+                    ResolvedType.Opaque _ args ->
                         case exprs of
                             [] ->
                                 Just (CG.apply [ csv_decode "succeed", ctor ])

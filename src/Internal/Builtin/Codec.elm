@@ -2,8 +2,8 @@ module Internal.Builtin.Codec exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
-import Internal.Helpers exposing (toValueCase)
 import ResolvedType
+import String.Extra
 import TypePattern exposing (TypePattern(..))
 
 
@@ -21,7 +21,7 @@ codeGen =
         { id = "MartinSStewart/elm-serialize/Codec"
         , dependency = "MartinSStewart/elm-serialize"
         , typePattern = Typed [ "Serialize" ] "Codec" [ GenericType "e", Target ]
-        , makeName = \name -> toValueCase name ++ "Codec"
+        , makeName = \name -> String.Extra.decapitalize name ++ "Codec"
         }
         [ CodeGenerator.int (val "int")
         , CodeGenerator.float (val "float")
@@ -37,12 +37,12 @@ codeGen =
                 CG.pipe
                     (CG.apply
                         [ val "customType"
-                        , CG.lambda (List.map (\( ctorRef, _ ) -> CG.varPattern (toValueCase ctorRef.name ++ "Encoder")) ctors ++ [ CG.varPattern "value" ])
+                        , CG.lambda (List.map (\( ctorRef, _ ) -> CG.varPattern (String.Extra.decapitalize ctorRef.name ++ "Encoder")) ctors ++ [ CG.varPattern "value" ])
                             (ctors
                                 |> List.map
                                     (\( ctorRef, arguments ) ->
                                         ( CG.fqNamedPattern ctorRef.modulePath ctorRef.name (thingsToPatterns arguments)
-                                        , CG.apply (CG.val (toValueCase ctorRef.name ++ "Encoder") :: thingsToValues arguments)
+                                        , CG.apply (CG.val (String.Extra.decapitalize ctorRef.name ++ "Encoder") :: thingsToValues arguments)
                                         )
                                     )
                                 |> CG.caseExpr (CG.val "value")

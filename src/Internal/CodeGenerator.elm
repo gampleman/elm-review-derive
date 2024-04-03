@@ -212,7 +212,7 @@ generate codeGen isTopLevel context stack inputValue type_ =
                         Err e ->
                             Err e
 
-                ResolvedType.Opaque ref args ->
+                ResolvedType.Opaque ref _ ->
                     case List.Extra.find (\recurse -> recurse.ref == ref) stack of
                         Just recurse ->
                             if recurse.isLambdaProtected then

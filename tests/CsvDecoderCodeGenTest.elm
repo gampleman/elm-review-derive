@@ -1,7 +1,6 @@
 module CsvDecoderCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest)
-import StandardModule
 import Test exposing (Test, describe)
 
 

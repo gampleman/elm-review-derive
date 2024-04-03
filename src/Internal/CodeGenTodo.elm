@@ -294,14 +294,14 @@ createFixes projectContext codeGen imports currentModule todo =
             (\( expr, declarations_ ) ->
                 let
                     ( expression, newImports_ ) =
-                        Helpers.fixNamesAndImportsInExpression (Postprocess.expression expr) currentModule imports.existingImports
+                        Postprocess.fixNamesAndImportsInExpression (Postprocess.expression expr) currentModule imports.existingImports
 
                     ( declarations, newImports ) =
                         List.foldr
                             (\decl ( soFar, imports_ ) ->
                                 let
                                     ( newDecl, foundImports ) =
-                                        Helpers.fixNamesAndImportsInFunctionDeclaration decl currentModule imports.existingImports
+                                        Postprocess.fixNamesAndImportsInFunctionDeclaration decl currentModule imports.existingImports
                                 in
                                 ( (Postprocess.writeFunctionDeclaration [] newDecl ++ "\n") :: soFar, foundImports ++ imports_ )
                             )
