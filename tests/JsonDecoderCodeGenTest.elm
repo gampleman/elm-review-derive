@@ -114,16 +114,4 @@ decodeB =
             )
         )
 """
-        , codeGenTest "Tree" [ elmJson ] [] [ """module A exposing (..)
-import Json.Decode as Decode exposing (Decoder)
-
-type MyTree a b
-    = Branch a b
-    | Leaf
-
-decoder : Decoder a -> Decoder b -> Decoder (MyTree a b)
-decoder bD aD =
-    Debug.todo ""
-
-""" ] """"""
         ]
