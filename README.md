@@ -226,3 +226,11 @@ these auxiliary definitions and the type pattern to create its type definition.
 ## Contributing
 
 Contributions welcome. To run the tests, please run `e2e/test.sh`, then you can also run `elm-test` as normal.
+
+MIT License
+
+## History
+
+This package was initially concieved and implemented by @MartinSStewart with a slightly different focus (there was some tooling to generate Lamdera migrations for instance) and a more custom architecture.
+
+@gampleman then took the project over with some refactoring work on a more general architecture focused on type-oriented code generation.
