@@ -1,18 +1,14 @@
-module Internal.Helpers exposing (applyBindings, hasDebugTodo, importsFix, lambda1, node, rangeContains, traverseExpression, traversePattern, traverseTypeAnnotation, writeExpression)
+module Internal.Helpers exposing (applyBindings, hasDebugTodo, lambda1, node, rangeContains, traverseExpression, traversePattern, traverseTypeAnnotation, writeExpression)
 
-import AssocSet as Set exposing (Set)
 import Dict
 import Elm.CodeGen as CG
 import Elm.Pretty
 import Elm.Syntax.Expression as Expression exposing (Expression(..), LetDeclaration(..))
-import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation(..))
-import Internal.ExistingImport exposing (ExistingImport)
 import Pretty
-import Review.Fix
 
 
 writeExpression : Expression -> String
@@ -103,28 +99,6 @@ hasDebugTodo declaration =
 
         _ ->
             False
-
-
-importsFix : ModuleName -> List ExistingImport -> Int -> Set ModuleName -> Maybe Review.Fix.Fix
-importsFix currentModule existingImports importStartRow imports =
-    let
-        imports_ =
-            Set.remove currentModule imports
-                |> Set.filter
-                    (\import_ -> List.any (.moduleName >> (==) import_) existingImports |> not)
-    in
-    if Set.isEmpty imports_ then
-        Nothing
-
-    else
-        Set.toList imports_
-            |> List.sort
-            |> List.foldl
-                (\import_ state -> state ++ "import " ++ String.join "." import_ ++ "\n")
-                ""
-            |> (\a -> a ++ "\n")
-            |> Review.Fix.insertAt { row = importStartRow, column = 1 }
-            |> Just
 
 
 

@@ -12,8 +12,8 @@ import Elm.Syntax.Range exposing (Range)
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation as TypeAnnotation exposing (TypeAnnotation(..))
 import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
-import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers as Helpers
+import Internal.Imports exposing (ExistingImport)
 import Internal.Postprocess as Postprocess
 import Internal.ResolvedType as ResolvedType
 import Internal.TypePattern
@@ -178,10 +178,6 @@ declarationVisitor :
     -> Function
     -> DeclarationSearchResult
 declarationVisitor context availableTypes declarationRange function =
-    let
-        declaration =
-            Node.value function.declaration
-    in
     function.signature
         |> Maybe.map Node.value
         |> Maybe.andThen
@@ -189,6 +185,10 @@ declarationVisitor context availableTypes declarationRange function =
                 findMatchingPatternWithGenerics context.codeGens (normalizeTypes context.lookupTable (Node.value signature.typeAnnotation))
                     |> Maybe.andThen
                         (\( codeGenId, childType, assignments ) ->
+                            let
+                                declaration =
+                                    Node.value function.declaration
+                            in
                             if Helpers.hasDebugTodo declaration then
                                 List.map2
                                     (\var pattern ->
@@ -345,7 +345,7 @@ createFixes projectContext codeGen imports currentModule todo =
                                 ]
                        )
                     ++ (case
-                            Helpers.importsFix
+                            Internal.Imports.importsFix
                                 currentModule
                                 imports.existingImports
                                 imports.newImportStartRow

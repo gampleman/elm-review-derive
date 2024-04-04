@@ -1,9 +1,10 @@
-module ListVariantsCodeGenTest exposing (..)
+module ListVariantsCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (codeGenTest)
 import Test
 
 
+suite : Test.Test
 suite =
     Test.describe "all variant"
         [ codeGenTest "list all variants" [] [] [ """module A exposing (..)

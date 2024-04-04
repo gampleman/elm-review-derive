@@ -32,7 +32,8 @@ import Review.Test.Dependencies
 import Test exposing (Test)
 
 
-{-| -}
+{-| Represents a dependency that the user has in their project.
+-}
 type FakeDependency
     = Dep Dependency
     | FailedDep String
@@ -69,13 +70,14 @@ codeGenTestHelper description dependencies codeGens modules fn =
                                     Just (" - " ++ reason)
                         )
                         dependencies
-
-                project =
-                    List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore validDependencies
             in
             case findTodo inputModules of
                 Ok result ->
                     if List.isEmpty failedDeps then
+                        let
+                            project =
+                                List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore validDependencies
+                        in
                         fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoItForMe.rule codeGens) inputModules)
 
                     else

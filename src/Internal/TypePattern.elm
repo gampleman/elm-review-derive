@@ -1,4 +1,4 @@
-module Internal.TypePattern exposing (..)
+module Internal.TypePattern exposing (generate, matches)
 
 import Elm.CodeGen as CG
 import Elm.Syntax.Node as Node exposing (Node(..))

@@ -11,7 +11,6 @@ when inside the directory containing this file.
 
 -}
 
-
 import NoDebug.TodoItForMe
 import Review.Rule exposing (Rule)
 

@@ -8,6 +8,7 @@ module NoDebug.TodoItForMe exposing (rule)
 
 import AssocList exposing (Dict)
 import AssocSet
+import CodeGenerator exposing (CodeGenerator)
 import Dict
 import Elm.Project
 import Elm.Syntax.Declaration exposing (Declaration)
@@ -28,10 +29,10 @@ import Internal.Builtin.ListAllVariants
 import Internal.Builtin.Random
 import Internal.Builtin.ToString
 import Internal.CodeGenTodo exposing (CodeGenTodo)
-import Internal.CodeGenerator exposing (CodeGenerator, ConfiguredCodeGenerator, ExistingFunctionProvider)
+import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
 import Internal.DependencyScanner
-import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers
+import Internal.Imports exposing (ExistingImport)
 import Internal.ResolvedType as ResolvedType
 import List.Extra
 import ResolvedType exposing (ResolvedType)
@@ -64,7 +65,7 @@ add your own. See [`CodeGenerator`](CodeGenerator) for details.
 You can try this rule out by running the following command:
 
 ```bash
-elm-review --template MartinSStewart/elm-review-todo-it-for-me/preview --fix
+elm-review --template gampleman/elm-review-derive/preview --fix
 ```
 
 [`Debug.todo`]: https://package.elm-lang.org/packages/elm/core/latest/Debug#todo
@@ -227,7 +228,7 @@ fromProjectToModule lookupTable metadata projectContext =
     , exports = []
     , availableTypes = projectContext.types
     , importStartRow = Nothing
-    , imports = Internal.ExistingImport.defaults
+    , imports = Internal.Imports.defaults
     , currentModule = moduleName
     , codeGens = projectContext.codeGens
     , codeGenTodos = []

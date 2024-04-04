@@ -1,9 +1,10 @@
-module ToStringCodeGenTest exposing (..)
+module ToStringCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (codeGenTest)
 import Test
 
 
+suite : Test.Test
 suite =
     Test.describe "toString"
         [ codeGenTest "Simple custom type to string"

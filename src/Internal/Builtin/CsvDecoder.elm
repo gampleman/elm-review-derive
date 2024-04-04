@@ -1,4 +1,4 @@
-module Internal.Builtin.CsvDecoder exposing (..)
+module Internal.Builtin.CsvDecoder exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG

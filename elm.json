@@ -1,6 +1,6 @@
 {
   "type": "package",
-  "name": "MartinSStewart/elm-review-todo-it-for-me",
+  "name": "gampleman/elm-review-derive",
   "summary": "Generate code for json encoders/decoders, codecs, fuzzers, generators, and more",
   "license": "MIT",
   "version": "1.0.0",
