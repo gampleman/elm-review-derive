@@ -1,7 +1,7 @@
 module SerializeCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest)
-import Test exposing (..)
+import Test exposing (Test, describe)
 
 
 elmSerialize : FakeDependency

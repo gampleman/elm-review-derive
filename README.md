@@ -1,4 +1,4 @@
-# elm-review-todo-it-for-me
+# elm-review-derive
 
 This elm-review rule is special in that it's not really a rule that checks for mistakes.  
 Instead it looks for code like this
@@ -31,49 +31,49 @@ This rule isn't limited to generating toString functions for custom types though
 
 ### `Serialize.Codec e MyType`
 
-**Required package:** [MartinSStewart/elm-serialize]  
-**Type features supported:** All\*
+Required package: [MartinSStewart/elm-serialize]  
+Type features supported: **All\***
 
 ### `Csv.Decode.Decoder MyType`
 
-**Required package:** [BrianHicks/elm-csv]  
-**Type features supported:** Supports (non-recursive) custom types and type aliases as well as most primitives. Doesn't support collection types.
+Required package: [BrianHicks/elm-csv]  
+Type features supported: Supports (non-recursive) **custom types and type aliases** as well as most primitives. Doesn't support collection types.
 
 ### `String -> Maybe MyType`
 
-**Required package:** [elm/core]  
-**Type features supported:** Enums\*\*
+Required package: [elm/core]  
+Type features supported: **Enums\*\***
 
 ### `Fuzz.Fuzzer MyType`
 
-**Required package:** [elm-explorations/test]  
-**Type features supported:** All\*
+Required package: [elm-explorations/test]  
+Type features supported: **All\***
 
 ### `Json.Decode.Decoder MyType`
 
-**Required package:** [elm/json]  
-**Type features supported:** All\*
+Required package: [elm/json]  
+Type features supported: **All\***
 
 ### `MyType -> Json.Encode.Value`
 
-**Required package:** [elm/json]  
-**Type features supported:** All\*
+Required package: [elm/json]  
+Type features supported: **All\***
 
 ### `List MyType`
 
-**Required package:** [elm/core]  
-**Type features supported:** Enums\*\*
+Required package: [elm/core]  
+Type features supported: **Enums\*\***
 
 ### `Random.Generator MyType`
 
-**Required package:** [elm/random]  
-**Type features supported:** All\*  
-**Optional packages:** [elm-community/random-extra] supported - it will use `Random.Extra.anyInt`, `Random.Extra.choices` and `Random.Extra.andThen` if you have the package installed.
+Required package: [elm/random]  
+Type features supported: **All\***  
+Optional packages: [elm-community/random-extra] supported - it will use `Random.Extra.anyInt`, `Random.Extra.choices` and `Random.Extra.andThen` if you have the package installed.
 
 ### `MyType -> String`
 
-**Required package:** [elm/core]  
-**Type features supported:** Enums\*\*
+Required package: [elm/core]  
+Type features supported: **Enums\*\***
 
 \* All types actually supported by the relevant packages. Generally this means that it won't support function types, nor opaque
 types that don't provide a compatible signature (i.e. a `Decoder { foo : Color }` will fail of `Color` is an opaque type,
@@ -140,10 +140,14 @@ More formally, for every type variable in the target type, you can provide an ar
 You can add it to your review config like any elm-review rule. However, I like to invoke it from the command line when I want it. You can do that with:
 
 ```bash
-npx elm-review --fix --template MartinSStewart/elm-review-todo-it-for-me/preview
+npx elm-review --fix --template gampleman/elm-review-derive/preview
 ```
 
 If you like it, you can save that command in a convenient shell alias.
+
+```bash
+alias elm-derive='npx elm-review --fix --template gampleman/elm-review-derive/preview'
+```
 
 ## How stable is it? Are there bugs?
 
@@ -231,6 +235,7 @@ MIT License
 
 ## History
 
-This package was initially concieved and implemented by @MartinSStewart with a slightly different focus (there was some tooling to generate Lamdera migrations for instance) and a more custom architecture.
+This package was initially conceived and implemented by @MartinSStewart with a slightly different focus (there was some tooling to generate Lamdera migrations for instance) and a more custom architecture.
+It was called MartinSStewart/elm-review-todo-it-for-me.
 
-@gampleman then took the project over with some refactoring work on a more general architecture focused on type-oriented code generation.
+@gampleman then took the project over with some refactoring work on a more general architecture focused on type-oriented code generation. He renamed the project to be slightly less unwieldy to pronounce.

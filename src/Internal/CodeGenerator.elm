@@ -5,8 +5,8 @@ import Elm.CodeGen as CG
 import Elm.Syntax.Expression exposing (Expression(..), Function)
 import Elm.Syntax.ModuleName exposing (ModuleName)
 import Internal.CodeGenerationResult as CodeGenerationResult exposing (CodeGenerationResult)
-import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers as Helpers
+import Internal.Imports exposing (ExistingImport)
 import Internal.ResolvedType as ResolvedType
 import Internal.TypePattern as TypePattern
 import List.Extra
@@ -293,51 +293,49 @@ generate codeGen isTopLevel context stack inputValue type_ =
                         codeGen
                         ref
                         generics
-                        (case ctors of
-                            _ ->
-                                applyResolvers
-                                    (\resolver ->
-                                        case resolver of
-                                            CustomTypeResolver outputFn fn ->
-                                                List.map2
-                                                    (\( ctorRef, args ) input ->
-                                                        applyCombiner (ResolvedType.Opaque ctorRef args)
-                                                            (ResolvedType.refToExpr context.currentModule context.existingImports ctorRef)
-                                                            input
-                                                            args
-                                                            codeGen
-                                                            context
-                                                            (if isTopLevel then
+                        (applyResolvers
+                            (\resolver ->
+                                case resolver of
+                                    CustomTypeResolver outputFn fn ->
+                                        List.map2
+                                            (\( ctorRef, args ) input ->
+                                                applyCombiner (ResolvedType.Opaque ctorRef args)
+                                                    (ResolvedType.refToExpr context.currentModule context.existingImports ctorRef)
+                                                    input
+                                                    args
+                                                    codeGen
+                                                    context
+                                                    (if isTopLevel then
+                                                        stack
+
+                                                     else
+                                                        case codeGen.makeName of
+                                                            Just makeName ->
+                                                                { name = makeName ref.name
+                                                                , ref = ref
+                                                                , genericArguments = Dict.empty
+                                                                , isLambdaProtected = False
+                                                                }
+                                                                    :: stack
+
+                                                            Nothing ->
                                                                 stack
-
-                                                             else
-                                                                case codeGen.makeName of
-                                                                    Just makeName ->
-                                                                        { name = makeName ref.name
-                                                                        , ref = ref
-                                                                        , genericArguments = Dict.empty
-                                                                        , isLambdaProtected = False
-                                                                        }
-                                                                            :: stack
-
-                                                                    Nothing ->
-                                                                        stack
-                                                            )
                                                     )
-                                                    ctors
-                                                    (outputFn inputValue ctors)
-                                                    |> CodeGenerationResult.combine (\x -> x |> List.map2 (\( ctorRef, _ ) -> Tuple.pair ctorRef.name) ctors |> fn inputValue ctors)
-                                                    |> Just
+                                            )
+                                            ctors
+                                            (outputFn inputValue ctors)
+                                            |> CodeGenerationResult.combine (\x -> x |> List.map2 (\( ctorRef, _ ) -> Tuple.pair ctorRef.name) ctors |> fn inputValue ctors)
+                                            |> Just
 
-                                            _ ->
-                                                Nothing
-                                    )
-                                    ref.name
-                                    codeGen
-                                    context
-                                    stack
-                                    inputValue
-                                    type_
+                                    _ ->
+                                        Nothing
+                            )
+                            ref.name
+                            codeGen
+                            context
+                            stack
+                            inputValue
+                            type_
                         )
 
 
@@ -349,21 +347,20 @@ makeExternalDeclaration isTopLevel codeGen ref generics defExpr =
     else
         case codeGen.makeName of
             Just makeName ->
-                let
-                    name =
-                        makeName ref.name
-
-                    annotation =
-                        List.foldr
-                            (\r anno ->
-                                CG.funAnn (TypePattern.generate codeGen.searchPattern (CG.typeVar r)) anno
-                            )
-                            (TypePattern.generate codeGen.searchPattern (CG.fqTyped ref.modulePath ref.name (List.map (\r -> CG.fqTyped [] r []) generics)))
-                            generics
-                in
                 Result.map
                     (\res ->
                         let
+                            annotation =
+                                List.foldr
+                                    (\r anno ->
+                                        CG.funAnn (TypePattern.generate codeGen.searchPattern (CG.typeVar r)) anno
+                                    )
+                                    (TypePattern.generate codeGen.searchPattern (CG.fqTyped ref.modulePath ref.name (List.map (\r -> CG.fqTyped [] r []) generics)))
+                                    generics
+
+                            name =
+                                makeName ref.name
+
                             binds =
                                 Dict.fromList res.bindings
                         in

@@ -1,9 +1,10 @@
-module FromStringCodeGenTest exposing (..)
+module FromStringCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (codeGenTest)
 import Test
 
 
+suite : Test.Test
 suite =
     Test.describe "fromString"
         [ codeGenTest "custom type from string" [] [] [ """module A exposing (..)

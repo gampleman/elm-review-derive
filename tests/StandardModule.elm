@@ -1,10 +1,12 @@
-module StandardModule exposing (..)
+module StandardModule exposing (standard)
 
 -- Do not edit this module directly, it is generated from ../e2e/Standard.elm
+
 
 standard : String
 standard =
     """module Standard exposing (A(..), B)
+
 import Array exposing (Array)
 import Dict exposing (Dict)
 

@@ -9,8 +9,8 @@ import Elm.Syntax.Node as Node exposing (Node(..))
 import Elm.Syntax.Pattern exposing (Pattern(..))
 import Elm.Syntax.Signature exposing (Signature)
 import Elm.Syntax.TypeAnnotation exposing (TypeAnnotation(..))
-import Internal.ExistingImport exposing (ExistingImport)
 import Internal.Helpers as Helpers
+import Internal.Imports exposing (ExistingImport)
 import List.Extra
 import Pretty
 
@@ -383,7 +383,7 @@ findImport isType moduleName name currentModule imports =
                         else
                             helper t
         in
-        helper (imports ++ Internal.ExistingImport.defaults)
+        helper (imports ++ Internal.Imports.defaults)
 
 
 exposes : Bool -> String -> Exposing -> Bool

@@ -1,4 +1,5 @@
 module Standard exposing (A(..), B)
+
 import Array exposing (Array)
 import Dict exposing (Dict)
 

@@ -1,4 +1,4 @@
-module RandomCodeGenTest exposing (..)
+module RandomCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest, codeGenTestFailsWith)
 import Test exposing (Test, describe)

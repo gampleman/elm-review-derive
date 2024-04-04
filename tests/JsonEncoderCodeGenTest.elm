@@ -1,4 +1,4 @@
-module JsonEncoderCodeGenTest exposing (..)
+module JsonEncoderCodeGenTest exposing (suite)
 
 import CodeGenerator.Test exposing (FakeDependency, codeGenTest, codeGenTestFailsWith)
 import StandardModule
