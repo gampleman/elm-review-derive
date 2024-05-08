@@ -301,7 +301,12 @@ type alias MyType =
 
 codec : Codec MyType
 codec =
-    Codec.object MyType |> Codec.field "fieldA" .fieldA (Codec.dict Codec.int Codec.string) |> Codec.buildObject
+    Codec.object MyType
+        |> Codec.field
+            "fieldA"
+            .fieldA
+            (Codec.map Dict.fromList Dict.toList (Codec.list (Codec.tuple Codec.int Codec.string)))
+        |> Codec.buildObject
 """
         , codeGenTest "nested record codec"
             [ elmCodec ]

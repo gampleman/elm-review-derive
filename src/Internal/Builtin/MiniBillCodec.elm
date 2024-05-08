@@ -28,7 +28,15 @@ codeGen =
         , CodeGenerator.string (val "string")
         , CodeGenerator.list (fn1 "list")
         , CodeGenerator.maybe (fn1 "nullable")
-        , CodeGenerator.dict (\key value -> CG.apply [ val "dict", key, value ])
+        , CodeGenerator.dict
+            (\key value ->
+                CG.apply
+                    [ val "map"
+                    , CG.fqVal [ "Dict" ] "fromList"
+                    , CG.fqVal [ "Dict" ] "toList"
+                    , CG.apply [ val "list", CG.apply [ val "tuple", key, value ] ]
+                    ]
+            )
         , CodeGenerator.unit (val "unit")
         , CodeGenerator.tuple (\arg1 arg2 -> CG.apply [ val "tuple", arg1, arg2 ])
         , CodeGenerator.triple (\arg1 arg2 arg3 -> CG.apply [ val "tuple", arg1, arg2, arg3 ])
