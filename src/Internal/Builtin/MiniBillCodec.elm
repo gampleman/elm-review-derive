@@ -27,7 +27,7 @@ codeGen =
         , CodeGenerator.float (val "float")
         , CodeGenerator.string (val "string")
         , CodeGenerator.list (fn1 "list")
-        , CodeGenerator.maybe (fn1 "maybe")
+        , CodeGenerator.maybe (fn1 "nullable")
         , CodeGenerator.dict (\key value -> CG.apply [ val "dict", key, value ])
         , CodeGenerator.unit (val "unit")
         , CodeGenerator.tuple (\arg1 arg2 -> CG.apply [ val "tuple", arg1, arg2 ])
