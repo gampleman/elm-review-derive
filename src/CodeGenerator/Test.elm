@@ -1,4 +1,7 @@
-module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, fakeDependency, FakeDependency)
+module CodeGenerator.Test exposing
+    ( codeGenTest, codeGenTestFailsWith, fakeDependency, FakeDependency
+    , codeGenIncrementalTest
+    )
 
 {-| Testing code generators can be tricky, but very rewarding as it makes developing CodeGenerators much easier.
 
@@ -39,8 +42,8 @@ type FakeDependency
     | FailedDep String
 
 
-codeGenTestHelper : String -> List FakeDependency -> List CodeGenerator -> List String -> ({ module_ : String, under : String } -> Review.Test.ReviewResult -> Expectation) -> Test
-codeGenTestHelper description dependencies codeGens modules fn =
+codeGenTestHelper : String -> List FakeDependency -> List CodeGenerator -> List String -> Bool -> ({ module_ : String, under : String } -> Review.Test.ReviewResult -> Expectation) -> Test
+codeGenTestHelper description dependencies codeGens modules incremental fn =
     Test.test description <|
         \_ ->
             let
@@ -78,7 +81,7 @@ codeGenTestHelper description dependencies codeGens modules fn =
                             project =
                                 List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore validDependencies
                         in
-                        fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoItForMe.rule codeGens) inputModules)
+                        fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoItForMe.rule incremental codeGens) inputModules)
 
                     else
                         Expect.fail ("Found issues in the following dependencies: \n\n" ++ String.join "\n" failedDeps)
@@ -95,6 +98,7 @@ codeGenTestFailsWith description dependencies codeGens modules expectedFailureDe
         dependencies
         codeGens
         modules
+        False
         (\result ->
             Review.Test.expectErrorsForModules
                 [ ( result.module_
@@ -144,6 +148,31 @@ codeGenTest description dependencies codeGens modules expected =
         dependencies
         codeGens
         modules
+        False
+        (\result ->
+            Review.Test.expectErrorsForModules
+                [ ( result.module_
+                  , [ Review.Test.error
+                        { message = "Remove the use of `Debug.todo` before shipping to production"
+                        , details = [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production." ]
+                        , under = result.under
+                        }
+                        |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
+                    ]
+                  )
+                ]
+        )
+
+
+{-| Like `codeGenTest`, but runs in incremental mode. Only looks for a fix for the first `Debug.todo` found.
+-}
+codeGenIncrementalTest : String -> List FakeDependency -> List CodeGenerator -> List String -> String -> Test
+codeGenIncrementalTest description dependencies codeGens modules expected =
+    codeGenTestHelper description
+        dependencies
+        codeGens
+        modules
+        True
         (\result ->
             Review.Test.expectErrorsForModules
                 [ ( result.module_
