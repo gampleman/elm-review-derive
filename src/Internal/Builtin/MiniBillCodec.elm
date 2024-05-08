@@ -54,8 +54,15 @@ codeGen =
         , CodeGenerator.combiner
             (\t fn exprs ->
                 case t of
-                    ResolvedType.Opaque _ args ->
-                        Just <| CG.apply ([ val ("variant" ++ String.fromInt (List.length args)), fn ] ++ exprs)
+                    ResolvedType.Opaque reference args ->
+                        CG.apply
+                            ([ val ("variant" ++ String.fromInt (List.length args))
+                             , CG.string reference.name
+                             , fn
+                             ]
+                                ++ exprs
+                            )
+                            |> Just
 
                     ResolvedType.AnonymousRecord _ fields ->
                         CG.pipe
