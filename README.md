@@ -34,6 +34,11 @@ This rule isn't limited to generating toString functions for custom types though
 Required package: [MartinSStewart/elm-serialize]  
 Type features supported: **All\***
 
+### `Codec.Codec e MyType`
+
+Required package: [miniBill/elm-codec]  
+Type features supported: **All\***
+
 ### `Csv.Decode.Decoder MyType`
 
 Required package: [BrianHicks/elm-csv]  
