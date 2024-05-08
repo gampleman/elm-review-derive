@@ -20,7 +20,7 @@ codeGen =
     CodeGenerator.define
         { id = "miniBill/elm-codec/Codec"
         , dependency = "miniBill/elm-codec"
-        , typePattern = Typed [ "Codec" ] "Codec" [ GenericType "e", Target ]
+        , typePattern = Typed [ "Codec" ] "Codec" [ Target ]
         , makeName = \name -> String.Extra.decapitalize name ++ "Codec"
         }
         [ CodeGenerator.int (val "int")
