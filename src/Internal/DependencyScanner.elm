@@ -7,6 +7,7 @@ import Elm.Syntax.ModuleName exposing (ModuleName)
 import Elm.Type as T exposing (Type)
 import Internal.CodeGenerator exposing (ConfiguredCodeGenerator, ExistingFunctionProvider)
 import List.Extra
+import Maybe.Extra
 import ResolvedType as RT exposing (ResolvedType)
 import Review.Project.Dependency as Dependency exposing (Dependency)
 import TypePattern as TP exposing (TypePattern)
@@ -105,8 +106,11 @@ heuristicRejectIfMultiplePatternsForSameType codeGens providers =
                     Dict.get provider.codeGenId codeGens
                         |> Maybe.andThen
                             (\codeGen ->
-                                List.Extra.find (\ref -> ref.modulePath == provider.moduleName && ref.name == provider.functionName) codeGen.blessedImplementations
-                                    |> Maybe.map (always provider)
+                                List.Extra.find
+                                    (\{ moduleName, functionName } ->
+                                        Maybe.Extra.isJust (List.Extra.find (\ref -> ref.modulePath == moduleName && ref.name == functionName) codeGen.blessedImplementations)
+                                    )
+                                    (provider :: rest)
                             )
             )
 
