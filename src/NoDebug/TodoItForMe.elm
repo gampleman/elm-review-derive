@@ -26,6 +26,7 @@ import Internal.Builtin.Fuzzer
 import Internal.Builtin.JsonDecoder
 import Internal.Builtin.JsonEncoder
 import Internal.Builtin.ListAllVariants
+import Internal.Builtin.MiniBillCodec
 import Internal.Builtin.Random
 import Internal.Builtin.ToString
 import Internal.CodeGenTodo exposing (CodeGenTodo)
@@ -80,6 +81,7 @@ rule generators =
                    , Internal.Builtin.JsonEncoder.codeGen
                    , Internal.Builtin.JsonDecoder.codeGen
                    , Internal.Builtin.Codec.codeGen
+                   , Internal.Builtin.MiniBillCodec.codeGen
                    , Internal.Builtin.Fuzzer.codeGen
                    , Internal.Builtin.ListAllVariants.codeGen
                    , Internal.Builtin.ToString.codeGen
