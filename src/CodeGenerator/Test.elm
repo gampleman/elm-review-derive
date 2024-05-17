@@ -1,11 +1,8 @@
-module CodeGenerator.Test exposing
-    ( codeGenTest, codeGenTestFailsWith, fakeDependency, FakeDependency
-    , codeGenIncrementalTest
-    )
+module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, codeGenIncrementalTest, fakeDependency, FakeDependency)
 
 {-| Testing code generators can be tricky, but very rewarding as it makes developing CodeGenerators much easier.
 
-@docs codeGenTest, codeGenTestFailsWith, fakeDependency, FakeDependency
+@docs codeGenTest, codeGenTestFailsWith, codeGenIncrementalTest, fakeDependency, FakeDependency
 
 -}
 

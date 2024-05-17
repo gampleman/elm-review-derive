@@ -10,7 +10,7 @@ import Internal.Imports exposing (ExistingImport)
 import Internal.ResolvedType as ResolvedType
 import Internal.TypePattern as TypePattern
 import List.Extra
-import ResolvedType exposing (Reference, ResolvedType)
+import ResolvedType exposing (Reference, ResolvedType(..))
 import TypePattern exposing (TypePattern)
 
 
@@ -193,7 +193,7 @@ generate codeGen isTopLevel context stack inputValue type_ =
                     |> CodeGenerationResult.combine (\exps -> CG.apply (CG.fqFun provider.moduleName provider.functionName :: exps))
 
         Nothing ->
-            case Debug.log "type_" type_ of
+            case type_ of
                 ResolvedType.GenericType name Nothing ->
                     Dict.get name context.genericArguments
                         |> Result.fromMaybe ("Could not generate definition for generic variable `" ++ name ++ "`. You need to supply an argument of that type.")
@@ -226,21 +226,8 @@ generate codeGen isTopLevel context stack inputValue type_ =
 
                         Nothing ->
                             applyResolvers
-                                -- (\resolver ->
-                                --     case resolver of
-                                --         PrimitiveResolver reference fn ->
-                                --             if reference == ref then
-                                --                 List.map (generate False context stack) args
-                                --                     |> combineResults
-                                --                     |> Result.map (\( x, y, z ) -> ( fn args x, y, z ))
-                                --                     |> transmogrify
-                                --             else
-                                --                 Nothing
-                                --         _ ->
-                                --             Nothing
                                 (always Nothing)
                                 isTopLevel
-                                -- )
                                 (Helpers.writeExpression (ResolvedType.refToExpr context.currentModule context.existingImports ref))
                                 codeGen
                                 context
@@ -361,7 +348,7 @@ generate codeGen isTopLevel context stack inputValue type_ =
 
 lazilyPrepareGenerics : AssembledGenerator a -> GenerationContext -> RecursionStack -> a -> ResolvedType -> CodeGenerationResult
 lazilyPrepareGenerics codeGen context stack inputValue type_ =
-    case Debug.log "lazilyPrepareGenerics" type_ of
+    case type_ of
         ResolvedType.GenericType name Nothing ->
             Dict.get name context.genericArguments
                 |> Result.fromMaybe ("Could not generate definition for generic variable `" ++ name ++ "`. You need to supply an argument of that type.")
@@ -393,6 +380,9 @@ lazilyPrepareGenerics codeGen context stack inputValue type_ =
         ResolvedType.CustomType _ _ ctors ->
             CodeGenerationResult.combine (always CG.unit) (List.concatMap (Tuple.second >> List.map (lazilyPrepareGenerics codeGen context stack inputValue)) ctors)
 
+        ResolvedType.Opaque _ vars ->
+            CodeGenerationResult.combine (always CG.unit) (List.map (lazilyPrepareGenerics codeGen context stack inputValue) vars)
+
         _ ->
             CodeGenerationResult.succeed CG.unit
 
@@ -423,7 +413,6 @@ makeExternalDeclaration isTopLevel codeGen context stack inputValue type_ ref ge
                             let
                                 binds =
                                     Dict.fromList res.bindings
-                                        |> Debug.log "binds"
                             in
                             { res
                                 | expression =
@@ -535,21 +524,118 @@ applyResolvers fn isTopLevel name codeGen context stack inputValue t =
                     fn resolver
         )
         codeGen.resolvers
-        |> reportError isTopLevel name context
+        |> reportError isTopLevel codeGen context stack inputValue t [] name
 
 
-reportError : Bool -> String -> GenerationContext -> Maybe CodeGenerationResult -> CodeGenerationResult
-reportError isTopLevel name context maybeResult =
+getRef : ResolvedType -> Maybe Reference
+getRef t =
+    case t of
+        ResolvedType.Opaque ref _ ->
+            Just ref
+
+        ResolvedType.CustomType ref _ _ ->
+            Just ref
+
+        _ ->
+            Nothing
+
+
+typeVariableFromIndex : Int -> String
+typeVariableFromIndex index =
+    let
+        prefix =
+            (modBy 26 index + 97)
+                |> Char.fromCode
+                |> String.fromChar
+
+        suffix =
+            if (index // 26) == 0 then
+                ""
+
+            else
+                String.fromInt (index // 26)
+    in
+    prefix ++ suffix
+
+
+reportError : Bool -> AssembledGenerator a -> GenerationContext -> RecursionStack -> a -> ResolvedType -> List String -> String -> Maybe CodeGenerationResult -> CodeGenerationResult
+reportError isTopLevel codeGen context stack inputValue type_ generics_ label maybeResult =
     case maybeResult of
         Just result ->
             result
 
         Nothing ->
             if context.incrementalMode && not isTopLevel then
-                CodeGenerationResult.succeed (CG.apply [ CG.fqFun [ "Debug" ] "todo", CG.string ("Could not automatically generate a definition for `" ++ name ++ "`, as we don't know how to implement this type.") ])
+                case ( codeGen.makeName, getRef type_ ) of
+                    ( Just makeName, Just ref ) ->
+                        let
+                            -- Fakery needed to generate proper type signatures for opaque types
+                            ( type__, generics ) =
+                                case type_ of
+                                    ResolvedType.Opaque refr vars ->
+                                        ( ResolvedType.Opaque refr (List.indexedMap (\i -> Just >> GenericType (typeVariableFromIndex i)) vars)
+                                        , List.indexedMap (\i _ -> typeVariableFromIndex i) vars
+                                        )
+
+                                    _ ->
+                                        ( type_, generics_ )
+
+                            annotation =
+                                List.foldr
+                                    (\r anno ->
+                                        CG.funAnn (TypePattern.generate codeGen.searchPattern (CG.typeVar r)) anno
+                                    )
+                                    (TypePattern.generate codeGen.searchPattern (CG.fqTyped ref.modulePath ref.name (List.map (\r -> CG.fqTyped [] r []) generics)))
+                                    generics
+
+                            name =
+                                makeName ref.name
+                        in
+                        Result.map
+                            (\res ->
+                                let
+                                    binds =
+                                        Dict.fromList res.bindings
+                                in
+                                { res
+                                    | expression =
+                                        if res.expression == CG.unit then
+                                            CG.apply
+                                                (CG.fun name
+                                                    :: List.filterMap
+                                                        (\r -> Dict.get r binds)
+                                                        generics
+                                                )
+
+                                        else
+                                            res.expression
+                                    , auxiliaryDefinitions =
+                                        [ { documentation = Nothing
+                                          , signature =
+                                                Just
+                                                    (Helpers.node
+                                                        { name = Helpers.node name
+                                                        , typeAnnotation = Helpers.node annotation
+                                                        }
+                                                    )
+                                          , declaration =
+                                                Helpers.node
+                                                    { name = Helpers.node name
+                                                    , arguments = List.map (\r -> Helpers.node (CG.varPattern r)) generics
+                                                    , expression = Helpers.node <| CG.apply [ CG.fqFun [ "Debug" ] "todo", CG.string ("Could not automatically generate a definition for `" ++ label ++ "`, as we don't know how to implement this type.") ]
+                                                    }
+                                          }
+                                        ]
+                                    , bindings = []
+                                }
+                            )
+                            (lazilyPrepareGenerics codeGen context stack inputValue type__)
+
+                    _ ->
+                        CodeGenerationResult.succeed (CG.apply [ CG.fqFun [ "Debug" ] "todo", CG.string ("Could not automatically generate a definition for `" ++ label ++ "`, as we don't know how to implement this type.") ])
 
             else
-                Err ("Could not automatically generate a definition for `" ++ name ++ "`, as we don't know how to implement this type.")
+                Err ("Could not automatically generate a definition for `" ++ label ++ "`, as we don't know how to implement this type.")
 
 
 applyCombiner : Bool -> ResolvedType -> Expression -> a -> List ResolvedType -> AssembledGenerator a -> GenerationContext -> RecursionStack -> CodeGenerationResult
