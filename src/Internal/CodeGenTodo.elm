@@ -239,9 +239,13 @@ todoErrors incrementalMode projectContext currentModule todo =
             case createFixes incrementalMode projectContext codeGen imports currentModule todo of
                 Ok fixes ->
                     Rule.errorForModuleWithFix moduleKey
-                        { message = "Remove the use of `Debug.todo` before shipping to production"
+                        { message = "Remove the use of `Debug.todo`"
                         , details =
-                            [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
+                            [ if incrementalMode then
+                                "We have successfully generated a stub for this `Debug.todo`"
+
+                              else
+                                "We have successfully generated an implementation for this `Debug.todo`"
                             ]
                         }
                         todo.range
@@ -250,10 +254,9 @@ todoErrors incrementalMode projectContext currentModule todo =
 
                 Err reason ->
                     Rule.errorForModule moduleKey
-                        { message = "Remove the use of `Debug.todo` before shipping to production"
+                        { message = "Cannot generate the implementation of this `Debug.todo`"
                         , details =
-                            [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
-                            , reason
+                            [ reason
                             ]
                         }
                         todo.range
