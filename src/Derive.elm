@@ -1,4 +1,4 @@
-module NoDebug.TodoItForMe exposing (rule)
+module Derive exposing (rule)
 
 {-|
 
@@ -134,7 +134,7 @@ rule incrementalMode generators =
                    , Internal.Builtin.CsvDecoder.codeGen
                    ]
     in
-    Rule.newProjectRuleSchema "CodeGen" initialProjectContext
+    Rule.newProjectRuleSchema "Derive" initialProjectContext
         |> Rule.withContextFromImportedModules
         |> Rule.withModuleVisitor moduleVisitor
         |> Rule.withModuleContextUsingContextCreator
@@ -430,9 +430,9 @@ finalProjectEvaluation incrementalMode projectContext =
     List.map
         (\( moduleKey, range ) ->
             Rule.errorForModule moduleKey
-                { message = "Remove the use of `Debug.todo` before shipping to production"
+                { message = "Cannot derive implementation for Debug.todo within functions"
                 , details =
-                    [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
+                    [ "This rule can only derive implementations for you when the `Debug.todo` call is at the top-level and has an explicit supported type declaration."
                     ]
                 }
                 range

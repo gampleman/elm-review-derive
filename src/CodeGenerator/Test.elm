@@ -8,6 +8,7 @@ module CodeGenerator.Test exposing (codeGenTest, codeGenTestFailsWith, codeGenIn
 
 import Array
 import CodeGenerator exposing (CodeGenerator)
+import Derive
 import Elm.Constraint
 import Elm.License
 import Elm.Module
@@ -24,7 +25,6 @@ import Elm.Type
 import Elm.Version
 import Expect exposing (Expectation)
 import Json.Decode
-import NoDebug.TodoItForMe
 import Review.Project
 import Review.Project.Dependency exposing (Dependency)
 import Review.Test
@@ -78,7 +78,7 @@ codeGenTestHelper description dependencies codeGens modules incremental fn =
                             project =
                                 List.foldl Review.Project.addDependency Review.Test.Dependencies.projectWithElmCore validDependencies
                         in
-                        fn result (Review.Test.runOnModulesWithProjectData project (NoDebug.TodoItForMe.rule incremental codeGens) inputModules)
+                        fn result (Review.Test.runOnModulesWithProjectData project (Derive.rule incremental codeGens) inputModules)
 
                     else
                         Expect.fail ("Found issues in the following dependencies: \n\n" ++ String.join "\n" failedDeps)
@@ -100,8 +100,8 @@ codeGenTestFailsWith description dependencies codeGens modules expectedFailureDe
             Review.Test.expectErrorsForModules
                 [ ( result.module_
                   , [ Review.Test.error
-                        { message = "Remove the use of `Debug.todo` before shipping to production"
-                        , details = [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production.", expectedFailureDetails ]
+                        { message = "Cannot generate the implementation of this `Debug.todo`"
+                        , details = [ expectedFailureDetails ]
                         , under = result.under
                         }
                     ]
@@ -150,8 +150,8 @@ codeGenTest description dependencies codeGens modules expected =
             Review.Test.expectErrorsForModules
                 [ ( result.module_
                   , [ Review.Test.error
-                        { message = "Remove the use of `Debug.todo` before shipping to production"
-                        , details = [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production." ]
+                        { message = "Remove the use of `Debug.todo`"
+                        , details = [ "We have successfully generated an implementation for this `Debug.todo`" ]
                         , under = result.under
                         }
                         |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
@@ -174,8 +174,8 @@ codeGenIncrementalTest description dependencies codeGens modules expected =
             Review.Test.expectErrorsForModules
                 [ ( result.module_
                   , [ Review.Test.error
-                        { message = "Remove the use of `Debug.todo` before shipping to production"
-                        , details = [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production." ]
+                        { message = "Remove the use of `Debug.todo`"
+                        , details = [ "We have successfully generated a stub for this `Debug.todo`" ]
                         , under = result.under
                         }
                         |> Review.Test.whenFixed (String.replace "\u{000D}" "" expected)
