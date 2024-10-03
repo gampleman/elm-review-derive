@@ -11,11 +11,11 @@ when inside the directory containing this file.
 
 -}
 
-import NoDebug.TodoItForMe
+import Derive
 import Review.Rule exposing (Rule)
 
 
 config : List Rule
 config =
-    [ NoDebug.TodoItForMe.rule True []
+    [ Derive.rule True []
     ]

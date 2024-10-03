@@ -1,6 +1,6 @@
 module NoDebugTest exposing (all)
 
-import NoDebug.TodoItForMe
+import Derive
 import Review.Test exposing (ReviewResult)
 import Review.Test.Dependencies
 import Test exposing (Test, describe, test)
@@ -10,17 +10,17 @@ testRule : String -> ReviewResult
 testRule string =
     "module A exposing (..)\n\n"
         ++ string
-        |> Review.Test.runWithProjectData Review.Test.Dependencies.projectWithElmCore (NoDebug.TodoItForMe.rule False [])
+        |> Review.Test.runWithProjectData Review.Test.Dependencies.projectWithElmCore (Derive.rule False [])
 
 
 todoMessage : String
 todoMessage =
-    "Remove the use of `Debug.todo` before shipping to production"
+    "Cannot derive implementation for Debug.todo within functions"
 
 
 todoDetails : List String
 todoDetails =
-    [ "`Debug.todo` can be useful when developing, but is not meant to be shipped to production or published in a package. I suggest removing its use before committing and attempting to push to production."
+    [ "This rule can only derive implementations for you when the `Debug.todo` call is at the top-level and has an explicit supported type declaration."
     ]
 
 
@@ -102,4 +102,20 @@ import Debug exposing (log)
 a = todo "" 1
 """
                     |> Review.Test.expectNoErrors
+        , test "should report the use of `todo` when it has a non-matching type signature" <|
+            \() ->
+                testRule """
+import Json.Decode exposing (Decoder)
+type Foo var = Foo var
+
+a : Decoder Int
+a = Debug.todo ""
+"""
+                    |> Review.Test.expectErrors
+                        [ Review.Test.error
+                            { message = todoMessage
+                            , details = todoDetails
+                            , under = "Debug.todo"
+                            }
+                        ]
         ]
