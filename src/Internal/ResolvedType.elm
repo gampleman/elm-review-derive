@@ -21,17 +21,12 @@ refToExpr currentModule imports ref =
 
     else
         case List.Extra.find (\import_ -> import_.moduleName == ref.modulePath) imports of
-            Just { moduleAlias, exposingList } ->
+            Just { exposingList } ->
                 if isExposed exposingList ref.name then
                     Elm.CodeGen.fun ref.name
 
                 else
-                    case moduleAlias of
-                        Just moduleAlias_ ->
-                            Elm.CodeGen.fqFun [ moduleAlias_ ] ref.name
-
-                        Nothing ->
-                            Elm.CodeGen.fqFun ref.modulePath ref.name
+                    Elm.CodeGen.fqFun ref.modulePath ref.name
 
             Nothing ->
                 Elm.CodeGen.fqFun ref.modulePath ref.name

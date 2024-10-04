@@ -1,6 +1,6 @@
 module FuzzerCodeGenTest exposing (suite)
 
-import CodeGenerator.Test exposing (FakeDependency, codeGenTest)
+import CodeGenerator.Test exposing (FakeDependency, codeGenIncrementalTest, codeGenTest)
 import StandardModule
 import Test exposing (Test, describe)
 
@@ -109,5 +109,39 @@ bFuzzer =
         (Fuzz.map Dict.fromList (Fuzz.list (Fuzz.pair Fuzz.string Fuzz.niceFloat)))
         (Fuzz.pair (Fuzz.maybe Fuzz.string) Fuzz.bool)
         (Fuzz.map2 (\\a b -> { a = a, b = b }) Fuzz.int Fuzz.int)
+"""
+        , codeGenIncrementalTest "Issue #16"
+            [ elmJson ]
+            []
+            [ """module SQLite.Statement.CreateTable exposing (ColumnConstraint(..), InnerColumnConstraint(..))
+
+type alias ColumnConstraint =
+    { foo : (Maybe String), bar : InnerColumnConstraint }
+
+type InnerColumnConstraint =
+    InnerColumnConstraint String
+"""
+            , """module ParserTest exposing (suite)
+
+import SQLite.Statement.CreateTable as CreateTable
+import Fuzz exposing (Fuzzer)
+
+columnConstraintFuzzer : Fuzzer CreateTable.ColumnConstraint
+columnConstraintFuzzer =
+    Debug.todo ""
+"""
+            ]
+            """module ParserTest exposing (suite)
+
+import SQLite.Statement.CreateTable as CreateTable
+import Fuzz exposing (Fuzzer)
+
+columnConstraintFuzzer : Fuzzer CreateTable.ColumnConstraint
+columnConstraintFuzzer =
+    Fuzz.map2 CreateTable.ColumnConstraint (Fuzz.maybe Fuzz.string) innerColumnConstraintFuzzer
+
+innerColumnConstraintFuzzer : Fuzzer CreateTable.InnerColumnConstraint
+innerColumnConstraintFuzzer =
+    Debug.todo ""
 """
         ]
