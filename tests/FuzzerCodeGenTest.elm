@@ -144,4 +144,26 @@ innerColumnConstraintFuzzer : Fuzzer CreateTable.InnerColumnConstraint
 innerColumnConstraintFuzzer =
     Debug.todo ""
 """
+        , codeGenTest "Issue #17"
+            [ elmJson ]
+            []
+            [ """module A exposing (..)
+import Fuzz exposing (Fuzzer)
+
+type Semaphore = Red | Yellow | Green
+
+fuzzer : Fuzzer Semaphore
+fuzzer =
+    Debug.todo ""
+"""
+            ]
+            """module A exposing (..)
+import Fuzz exposing (Fuzzer)
+
+type Semaphore = Red | Yellow | Green
+
+fuzzer : Fuzzer Semaphore
+fuzzer =
+    Fuzz.oneOfValues [ Red, Yellow, Green ]
+"""
         ]
