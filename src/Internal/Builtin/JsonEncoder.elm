@@ -83,7 +83,7 @@ codeGen =
                                         [ CG.fqFun [ "Json", "Encode" ] "object"
                                         , CG.list
                                             (CG.tuple [ CG.string "tag", CG.apply [ CG.fqFun [ "Json", "Encode" ] "string", CG.string ref.name ] ]
-                                                :: List.indexedMap (\i expr -> CG.tuple [ CG.string (String.fromInt i), CG.apply [ expr, CG.val ("arg" ++ String.fromInt i) ] ]) exprs
+                                                :: List.indexedMap (\i expr -> CG.tuple [ CG.string (String.fromInt i), CG.apply [ expr, CG.val ("arg" ++ Internal.Helpers.intToLetter i) ] ]) exprs
                                             )
                                         ]
                                     )
@@ -159,9 +159,9 @@ codeGen =
 
 thingsToPatterns : List a -> List CG.Pattern
 thingsToPatterns =
-    List.indexedMap (\i _ -> CG.varPattern ("arg" ++ String.fromInt i))
+    List.indexedMap (\i _ -> CG.varPattern ("arg" ++ Internal.Helpers.intToLetter i))
 
 
 thingsToValues : List a -> List CG.Expression
 thingsToValues =
-    List.indexedMap (\i _ -> CG.val ("arg" ++ String.fromInt i))
+    List.indexedMap (\i _ -> CG.val ("arg" ++ Internal.Helpers.intToLetter i))

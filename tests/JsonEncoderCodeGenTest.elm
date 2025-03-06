@@ -182,11 +182,11 @@ type Foo
 encode : Foo -> Value
 encode foo =
     case foo of
-        A arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", Json.Encode.int arg0 ) ]
+        A argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", Json.Encode.int argA ) ]
 
-        B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.string arg0 ) ]
+        B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.string argA ) ]
 """
         , codeGenTest "Picks up an encoder from another file"
             [ elmJson ]
@@ -224,8 +224,8 @@ type B =
 encode : B -> Value
 encode b =
     case b of
-        B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode arg0 ) ]
+        B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode argA ) ]
 """
         , codeGenTest "Picks up a generator from another file with different import notation"
             [ elmJson ]
@@ -263,8 +263,8 @@ type B =
 encode : B -> Encode.Value
 encode b =
     case b of
-        B arg0 ->
-            Encode.object [ ( "tag", Encode.string "B" ), ( "0", A.encode arg0 ) ]
+        B argA ->
+            Encode.object [ ( "tag", Encode.string "B" ), ( "0", A.encode argA ) ]
 """
         , codeGenTest "Picks up an encoder from another file with generics"
             [ elmJson ]
@@ -302,8 +302,8 @@ type B =
 encode : B -> Value
 encode b =
     case b of
-        B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int arg0 ) ]
+        B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int argA ) ]
 """
         , codeGenTest "Picks up an encoder from another file with generics type alias"
             [ elmJson ]
@@ -341,8 +341,8 @@ type B =
 encode : B Int -> Value
 encode b =
     case b of
-        B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int arg0 ) ]
+        B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", A.encode Json.Encode.int argA ) ]
 """
         , codeGenTestFailsWith "Doesn't pick up an encoder if not exposed"
             [ elmJson ]
@@ -440,26 +440,26 @@ type Foo =
 encode : Foo -> Value
 encode b =
     case b of
-        B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", encodeA arg0 ) ]
+        B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", encodeA argA ) ]
 
 encodeA : A -> Value
 encodeA arg =
     case arg of
-        A.A arg0 arg1 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", encodeB arg0 ), ( "1", encodeC arg1 ) ]
+        A.A argA argB ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", encodeB argA ), ( "1", encodeC argB ) ]
 
 encodeB : A.B -> Value
 encodeB arg =
     case arg of
-        A.B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.int arg0 ) ]
+        A.B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.int argA ) ]
 
 encodeC : C.C -> Value
 encodeC arg =
     case arg of
-        C.C arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "C" ), ( "0", Json.Encode.int arg0 ) ]
+        C.C argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "C" ), ( "0", Json.Encode.int argA ) ]
 """
         , codeGenTestFailsWith "Fails when necessary sub-values don't have sufficient visibility"
             [ elmJson ]
@@ -512,8 +512,8 @@ type A =
 encode : A -> Value
 encode arg =
     case arg of
-        A arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", Json.Encode.int arg0 ) ]
+        A argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", Json.Encode.int argA ) ]
 
 main =
     Json.Encode.encode 2 (encode (A 2))
@@ -535,11 +535,11 @@ encode encodeVal a =
 encodeResult : (err -> Value) -> (ok -> Value) -> Result err ok -> Value
 encodeResult err ok val =
     case val of
-        Err arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", err arg0 ) ]
+        Err argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", err argA ) ]
 
-        Ok arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok arg0 ) ]
+        Ok argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok argA ) ]
 """ ]
             """module A exposing (A, encode)
 import Json.Encode exposing (Value)
@@ -551,18 +551,18 @@ type A
 encode : A val -> Value
 encode encodeVal a =
     case a of
-        A arg0 ->
+        A argA ->
             Json.Encode.object
-                [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int arg0 ) ]
+                [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int argA ) ]
 
 encodeResult : (err -> Value) -> (ok -> Value) -> Result err ok -> Value
 encodeResult err ok val =
     case val of
-        Err arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", err arg0 ) ]
+        Err argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", err argA ) ]
 
-        Ok arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok arg0 ) ]
+        Ok argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", ok argA ) ]
 """
         , codeGenTest "Picks up the definition of Result from dependency"
             [ elmJson ]
@@ -588,18 +588,18 @@ type A
 encode : A val -> Value
 encode encodeVal a =
     case a of
-        A arg0 ->
+        A argA ->
             Json.Encode.object
-                [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int arg0 ) ]
+                [ ( "tag", Json.Encode.string "A" ), ( "0", encodeResult Json.Encode.string Json.Encode.int argA ) ]
 
 encodeResult : (error -> Value) -> (value -> Value) -> Result error value -> Value
 encodeResult error value arg =
     case arg of
-        Result.Ok arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", value arg0 ) ]
+        Result.Ok argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Ok" ), ( "0", value argA ) ]
 
-        Result.Err arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", error arg0 ) ]
+        Result.Err argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Err" ), ( "0", error argA ) ]
 """
         , codeGenTest "Generates an encoder for a subtype"
             [ elmJson ]
@@ -629,14 +629,14 @@ type B
 encode : A -> Value
 encode arg =
     case arg of
-        A arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", encodeB arg0 ) ]
+        A argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "A" ), ( "0", encodeB argA ) ]
 
 encodeB : B -> Value
 encodeB arg =
     case arg of
-        B arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.int arg0 ) ]
+        B argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "B" ), ( "0", Json.Encode.int argA ) ]
 """
         , codeGenTest "recursive"
             [ elmJson ]
@@ -662,12 +662,12 @@ type Tree a
 encode : (a -> Value) -> Tree a -> Value
 encode childEncoder tree =
     case tree of
-        Node arg0 arg1 arg2 ->
+        Node argA argB argC ->
             Encode.object
                 [ ( "tag", Encode.string "Node" )
-                , ( "0", encode childEncoder arg0 )
-                , ( "1", childEncoder arg1 )
-                , ( "2", encode childEncoder arg2 )
+                , ( "0", encode childEncoder argA )
+                , ( "1", childEncoder argB )
+                , ( "2", encode childEncoder argC )
                 ]
 
         Empty ->
@@ -795,8 +795,8 @@ type Always =
 encode : Foo { capabilites | x : Always } -> Value
 encode foo =
     case foo of
-        Foo arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Foo" ), ( "0", Json.Encode.int arg0 ) ]
+        Foo argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Foo" ), ( "0", Json.Encode.int argA ) ]
 """
         , codeGenTest "Generates an encoder with a list"
             [ elmJson ]
@@ -916,14 +916,14 @@ import Json.Encode exposing (Value)
 encode : A Int -> Value
 encode arg =
     case arg of
-        Rec arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Rec" ), ( "0", encodeB arg0 ) ]
+        Rec argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Rec" ), ( "0", encodeB argA ) ]
 
-        Gen arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Gen" ), ( "0", Json.Encode.int arg0 ) ]
+        Gen argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Gen" ), ( "0", Json.Encode.int argA ) ]
 
-        Recursive arg0 ->
-            Json.Encode.object [ ( "tag", Json.Encode.string "Recursive" ), ( "0", encode arg0 ) ]
+        Recursive argA ->
+            Json.Encode.object [ ( "tag", Json.Encode.string "Recursive" ), ( "0", encode argA ) ]
 
 encodeB : B -> Value
 encodeB rec =
