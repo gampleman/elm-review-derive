@@ -2,6 +2,7 @@ module Internal.Builtin.Codec exposing (codeGen)
 
 import CodeGenerator exposing (CodeGenerator)
 import Elm.CodeGen as CG
+import Internal.Helpers
 import ResolvedType
 import String.Extra
 import TypePattern exposing (TypePattern(..))
@@ -75,9 +76,9 @@ codeGen =
 
 thingsToPatterns : List a -> List CG.Pattern
 thingsToPatterns =
-    List.indexedMap (\i _ -> CG.varPattern ("arg" ++ String.fromInt i))
+    List.indexedMap (\i _ -> CG.varPattern ("arg" ++ Internal.Helpers.intToLetter i))
 
 
 thingsToValues : List a -> List CG.Expression
 thingsToValues =
-    List.indexedMap (\i _ -> CG.val ("arg" ++ String.fromInt i))
+    List.indexedMap (\i _ -> CG.val ("arg" ++ Internal.Helpers.intToLetter i))

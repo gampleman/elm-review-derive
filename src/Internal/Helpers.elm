@@ -1,4 +1,4 @@
-module Internal.Helpers exposing (applyBindings, hasDebugTodo, lambda1, node, rangeContains, traverseExpression, traversePattern, traverseTypeAnnotation, writeExpression)
+module Internal.Helpers exposing (applyBindings, hasDebugTodo, intToLetter, lambda1, node, rangeContains, traverseExpression, traversePattern, traverseTypeAnnotation, writeExpression)
 
 import Dict
 import Elm.CodeGen as CG
@@ -373,3 +373,18 @@ traversePattern fn initial pattern =
 
         _ ->
             ( newPattern, accumulator )
+
+
+lettersInAlphabet =
+    26
+
+
+intToLetter : Int -> String
+intToLetter int =
+    (if int < lettersInAlphabet then
+        ""
+
+     else
+        String.fromChar (Char.fromCode (65 - 1 + int // lettersInAlphabet))
+    )
+        ++ String.fromChar (Char.fromCode (65 + modBy lettersInAlphabet int))
