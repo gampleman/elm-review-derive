@@ -375,6 +375,7 @@ traversePattern fn initial pattern =
             ( newPattern, accumulator )
 
 
+lettersInAlphabet : number
 lettersInAlphabet =
     26
 
