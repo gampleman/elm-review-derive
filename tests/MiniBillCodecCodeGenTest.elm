@@ -153,11 +153,11 @@ codec =
                 VariantA ->
                     variantAEncoder
 
-                VariantB arg0 ->
-                    variantBEncoder arg0
+                VariantB argA ->
+                    variantBEncoder argA
 
-                VariantC arg0 arg1 ->
-                    variantCEncoder arg0 arg1
+                VariantC argA argB ->
+                    variantCEncoder argA argB
         )
         |> Codec.variant0 "VariantA" VariantA
         |> Codec.variant1 "VariantB" VariantB Codec.int
@@ -197,11 +197,11 @@ codec =
                 OtherModule.VariantA ->
                     variantAEncoder
 
-                OtherModule.VariantB arg0 ->
-                    variantBEncoder arg0
+                OtherModule.VariantB argA ->
+                    variantBEncoder argA
 
-                OtherModule.VariantC arg0 ->
-                    variantCEncoder arg0
+                OtherModule.VariantC argA ->
+                    variantCEncoder argA
         )
         |> Codec.variant0 "VariantA" OtherModule.VariantA
         |> Codec.variant1 "VariantB" OtherModule.VariantB Codec.int
@@ -499,11 +499,11 @@ codec codecA =
     Codec.custom
         (\\nodeEncoder leafEncoder value ->
             case value of
-                Node arg0 ->
-                    nodeEncoder arg0
+                Node argA ->
+                    nodeEncoder argA
 
-                Leaf arg0 ->
-                    leafEncoder arg0
+                Leaf argA ->
+                    leafEncoder argA
         )
         |> Codec.variant1 "Node" Node (Codec.lazy (\\() -> codec codecA))
         |> Codec.variant1 "Leaf" Leaf codecA
@@ -604,8 +604,8 @@ routeCodec =
     Codec.custom
         (\\myPagesRouteEncoder value ->
             case value of
-                MyPagesRoute arg0 ->
-                    myPagesRouteEncoder arg0
+                MyPagesRoute argA ->
+                    myPagesRouteEncoder argA
         )
         |> Codec.variant1 "MyPagesRoute" MyPagesRoute (Codec.nullable CaseId.codec)
         |> Codec.buildCustom

@@ -143,11 +143,11 @@ codec =
                 VariantA ->
                     variantAEncoder
 
-                VariantB arg0 ->
-                    variantBEncoder arg0
+                VariantB argA ->
+                    variantBEncoder argA
 
-                VariantC arg0 arg1 ->
-                    variantCEncoder arg0 arg1
+                VariantC argA argB ->
+                    variantCEncoder argA argB
         )
         |> Serialize.variant0 VariantA
         |> Serialize.variant1 VariantB Serialize.int
@@ -187,11 +187,11 @@ codec =
                 OtherModule.VariantA ->
                     variantAEncoder
 
-                OtherModule.VariantB arg0 ->
-                    variantBEncoder arg0
+                OtherModule.VariantB argA ->
+                    variantBEncoder argA
 
-                OtherModule.VariantC arg0 ->
-                    variantCEncoder arg0
+                OtherModule.VariantC argA ->
+                    variantCEncoder argA
         )
         |> Serialize.variant0 OtherModule.VariantA
         |> Serialize.variant1 OtherModule.VariantB Serialize.int
@@ -485,11 +485,11 @@ codec codecA =
     Serialize.customType
         (\\nodeEncoder leafEncoder value ->
             case value of
-                Node arg0 ->
-                    nodeEncoder arg0
+                Node argA ->
+                    nodeEncoder argA
 
-                Leaf arg0 ->
-                    leafEncoder arg0
+                Leaf argA ->
+                    leafEncoder argA
         )
         |> Serialize.variant1 Node (Serialize.lazy (\\() -> codec codecA))
         |> Serialize.variant1 Leaf codecA
@@ -592,8 +592,8 @@ routeCodec =
     Serialize.customType
         (\\myPagesRouteEncoder value ->
             case value of
-                MyPagesRoute arg0 ->
-                    myPagesRouteEncoder arg0
+                MyPagesRoute argA ->
+                    myPagesRouteEncoder argA
         )
         |> Serialize.variant1 MyPagesRoute (Serialize.maybe CaseId.codec)
         |> Serialize.finishCustomType
