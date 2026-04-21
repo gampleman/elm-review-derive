@@ -3,7 +3,6 @@
     "elm": "0.19.1-5",
     "elm-doc-preview": "^5.0.5",
     "elm-format": "^0.8.7",
-    "elm-review": "^2.10.2",
     "elm-test": "0.19.1-revision12",
     "elm-verify-examples": "^5.2.0",
     "npm-run-all": "^4.1.5"
@@ -23,5 +22,8 @@
     "start:docs": "elm-doc-preview",
     "elm-bump": "npm-run-all --print-name --sequential test bump-version 'test:review -- --fix-all-without-prompt'",
     "bump-version": "(yes | elm bump)"
+  },
+  "devDependencies": {
+    "elm-review": "^2.13.5"
   }
 }

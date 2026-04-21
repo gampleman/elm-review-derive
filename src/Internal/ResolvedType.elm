@@ -178,7 +178,7 @@ resolveLocalReferences currentModule types =
         initialNameDict =
             List.filterMap
                 (\t ->
-                    getRefKey t |> Maybe.map (\a -> Tuple.pair a t)
+                    getRefKey t |> Maybe.map (\a -> ( a, t ))
                 )
                 types
                 |> Dict.fromList

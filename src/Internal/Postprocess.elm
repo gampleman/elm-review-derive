@@ -36,7 +36,7 @@ expression inputExpression =
                             (\(Node _ v) ->
                                 case v of
                                     Expression.FunctionOrValue m2 n2 ->
-                                        n2 /= name || m2 /= []
+                                        n2 /= name || not (List.isEmpty m2)
 
                                     _ ->
                                         False
@@ -362,7 +362,7 @@ fixNamesAndImportsInFunctionDeclaration fun currentModule imports =
 
 findImport : Bool -> List String -> String -> List String -> List ExistingImport -> Maybe (List String)
 findImport isType moduleName name currentModule imports =
-    if moduleName == currentModule || moduleName == [] then
+    if moduleName == currentModule || List.isEmpty moduleName then
         Just []
 
     else
