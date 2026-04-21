@@ -372,13 +372,13 @@ lazilyPrepareGenerics codeGen context stack inputValue type_ =
             lazilyPrepareGenerics codeGen context stack inputValue subT
 
         ResolvedType.AnonymousRecord _ children ->
-            CodeGenerationResult.combine (always CG.unit) (List.map (Tuple.second >> lazilyPrepareGenerics codeGen context stack inputValue) children)
+            CodeGenerationResult.combine (always CG.unit) (List.map (\( _, child ) -> lazilyPrepareGenerics codeGen context stack inputValue child) children)
 
         ResolvedType.Tuple args ->
             CodeGenerationResult.combine (always CG.unit) (List.map (lazilyPrepareGenerics codeGen context stack inputValue) args)
 
         ResolvedType.CustomType _ _ ctors ->
-            CodeGenerationResult.combine (always CG.unit) (List.concatMap (Tuple.second >> List.map (lazilyPrepareGenerics codeGen context stack inputValue)) ctors)
+            CodeGenerationResult.combine (always CG.unit) (List.concatMap (\( _, args ) -> List.map (lazilyPrepareGenerics codeGen context stack inputValue) args) ctors)
 
         ResolvedType.Opaque _ vars ->
             CodeGenerationResult.combine (always CG.unit) (List.map (lazilyPrepareGenerics codeGen context stack inputValue) vars)
@@ -573,7 +573,7 @@ reportError isTopLevel codeGen context stack inputValue type_ generics_ label ma
                             ( type__, generics ) =
                                 case type_ of
                                     ResolvedType.Opaque refr vars ->
-                                        ( ResolvedType.Opaque refr (List.indexedMap (\i -> Just >> GenericType (typeVariableFromIndex i)) vars)
+                                        ( ResolvedType.Opaque refr (List.indexedMap (\i v -> GenericType (typeVariableFromIndex i) (Just v)) vars)
                                         , List.indexedMap (\i _ -> typeVariableFromIndex i) vars
                                         )
 

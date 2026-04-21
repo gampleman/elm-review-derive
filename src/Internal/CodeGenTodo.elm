@@ -86,10 +86,10 @@ containsGenericType varName t =
             False
 
         Typed _ args ->
-            List.any (Node.value >> containsGenericType varName) args
+            List.any (\(Node _ value) -> containsGenericType varName value) args
 
         Tupled args ->
-            List.any (Node.value >> containsGenericType varName) args
+            List.any (\(Node _ value) -> containsGenericType varName value) args
 
         Record def ->
             List.any (\(Node _ ( _, Node _ v )) -> containsGenericType varName v) def

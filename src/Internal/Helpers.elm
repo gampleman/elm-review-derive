@@ -12,8 +12,8 @@ import Pretty
 
 
 writeExpression : Expression -> String
-writeExpression =
-    Elm.Pretty.prettyExpression >> Pretty.pretty 120
+writeExpression e =
+    e |> Elm.Pretty.prettyExpression |> Pretty.pretty 120
 
 
 node : a -> Node a
@@ -69,7 +69,7 @@ produces
 
 -}
 applyBindings : Dict.Dict String Expression -> Expression -> Expression
-applyBindings bindings =
+applyBindings bindings e =
     traverseExpression
         (\subexpr foo ->
             case subexpr of
@@ -88,7 +88,8 @@ applyBindings bindings =
                     ( subexpr, foo )
         )
         ()
-        >> Tuple.first
+        e
+        |> Tuple.first
 
 
 hasDebugTodo : { a | expression : Node Expression } -> Bool
@@ -308,7 +309,7 @@ traverseTypeAnnotation fn initial annotation =
                     Tuple.mapFirst (\res -> ( key, Node nv res )) (fx val)
                 )
                 args
-                |> Tuple.mapFirst (Node n >> GenericRecord generic)
+                |> Tuple.mapFirst (\t -> t |> Node n |> GenericRecord generic)
 
         FunctionTypeAnnotation (Node lr lv0) (Node rr rv0) ->
             let

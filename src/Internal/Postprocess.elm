@@ -343,7 +343,7 @@ fixNamesAndImportsInFunctionDeclaration fun currentModule imports =
             fixNamesAndImportsInExpression (Node.value impl.expression) currentModule imports
 
         ( newSignature, signatureImports ) =
-            Maybe.map (\sign -> fixNamesAndImportsInSignature (Node.value sign) currentModule imports |> Tuple.mapFirst (Helpers.node >> Just)) fun.signature |> Maybe.withDefault ( Nothing, [] )
+            Maybe.map (\sign -> fixNamesAndImportsInSignature (Node.value sign) currentModule imports |> Tuple.mapFirst (\v -> Just (Helpers.node v))) fun.signature |> Maybe.withDefault ( Nothing, [] )
 
         ( newArguments, argumentsImports ) =
             List.foldr

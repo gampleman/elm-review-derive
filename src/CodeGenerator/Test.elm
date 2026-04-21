@@ -259,7 +259,7 @@ fakeDependency :
 fakeDependency data =
     case
         ( Elm.Package.fromString data.name
-        , listMaybe2MaybeList (List.map (.name >> Elm.Module.fromString) data.modules)
+        , listMaybe2MaybeList (List.map (\{ name } -> Elm.Module.fromString name) data.modules)
         , listMaybe2MaybeList (List.map (\d -> Maybe.map2 Tuple.pair (Elm.Package.fromString d) (Elm.Constraint.fromString "1.0.0 <= v < 2.0.0")) data.dependencies)
         )
     of

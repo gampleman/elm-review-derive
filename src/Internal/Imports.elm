@@ -34,7 +34,11 @@ importsFix currentModule existingImports importStartRow imports =
         imports_ =
             Set.remove currentModule imports
                 |> Set.filter
-                    (\import_ -> List.any (.moduleName >> (==) import_) existingImports |> not)
+                    (\import_ ->
+                        List.all
+                            (\{ moduleName } -> moduleName /= import_)
+                            existingImports
+                    )
     in
     if Set.isEmpty imports_ then
         Nothing

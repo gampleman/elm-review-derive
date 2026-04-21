@@ -1,7 +1,7 @@
 module Internal.TypePattern exposing (generate, matches)
 
 import Elm.CodeGen as CG
-import Elm.Syntax.Node as Node exposing (Node(..))
+import Elm.Syntax.Node exposing (Node(..))
 import Elm.Syntax.TypeAnnotation as TA exposing (TypeAnnotation)
 import TypePattern exposing (TypePattern(..))
 
@@ -64,7 +64,7 @@ matches typePattern typeAnnotation =
 
                 ( Record tpDef, TA.Record taDef ) ->
                     if List.all identity (List.map2 (\( tpName, _ ) (Node _ ( Node _ taName, _ )) -> tpName == taName) tpDef taDef) then
-                        matchLists (List.map Tuple.second tpDef) (List.map (Node.value >> Tuple.second) taDef)
+                        matchLists (List.map Tuple.second tpDef) (List.map (\(Node _ ( _, v )) -> v) taDef)
 
                     else
                         NotMatched

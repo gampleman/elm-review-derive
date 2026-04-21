@@ -69,13 +69,34 @@ fromTypeSignature lookupTable availableTypes currentModule typeAnnotation =
         TA.Typed t args ->
             case ModuleNameLookupTable.moduleNameFor lookupTable t of
                 Just [] ->
-                    computeApplication (lookupDefinition { modulePath = currentModule, name = Node.value t |> Tuple.second } availableTypes) (List.map (Node.value >> fromTypeSignature lookupTable availableTypes currentModule) args)
+                    computeApplication
+                        (lookupDefinition
+                            { modulePath = currentModule
+                            , name = Node.value t |> Tuple.second
+                            }
+                            availableTypes
+                        )
+                        (List.map (\(Node _ v) -> fromTypeSignature lookupTable availableTypes currentModule v) args)
 
                 Just moduleName ->
-                    computeApplication (lookupDefinition { modulePath = moduleName, name = Node.value t |> Tuple.second } availableTypes) (List.map (Node.value >> fromTypeSignature lookupTable availableTypes currentModule) args)
+                    computeApplication
+                        (lookupDefinition
+                            { modulePath = moduleName
+                            , name = Node.value t |> Tuple.second
+                            }
+                            availableTypes
+                        )
+                        (List.map (\(Node _ v) -> fromTypeSignature lookupTable availableTypes currentModule v) args)
 
                 Nothing ->
-                    computeApplication (lookupDefinition { modulePath = currentModule, name = Node.value t |> Tuple.second } availableTypes) (List.map (Node.value >> fromTypeSignature lookupTable availableTypes currentModule) args)
+                    computeApplication
+                        (lookupDefinition
+                            { modulePath = currentModule
+                            , name = Node.value t |> Tuple.second
+                            }
+                            availableTypes
+                        )
+                        (List.map (\(Node _ v) -> fromTypeSignature lookupTable availableTypes currentModule v) args)
 
         --(normalizeReference lookupTable t) (List.map (\(Node r v) -> Node r (normalizeTypes lookupTable v)) args)
         TA.Tupled args ->
@@ -115,7 +136,7 @@ fromDeclaration lookupTable availableTypes currentModule declaration =
                     (List.map
                         (\(Node _ constructor) ->
                             ( { name = Node.value constructor.name, modulePath = currentModule }
-                            , List.map (Node.value >> fromTypeSignature lookupTable availableTypes currentModule) constructor.arguments
+                            , List.map (\(Node _ v) -> fromTypeSignature lookupTable availableTypes currentModule v) constructor.arguments
                             )
                         )
                         customType.constructors
@@ -413,7 +434,8 @@ getArgs t =
                 |> List.map (\( n, tt ) -> GenericType n tt)
 
         CustomType _ _ ctors ->
-            List.concatMap (Tuple.second >> List.concatMap getGenericSlots) ctors
+            ctors
+                |> List.concatMap (\( _, args ) -> List.concatMap getGenericSlots args)
                 |> List.map (\( n, tt ) -> GenericType n tt)
 
         _ ->
@@ -436,10 +458,10 @@ getGenericSlots t =
             getGenericSlots arg
 
         AnonymousRecord _ rec ->
-            List.concatMap (Tuple.second >> getGenericSlots) rec
+            List.concatMap (\( _, fieldType ) -> getGenericSlots fieldType) rec
 
         CustomType _ _ ctors ->
-            List.concatMap (Tuple.second >> List.concatMap getGenericSlots) ctors
+            List.concatMap (\( _, args ) -> args |> List.concatMap getGenericSlots) ctors
 
         Tuple items ->
             List.concatMap getGenericSlots items

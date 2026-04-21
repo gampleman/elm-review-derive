@@ -199,7 +199,7 @@ importVisitor (Node _ import_) context =
     , { context
         | imports =
             { moduleName = Node.value import_.moduleName
-            , moduleAlias = Maybe.andThen (Node.value >> List.head) import_.moduleAlias
+            , moduleAlias = Maybe.andThen (\(Node _ a) -> List.head a) import_.moduleAlias
             , exposingList =
                 Maybe.map Node.value import_.exposingList
                     |> Maybe.withDefault (Elm.Syntax.Exposing.Explicit [])
@@ -298,11 +298,12 @@ fromModuleToProject moduleKey metadata moduleContext =
         codeGenRanges =
             List.map .range moduleContext.codeGenTodos
 
-        filterTodos =
+        filteredTodos =
             List.filter
                 (\r ->
-                    List.all (Internal.Helpers.rangeContains r >> not) codeGenRanges
+                    List.all (\codeGenRange -> not (Internal.Helpers.rangeContains r codeGenRange)) codeGenRanges
                 )
+                moduleContext.otherTodos
     in
     { types =
         if List.isEmpty moduleContext.exports then
@@ -343,7 +344,7 @@ fromModuleToProject moduleKey metadata moduleContext =
                         { provider | privateTo = Just moduleName }
                 )
                 moduleContext.existingFunctionProviders
-    , otherTodos = List.map (Tuple.pair moduleKey) (filterTodos moduleContext.otherTodos)
+    , otherTodos = List.map (Tuple.pair moduleKey) filteredTodos
     }
 
 
@@ -385,7 +386,7 @@ declarationVisitor declarations context =
                 context.availableTypes
 
         unresolvedTypes =
-            List.filterMap (Node.value >> ResolvedType.fromDeclaration context.lookupTable externalAvailableTypes context.currentModule) declarations
+            List.filterMap (\(Node _ declaration) -> ResolvedType.fromDeclaration context.lookupTable externalAvailableTypes context.currentModule declaration) declarations
 
         types =
             ResolvedType.resolveLocalReferences context.currentModule unresolvedTypes
@@ -397,7 +398,7 @@ declarationVisitor declarations context =
     , { context
         | types = types ++ context.types
         , importStartRow =
-            List.map (Node.range >> .start >> .row) declarations |> List.minimum
+            List.map (\(Node { start } _) -> start.row) declarations |> List.minimum
         , existingFunctionProviders = results.providers
         , codeGenTodos = results.todos ++ context.codeGenTodos
       }
@@ -443,7 +444,7 @@ finalProjectEvaluation incrementalMode projectContext =
                 let
                     imports =
                         AssocList.get moduleName projectContext.imports
-                            |> Maybe.map (.existingImports >> List.map .moduleName)
+                            |> Maybe.map (\{ existingImports } -> List.map .moduleName existingImports)
                             |> Maybe.withDefault []
                             |> AssocSet.fromList
                 in

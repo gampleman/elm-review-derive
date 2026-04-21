@@ -22,7 +22,7 @@ findProviders codeGens deps =
                     Elm.Project.Package package ->
                         let
                             qualifyingCodeGens =
-                                List.filter (\provider -> (Elm.Package.toString package.name == provider.dependency) || List.member provider.dependency (List.map (Tuple.first >> Elm.Package.toString) package.deps)) codeGens
+                                List.filter (\provider -> (Elm.Package.toString package.name == provider.dependency) || List.member provider.dependency (List.map (\( p, _ ) -> p |> Elm.Package.toString) package.deps)) codeGens
 
                             qualifyingCodeGensDict =
                                 qualifyingCodeGens

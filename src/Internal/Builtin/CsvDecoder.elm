@@ -108,8 +108,8 @@ codeGen =
 
 
 makePath : List String -> String
-makePath =
-    List.reverse >> String.join "_"
+makePath segments =
+    segments |> List.reverse |> String.join "_"
 
 
 makeMap : List String -> CG.Expression -> List ( String, ResolvedType.ResolvedType, CG.Expression ) -> CG.Expression
