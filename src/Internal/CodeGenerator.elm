@@ -1,4 +1,4 @@
-module Internal.CodeGenerator exposing (CodeGenerator(..), Condition(..), ConfiguredCodeGenerator, ExistingFunctionProvider, GenerationContext, RecursionStack, Resolver, ResolverImpl(..), assemble, configureCodeGenerators)
+module Internal.CodeGenerator exposing (CodeGenerator, Condition(..), ConfiguredCodeGenerator, ExistingFunctionProvider, GenerationContext, RecursionStack, Resolver, ResolverImpl(..), assemble, configureCodeGenerators)
 
 import Dict
 import Elm.CodeGen as CG
